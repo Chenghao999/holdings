@@ -31,7 +31,8 @@
 
 | 模块 | Mock 方式 |
 |------|-----------|
-| `data/` 数据源 | 不实际联网。当前 `tests/test_data.py` 只验证导入链与工厂分发；**具体的网络降级路径尚无测试**，可用 `unittest.mock` 打桩 `akshare` / `yfinance` 模块 |
+| `data/` 数据源 | 不实际联网。`tests/test_data.py` 已验证导入链、工厂分发与 A 股降级链路（重试次数、退避、降级时机）；三个 fetcher 的 `_from_*` 仍可用同样的打桩手法补测 |
+| 网络超时 | `tests/test_resilience.py` 用**永不置位的事件**模拟不响应的上游（而不是 `sleep(N)`，整个文件不产生真实等待），断言按预算放弃、异常类型原样透传、守护线程不拖住进程退出 |
 
 > `responses`（HTTP 层打桩库）此前声明在 `dev` extra 里但全项目零引用，
 > 已从 `pyproject.toml` 移除；需要时再加。
@@ -56,7 +57,8 @@ tests/
 ├── test_storage.py        # DAO + 建表
 ├── test_trade_service.py  # 写入闸门与乱序补录
 ├── test_services.py       # 汇总 / 绩效指标 / 同步
-├── test_data.py           # 数据源工厂与导入链（不触网）
+├── test_data.py           # 数据源工厂、A 股降级链路与重试次数（不触网）
+├── test_resilience.py     # 网络超时：sync 不被不响应的数据源挂死
 ├── test_config.py         # 配置加载与 YAML 错误
 ├── test_cli_errors.py     # 退出码契约（需通过 main()，见下）
 ├── test_import_cmd.py     # CSV 整批事务与表头校验
@@ -71,7 +73,7 @@ tests/
 ## 覆盖率目标
 
 - `portfolio/calculator.py`：**≥ 90%**（关键在于费用与卖出边界）— 当前 **99%**。
-- 全项目行覆盖率：当前 **76%**（`python -m pytest --cov=holdings`）。
+- 全项目行覆盖率：当前 **81%**（`python -m pytest --cov=holdings`）。
 - 明确低于目标的区域：`cli/renderers/`（87%，空表分支未覆盖）、`utils/deps.py`（0%）、
-  `data/` 三个 fetcher（18%~29%）、`cli/commands/sync.py`（22%）。
-  这三处分别对应 [BACKLOG](BACKLOG.md) 的 B-09、B-10 与 B-07。
+  `data/` 三个 fetcher 的 `_from_*`（18%~29%）、`cli/commands/sync.py`（22%）。
+  这几处分别对应 [BACKLOG](BACKLOG.md) 的 B-09、B-10 与 B-07。

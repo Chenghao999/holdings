@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import time
 
+from holdings.data import resilience
 from holdings.data.fetcher import DataSourceUnavailableError, PriceResult
+
+#: 两次尝试之间的退避秒数。
+RETRY_BACKOFF_SECONDS = 0.5
 
 
 class AStockFetcher:
@@ -15,13 +19,16 @@ class AStockFetcher:
 
     def _with_fallback(self, symbol: str) -> PriceResult:
         last_err: Exception | None = None
-        for _ in range(2):  # 超时重试 1 次
-            # 重试循环的 try 必须在循环体内，PERF203 在此不适用。
+        # 尝试次数取自 sync.retry_count（默认 1 次重试 = 共 2 次尝试）。
+        for attempt in range(resilience.retry_count() + 1):
+            if attempt:
+                # 退避放在**重试之前**：原先写在 except 末尾，最后一次失败之后
+                # 还会白等 0.5 秒才降级，用户多等半秒却什么也没等到。
+                time.sleep(RETRY_BACKOFF_SECONDS)
             try:
                 return self._from_akshare(symbol)
-            except Exception as exc:  # noqa: PERF203 - 降级捕获所有异常
+            except Exception as exc:  # 降级要捕获所有异常：任何一种都不该中断取价
                 last_err = exc
-                time.sleep(0.5)
         # 降级至 yfinance（仅支持部分 A 股大盘）
         try:
             return self._from_yfinance(symbol)

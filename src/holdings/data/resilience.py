@@ -22,6 +22,7 @@ T = TypeVar("T")
 
 #: 默认值从配置层取，不在这里另写一份——抄出来的那份迟早和 CONFIG_SPEC 对不上。
 DEFAULT_TIMEOUT_SECONDS = DEFAULT_CONFIG["sync"]["timeout_seconds"]
+DEFAULT_RETRY_COUNT = DEFAULT_CONFIG["sync"]["retry_count"]
 
 
 def call_with_timeout(func: Callable[..., T], seconds: float, *args: Any, **kwargs: Any) -> T:
@@ -52,3 +53,18 @@ def call_with_timeout(func: Callable[..., T], seconds: float, *args: Any, **kwar
     if failure:
         raise failure[0]
     return result[0]
+
+
+def retry_count() -> int:
+    """读取 `sync.retry_count`（默认 1 次重试 = 共 2 次尝试）。
+
+    配置读不出来时用默认值：取数据的重试次数不该因为一个格式错误的
+    config.yaml 就把整个 `sync` 变成异常——那个错误会在别处如实报出来。
+    """
+    from holdings.exceptions import HoldingsError
+    from holdings.utils.config import load_config
+
+    try:
+        return max(0, load_config().sync_retry_count)
+    except (HoldingsError, OSError):
+        return DEFAULT_RETRY_COUNT

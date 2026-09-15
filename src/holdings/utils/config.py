@@ -32,11 +32,19 @@ DEFAULT_CONFIG: dict = {
 # 与 sync 默认值同源，供取值兜底使用；tests/test_config.py 会断言两处一致，
 # 免得改了 DEFAULT_CONFIG 却漏改这里。
 _DEFAULT_SYNC_TIMEOUT = DEFAULT_CONFIG["sync"]["timeout_seconds"]
+_DEFAULT_SYNC_RETRY = DEFAULT_CONFIG["sync"]["retry_count"]
 
 
 def _as_float(value, fallback: float) -> float:
     try:
         return float(value)
+    except (TypeError, ValueError):
+        return fallback
+
+
+def _as_int(value, fallback: int) -> int:
+    try:
+        return int(value)
     except (TypeError, ValueError):
         return fallback
 
@@ -73,13 +81,17 @@ class Config:
     def sync(self) -> dict:
         return self._data["sync"]
 
-    # sync 下的数值项单独给属性，并且**做取值兜底**：CONFIG_SPEC 注明字段取值
+    # sync 下的两个数值项单独给属性，并且**做取值兜底**：CONFIG_SPEC 注明字段取值
     # 尚未校验，`timeout_seconds: abc` 这种手写配置会一路走到 float() 才炸成
     # 裸 traceback。取数据的超时不值得让整个命令崩掉，回落到默认值即可，
     # 配置本身的问题在别处如实报。
     @property
     def sync_timeout_seconds(self) -> float:
         return _as_float(self.sync.get("timeout_seconds"), _DEFAULT_SYNC_TIMEOUT)
+
+    @property
+    def sync_retry_count(self) -> int:
+        return _as_int(self.sync.get("retry_count"), _DEFAULT_SYNC_RETRY)
 
     def get(self, key: str, default=None):
         return self._data.get(key, default)

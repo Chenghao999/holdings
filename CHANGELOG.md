@@ -28,8 +28,10 @@
 - 超时的语义是「放弃等待」而不是「取消请求」：Python 没有安全的线程取消机制，
   被放弃的请求仍会在后台跑完。守护线程保证它不会拖住进程退出——这正是这套
   方案能成立的关键，`tests/test_resilience.py` 对这一点有专门断言。
-- `sync.timeout_seconds` 此前是 4 个「改了不起作用」的配置项之一，现真正生效；
-  `CONFIG_SPEC.md` 的标注同步更新。
+- `sync.timeout_seconds` 与 `sync.retry_count` 此前都是「改了不起作用」的配置项，
+  现均真正生效：重试次数读配置（默认 1 次重试 = 共 2 次尝试）。顺带修掉退避的
+  位置——原先 `sleep` 写在 `except` 末尾，最后一次失败后还要白等 0.5 秒才降级。
+  `CONFIG_SPEC.md` / `FAQ.md` / `FEATURES.md` 的标注同步更新，尚未生效的从 4 项减到 2 项。
 
 **错误处理链路此前完全不生效**
 - `pyproject.toml` 的 console script 指向裸 click group `cli` 而非 `main`，导致

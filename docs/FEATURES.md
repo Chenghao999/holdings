@@ -21,10 +21,11 @@
 - 拉取 A 股（akshare，失败降级 yfinance）、美股 / 国际黄金（yfinance）价格。
 - 5 分钟缓存防重复请求；单标的失败不影响其余标的。
 
-> **降级链路的真实范围**：仅 A 股有 akshare → yfinance 的降级与 1 次重试；
-> 美股只有 yfinance 单一数据源，黄金走 A 股链路或 yfinance 的 `GC=F`。
-> 当前**没有任何网络超时设置**，重试次数与降级顺序都硬编码在 `data/` 层，
-> 不读配置。相关配置项见 [CONFIG_SPEC](CONFIG_SPEC.md)。
+> **降级链路的真实范围**：仅 A 股有 akshare → yfinance 的降级；美股只有
+> yfinance 单一数据源，黄金走 A 股链路或 yfinance 的 `GC=F`。取价有超时保护
+> （`sync.timeout_seconds`，默认每个标的 10 秒），重试次数读 `sync.retry_count`。
+> **降级顺序仍硬编码在 `data/` 层**，`data_sources.priority` 尚未接线。
+> 相关配置项见 [CONFIG_SPEC](CONFIG_SPEC.md)。
 
 ### 报表与可视化
 
