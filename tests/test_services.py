@@ -1,4 +1,4 @@
-"""services 层（portfolio_service / sync_service）的单元测试。
+"""services 层（portfolio_service / report_service / sync_service）的单元测试。
 
 网络请求一律 monkeypatch，测试不触网。
 """
@@ -9,8 +9,10 @@ import pytest
 
 from holdings.data.fetcher import DataSourceUnavailableError, PriceResult
 from holdings.models.enums import AssetType, MarketType
-from holdings.services import portfolio_service, sync_service
-from holdings.storage import price_cache_dao, transaction_dao
+from holdings.models.snapshot import Snapshot
+from holdings.portfolio import metrics
+from holdings.services import portfolio_service, report_service, sync_service
+from holdings.storage import price_cache_dao, snapshot_dao, transaction_dao
 
 # ------------------------------------------------------------ portfolio_service
 
@@ -231,3 +233,107 @@ def test_chart_without_plotly_raises_missing_dependency(db_path, monkeypatch):
     assert issubclass(MissingDependencyError, HoldingsError)
     # 提示必须给出可执行的安装命令，而不是只说「未安装」
     assert "holdings[chart]" in str(exc.value)
+
+
+# ----------------------------------------------------------- report_service
+
+
+def _snap(day: int, total: float, month: int = 1) -> Snapshot:
+    return Snapshot(
+        snapshot_date=date(2025, month, day),
+        total_value=total,
+        equity_value=total,
+        gold_value=0.0,
+    )
+
+
+def _add_snaps(db_path: str, *rows: tuple[int, int, float]) -> None:
+    """rows 为 (月, 日, 净值)。"""
+    for month, day, total in rows:
+        snapshot_dao.add(db_path, _snap(day, total, month))
+
+
+def test_performance_on_empty_db_reports_no_snapshots(db_path):
+    perf = report_service.get_performance(db_path)
+
+    assert perf.snapshot_count == 0
+    assert perf.max_drawdown is None
+    assert perf.annualized_return is None
+    assert perf.sharpe is None
+
+
+def test_performance_with_a_single_snapshot_is_all_unknown(db_path):
+    """单点不能算出「回撤 0.00%」——那看着像结论，其实只是没有第二个点。"""
+    _add_snaps(db_path, (1, 1, 100.0))
+
+    perf = report_service.get_performance(db_path)
+
+    assert perf.snapshot_count == 1
+    assert perf.max_drawdown is None, "单点回撤必须是 None，不是 0.0"
+
+
+def test_performance_max_drawdown_of_known_series(db_path):
+    """BACKLOG B-02 的判据：100 / 120 / 90 / 110 → (120-90)/120 = 25%。"""
+    _add_snaps(db_path, (1, 1, 100.0), (2, 1, 120.0), (3, 1, 90.0), (4, 1, 110.0))
+
+    perf = report_service.get_performance(db_path)
+
+    assert perf.snapshot_count == 4
+    assert perf.max_drawdown == pytest.approx(0.25)
+    assert (perf.first_date, perf.last_date) == (date(2025, 1, 1), date(2025, 4, 1))
+
+
+def test_performance_annualizes_on_the_real_span_not_the_point_count(db_path):
+    """90 天的跨度必须按 90 天折算，拿点数当交易日会算出一个大得多的数。"""
+    _add_snaps(db_path, (1, 1, 100.0), (2, 1, 120.0), (3, 1, 90.0), (4, 1, 110.0))
+
+    perf = report_service.get_performance(db_path)
+
+    years = 90 / metrics.DAYS_PER_YEAR
+    assert perf.annualized_return == pytest.approx((110.0 / 100.0) ** (1 / years) - 1)
+
+
+def test_performance_computes_sharpe_for_a_regular_monthly_series(db_path):
+    _add_snaps(db_path, (1, 1, 100.0), (2, 1, 120.0), (3, 1, 90.0), (4, 1, 110.0))
+
+    perf = report_service.get_performance(db_path)
+
+    assert perf.sharpe is not None
+    assert perf.notes == [], "口径都成立时不该有任何说明行"
+
+
+def test_performance_skips_sharpe_when_intervals_are_irregular(db_path):
+    """快照间隔忽长忽短时算不出有意义的夏普，返回 None 并说明原因。"""
+    _add_snaps(
+        db_path,
+        (1, 1, 100.0),
+        (1, 8, 110.0),
+        (2, 1, 120.0),
+        (3, 1, 130.0),
+    )
+
+    perf = report_service.get_performance(db_path)
+
+    assert perf.sharpe is None
+    assert any("间隔不规律" in note for note in perf.notes)
+    assert perf.max_drawdown is not None, "夏普算不出来不影响回撤——回撤不要求等距"
+
+
+def test_performance_skips_annualized_below_the_minimum_span(db_path):
+    """相隔几天的两次快照能外推出天文数字的年化收益，那是无用的数。"""
+    _add_snaps(db_path, (1, 1, 100.0), (1, 3, 110.0))
+
+    perf = report_service.get_performance(db_path)
+
+    assert perf.annualized_return is None
+    assert any(str(report_service.MIN_DAYS_FOR_ANNUALIZED) in note for note in perf.notes)
+    assert perf.max_drawdown == pytest.approx(0.0)
+
+
+def test_performance_skips_annualized_when_the_first_snapshot_is_zero(db_path):
+    _add_snaps(db_path, (1, 1, 0.0), (2, 1, 120.0), (3, 1, 90.0))
+
+    perf = report_service.get_performance(db_path)
+
+    assert perf.annualized_return is None
+    assert any("净值为 0" in note for note in perf.notes)

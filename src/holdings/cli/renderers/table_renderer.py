@@ -2,7 +2,46 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from rich.table import Table
+
+if TYPE_CHECKING:
+    from holdings.services.report_service import PerformanceSummary
+
+# 指标口径不成立时统一显示这个，而不是 0——「回撤 0.00%」看着像结论，
+# 「—」才是「这条数据算不出来」的诚实写法。
+_UNKNOWN = "—"
+
+
+def _percent(value: float | None) -> str:
+    return _UNKNOWN if value is None else f"{value * 100:.2f}%"
+
+
+def _number(value: float | None) -> str:
+    return _UNKNOWN if value is None else f"{value:.2f}"
+
+
+def render_performance_line(perf: PerformanceSummary) -> str:
+    """把绩效指标渲染成一行文本；出现 `—` 时另起一行说明原因。
+
+    说明为什么要有那一行：`夏普 —` 单独出现时，用户分不清是「程序坏了」
+    还是「这组数据算不出夏普」。原因由 service 给出，渲染层只负责排版。
+    """
+    if perf.snapshot_count < 2:
+        return (
+            f"绩效：快照不足（当前 {perf.snapshot_count} 条，至少 2 条），"
+            f"回撤 / 年化 / 夏普均不可计算"
+        )
+    line = (
+        f"绩效（{perf.snapshot_count} 条快照，{perf.first_date} ~ {perf.last_date}）："
+        f"最大回撤 {_percent(perf.max_drawdown)} | "
+        f"年化收益 {_percent(perf.annualized_return)} | "
+        f"夏普 {_number(perf.sharpe)}"
+    )
+    if perf.notes:
+        line += "\n  " + "；".join(perf.notes)
+    return line
 
 
 def render_holdings_table(holdings_df) -> Table:

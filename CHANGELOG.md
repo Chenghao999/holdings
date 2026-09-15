@@ -4,6 +4,19 @@
 
 ## [Unreleased]
 
+### Added
+- **`report` 新增绩效行**（[BACKLOG B-02](docs/BACKLOG.md)）：从 `snapshots` 表算最大回撤、
+  年化收益与夏普，接进 `holdings report` 的输出。新增 `services/report_service.py`
+  负责口径判定，`portfolio/metrics.py` 的 `periods_per_year` / `return_series` 负责折算。
+  - **算不出来时显示 `—`，不显示 0**：单条快照算出的「回撤 0.00%」看着像结论，
+    实际只是没有第二个点；`metrics.py` 此前 0% 覆盖，也从未被任何命令调用过。
+  - **夏普不再默认「入参是日收益」**：`sharpe_ratio` 原先硬编码 `sqrt(252)`，
+    任何人把快照收益直接喂进去都会得到一个乘了 15.87 的假数。现改为必填
+    `periods_per_year`，并新增 `periods_per_year()` 由快照间隔反推采样频率——
+    间隔不规律（变异系数 > 25%，例如漏记一周）时返回 `None`，报表显示 `—`。
+  - 年化收益用首末快照的**真实天数**折算，并设 30 天最小跨度：
+    相隔一天的两次快照能外推出天文数字的年化收益，那是数学上成立、决策上无用的数。
+
 ### Fixed
 
 **错误处理链路此前完全不生效**
@@ -90,6 +103,9 @@
 - 测试从 56 个增至 112 个，新增 `test_validation.py`、`test_trade_service.py`、
   `test_import_cmd.py`、`test_config.py`、`test_list_cmd.py`、`test_cli_errors.py`；
   此前零覆盖的 `utils/` 与 `cli/` 错误路径开始有测试，退出码契约与排序契约被逐条锁住。
+- 随着 B-02 接线，测试增至 **159 个**，新增 `test_metrics.py`（31 个用例，覆盖空序列 /
+  单点 / 全涨 / 全跌 / 已知回撤 / 采样口径）与 `test_report_cmd.py`；
+  全项目行覆盖率 **67% → 76%**，`metrics.py` **0% → 100%**。
 
 ### Planned
 - 逐项清掉 [`docs/BACKLOG.md`](docs/BACKLOG.md) 的 B-01~B-12。
