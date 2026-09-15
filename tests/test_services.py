@@ -5,6 +5,7 @@
 
 from datetime import date
 
+import pandas as pd
 import pytest
 
 from holdings.data.fetcher import DataSourceUnavailableError, PriceResult
@@ -54,18 +55,29 @@ def test_summary_single_buy_with_cached_price(db_path, make_tx):
     assert summary.fee_breakdown == {"600519": 5.0}
 
 
-def test_summary_without_cached_price_uses_zero(db_path, make_tx):
-    """没有缓存价时不臆造价格，市值为 0。"""
+def test_summary_without_cached_price_reports_unknown_not_zero(db_path, make_tx):
+    """没有缓存价时是「不知道」，不是「值 0」。
+
+    此前 current_price 缺省取 0.0，盈亏率于是算成 −100.00%——用户看到的是
+    「血亏 100%」，而事实只是还没同步过。
+    """
     transaction_dao.add(db_path, make_tx(qty=100, price=10.0, fee=0.0))
 
     summary = portfolio_service.get_summary(db_path)
 
     row = summary.holdings_df.iloc[0]
-    assert row["current_price"] == 0.0
-    assert row["market_value"] == 0.0
+    assert pd.isna(row["current_price"])
+    assert pd.isna(row["market_value"])
+    assert pd.isna(row["profit"])
+    assert pd.isna(row["profit_rate"])
+    # 汇总里一个能定价的标的都没有：不是 0，是未知
     assert summary.total_value == 0.0
-    # 盈亏 = (0 - 10) * 100 - 0 = -1000
-    assert summary.total_profit == pytest.approx(-1000.0)
+    assert summary.total_profit is None
+    assert summary.profit_rate is None
+    assert summary.total_cost == 0.0
+    # 但「谁没行情、它值多少成本」要如实报出来
+    assert summary.unpriced_symbols == ["600519"]
+    assert summary.unpriced_cost == pytest.approx(1000.0)
 
 
 def test_summary_excludes_fully_sold_position(db_path, make_tx):

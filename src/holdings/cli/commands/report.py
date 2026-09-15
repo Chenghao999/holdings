@@ -16,6 +16,8 @@ def report_cmd(verbose: bool) -> None:
         render_fee_table,
         render_holdings_table,
         render_performance_line,
+        render_summary_line,
+        render_unpriced_hint,
     )
     from holdings.services.portfolio_service import get_summary
     from holdings.services.report_service import get_performance
@@ -27,12 +29,10 @@ def report_cmd(verbose: bool) -> None:
 
     console = Console()
     console.print(render_holdings_table(summary.holdings_df))
-    console.print(
-        f"总市值 {summary.total_value:,.2f} | "
-        f"总成本 {summary.total_cost:,.2f} | "
-        f"总盈亏 {summary.total_profit:,.2f} ({summary.profit_rate:.2f}%) | "
-        f"累计费用 {summary.total_fees:,.2f}"
-    )
+    console.print(render_summary_line(summary))
+    hint = render_unpriced_hint(summary)
+    if hint:
+        console.print(f"[yellow]{hint}[/yellow]")
     # 绩效来自 snapshots（用户手记），与上面的持仓汇总（来自交易流水）是两条数据源，
     # 没有记过快照时它整行都是 `—`，这很正常，不是错误。
     console.print(render_performance_line(performance))

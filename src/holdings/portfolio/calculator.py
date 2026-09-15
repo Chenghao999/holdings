@@ -30,16 +30,22 @@ class Position:
 
 @dataclass
 class Holding:
-    """某标的某时间的最终持仓状态，可直接用于渲染与报表。"""
+    """某标的某时间的最终持仓状态，可直接用于渲染与报表。
+
+    `current_price` 为 `None` 表示**这只标的没有行情**（还没同步过，或者数据源
+    没取到）。此时市值、盈亏、盈亏率**一律是 `None`，不是 0**：按 0 算出来的
+    盈亏率是 −100%，用户看到的是「血亏 100%」，而事实只是「不知道」。
+    渲染层据此显示 `—`。
+    """
 
     symbol: str
     quantity: float
     avg_cost: float
     total_fees: float
-    current_price: float = 0.0
-    market_value: float = 0.0
-    profit: float = 0.0
-    profit_rate: float = 0.0
+    current_price: float | None = None
+    market_value: float | None = None
+    profit: float | None = None
+    profit_rate: float | None = None
 
 
 def _weighted_buy(pos: Position, tx: Transaction) -> None:
@@ -115,11 +121,23 @@ def compute_positions(
     return positions
 
 
-def holding_for(position: Position, current_price: float) -> Holding:
-    """根据持仓与当前价计算盈亏与收益率。"""
+def holding_for(position: Position, current_price: float | None) -> Holding:
+    """根据持仓与当前价计算盈亏与收益率。
+
+    `current_price=None` 表示没有行情：市值、盈亏、盈亏率都是 `None`。
+    零成本持仓（`avg_cost == 0`）的收益率同样无定义，一并给 `None`——
+    比起一个看着像结论的 `0.00%`，「算不出来」才是实话。
+    """
+    if current_price is None:
+        return Holding(
+            symbol=position.symbol,
+            quantity=position.quantity,
+            avg_cost=position.avg_cost,
+            total_fees=position.total_fees,
+        )
     market_value = position.quantity * current_price
     profit = (current_price - position.avg_cost) * position.quantity - position.total_fees
-    rate = (current_price / position.avg_cost - 1) * 100 if position.avg_cost else 0.0
+    rate = (current_price / position.avg_cost - 1) * 100 if position.avg_cost else None
     return Holding(
         symbol=position.symbol,
         quantity=position.quantity,

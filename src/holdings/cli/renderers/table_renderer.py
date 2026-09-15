@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING
 
 from rich.table import Table
 
 if TYPE_CHECKING:
+    from holdings.services.portfolio_service import PortfolioSummary
     from holdings.services.report_service import PerformanceSummary
 
 # 指标口径不成立时统一显示这个，而不是 0——「回撤 0.00%」看着像结论，
@@ -20,6 +22,15 @@ def _percent(value: float | None) -> str:
 
 def _number(value: float | None) -> str:
     return _UNKNOWN if value is None else f"{value:.2f}"
+
+
+def _missing(value) -> bool:
+    """pandas 把 None 存成 NaN，所以「没有值」有两种长相，都要认。"""
+    return value is None or (isinstance(value, float) and math.isnan(value))
+
+
+def _money(value) -> str:
+    return _UNKNOWN if _missing(value) else f"{value:,.2f}"
 
 
 def render_performance_line(perf: PerformanceSummary) -> str:
@@ -74,11 +85,13 @@ def render_holdings_table(holdings_df) -> Table:
             str(row.get("asset_type", "")),
             f"{row.get('quantity', 0):.4f}",
             f"{row.get('avg_cost', 0):.4f}",
-            f"{row.get('current_price', 0):.4f}",
-            f"{row.get('market_value', 0):,.2f}",
+            # 没有行情的标的：现价、市值、盈亏、盈亏率一律显示 `—`。
+            # 按 0 显示会让盈亏率变成「−100.00%」，那是没同步过，不是血亏。
+            _UNKNOWN if _missing(row.get("current_price")) else f"{row['current_price']:.4f}",
+            _money(row.get("market_value")),
             f"{row.get('total_fees', 0):,.4f}",
-            f"{row.get('profit', 0):,.2f}",
-            f"{row.get('profit_rate', 0):.2f}%",
+            _money(row.get("profit")),
+            _UNKNOWN if _missing(row.get("profit_rate")) else f"{row['profit_rate']:.2f}%",
         )
     return table
 
@@ -134,3 +147,31 @@ def render_snapshots_table(snapshots) -> Table:
             s.note or "",
         )
     return table
+
+
+def render_summary_line(summary: PortfolioSummary) -> str:
+    """持仓汇总行。口径是**有行情的标的**，没算进去的由提示行说明。
+
+    一处也没有行情时不再印 `0.00`：那会让「总市值 0 / 总成本 0 / 总盈亏 0」
+    看起来像空仓，而实际是持有着、只是不知道现在值多少。
+    """
+    profit = (
+        _UNKNOWN
+        if summary.total_profit is None
+        else f"{summary.total_profit:,.2f} ({summary.profit_rate:.2f}%)"
+    )
+    priced = not summary.unpriced_symbols or bool(summary.allocation)
+    value = f"{summary.total_value:,.2f}" if priced else _UNKNOWN
+    cost = f"{summary.total_cost:,.2f}" if priced else _UNKNOWN
+    return f"总市值 {value} | 总成本 {cost} | 总盈亏 {profit} | 累计费用 {summary.total_fees:,.2f}"
+
+
+def render_unpriced_hint(summary: PortfolioSummary) -> str | None:
+    """没有行情的标的提示。没有返回 None，调用方据此决定印不印。"""
+    if not summary.unpriced_symbols:
+        return None
+    return (
+        f"{len(summary.unpriced_symbols)} 个标的无行情"
+        f"（成本合计 {summary.unpriced_cost:,.2f}），未计入上面的汇总；"
+        f"请先执行 holdings sync"
+    )
