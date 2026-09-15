@@ -14,6 +14,9 @@ holdings init
 
 初始化后会在项目目录生成 `data/holdings.db` 与 `config.yaml`。
 
+> 数据源依赖（akshare / yfinance）不在默认安装里。同步价格前请先
+> `pip install 'holdings[data]'`，或用 `holdings check` 确认是否齐全。
+
 ---
 
 ## 命令详解
@@ -31,7 +34,7 @@ holdings init --dev       # 开发/测试环境（可选）
 
 ### 2. `holdings add` —— 新增交易
 
-支持交互式输入或全参数传入。
+所有字段通过命令行参数传入，**没有交互式输入**。
 
 ```bash
 # 买入股票（含手续费）
@@ -45,17 +48,25 @@ holdings add --symbol 600519 --market A股 --type SELL --qty 50 --price 1750.0
 
 # 记录一笔基金托管费（trade_type=FEE）
 holdings add --symbol 518880 --market A股 --type FEE --qty 0 --price 0 --fee 12.5 --notes "4月托管费"
+
+# 补录往日交易
+holdings add --symbol 600519 --market A股 --type BUY --qty 100 --price 1600 --date 2025-03-01
 ```
 
 | 参数 | 说明 |
 |------|------|
-| `--symbol` | 标的代码 |
-| `--market` | 市场：`A股` / `美股` / `黄金` |
-| `--type` | 类型：`BUY` / `SELL` / `FEE` |
-| `--qty` | 数量（FEE 类型填 0） |
-| `--price` | 单价（FEE 类型填 0） |
-| `--fee` | 费用（佣金、印花税、托管费等） |
+| `--symbol` | 标的代码（必填） |
+| `--market` | 市场（必填）：`A股` / `美股` / `黄金` |
+| `--type` | 类型（必填）：`BUY` / `SELL` / `FEE` |
+| `--qty` | 数量（必填；FEE 类型填 0） |
+| `--price` | 单价（必填；FEE 类型填 0） |
+| `--fee` | 费用（佣金、印花税、托管费等），默认 0 |
+| `--date` | 交易日期 `YYYY-MM-DD`，默认今天 |
+| `--group` | 组合分组，默认取配置项 `default_group` |
 | `--notes` | 备注（可选） |
+
+写入前会结合**历史持仓**校验这笔交易：卖出数量不得超过当时的持有量，数量、单价、费用不得为负。
+补录往日交易也按交易发生时的持仓判定，不按当前持仓。校验失败返回退出码 `5`，账本不会写入。
 
 ---
 
@@ -65,9 +76,16 @@ holdings add --symbol 518880 --market A股 --type FEE --qty 0 --price 0 --fee 12
 # 查看全部持仓
 holdings list
 
-# 按盈亏率排序
+# 按盈亏率降序
 holdings list --sort 盈亏率
+
+# 只看某个组合
+holdings list --group 养老金
 ```
+
+`--sort` 接受表格里的中文表头（`代码` / `市场` / `类型` / `数量` / `成本价` / `现价` /
+`市值` / `累计费用` / `盈亏` / `盈亏率`），一律降序；也接受对应的英文列名（如 `profit_rate`）。
+传其它值会直接报错，不会静默按原顺序输出。
 
 ---
 
@@ -85,6 +103,9 @@ holdings import --file trades.csv --group 养老金 --fee-column 手续费
 | `--group` | 组合分组（如「养老金」「压岁钱」） |
 | `--fee-column` | CSV 中的费用列名，映射到 `fee` 字段 |
 
+导入是**整批校验、单事务写入**：任一行数据非法（或缺少必需列、`--fee-column`
+指向不存在的列）则一笔都不写入，并提示出错行号。不会留下半批数据。
+
 ---
 
 ### 5. `holdings sync` —— 同步最新价格
@@ -95,6 +116,8 @@ holdings sync --market 全部     # 也可指定 A股 / 美股 / 黄金
 
 同步会更新 `price_cache` 与持仓市值。同一标的 5 分钟内不会重复请求网络。
 
+只要有一个标的同步成功即返回退出码 `0`；**全部失败返回 `1`**，便于脚本判断。
+
 ---
 
 ### 6. `holdings report` —— 生成综合报表
@@ -103,27 +126,39 @@ holdings sync --market 全部     # 也可指定 A股 / 美股 / 黄金
 holdings report --verbose
 ```
 
-终端显示持仓表格、配置占比柱状图，并单独汇总费用支出。
+终端显示持仓表格与汇总行；加 `--verbose` 额外显示费用分项表与资产配置占比表。
 
 ---
 
 ### 7. `holdings snapshot` —— 记录资产快照
 
 ```bash
-holdings snapshot --note "月度定投第12期"
+holdings snapshot --total 158000 --equity 120000 --gold 20000 --cash 18000
 ```
 
-用于净值追踪，写入 `snapshots` 表。
+| 参数 | 说明 |
+|------|------|
+| `--total` | 总资产（必填） |
+| `--equity` | 权益类资产，默认 0 |
+| `--gold` | 黄金资产，默认 0 |
+| `--cash` | 现金余额，默认 0 |
+| `--date` | 快照日期 `YYYY-MM-DD`，默认今天 |
+| `--note` | 备注，**仅回显在命令输出里，不写入数据库** |
+
+同日期的快照只能有一条，重复记录会报错（退出码 `4`）。
 
 ---
 
 ### 8. `holdings chart` —— 生成净值曲线图
 
 ```bash
-holdings chart --output networth.html --start 2025-01-01
+holdings chart --output networth.html
 ```
 
-生成交互式 HTML，自动打开浏览器预览。
+基于 `snapshots` 表生成交互式 HTML 并自动打开浏览器。数据不足时生成的曲线为空，
+先积累几条 `snapshot` 再画。
+
+> `--start` 目前是预留参数，**尚未生效**（不会过滤起始日期）。
 
 ---
 
@@ -133,4 +168,37 @@ holdings chart --output networth.html --start 2025-01-01
 holdings remove --id 3
 ```
 
-需二次确认后删除指定 ID 的交易记录。
+需二次确认后删除指定 ID 的交易记录。ID 不存在时退出码 `2`；用户在确认提示里
+选「否」或按 `Ctrl-C` 中止，退出码为 `130`。
+
+---
+
+### 10. `holdings check` —— 检查运行环境
+
+```bash
+holdings check
+holdings check --json
+```
+
+列出各依赖包是否已安装，标出缺失的必需依赖。全部齐全返回 `0`，
+缺失必需依赖返回 `1`。
+
+> `--json` 模式目前**不区分成功与失败**，无论是否缺依赖都返回 `0`，
+> 供管道消费时请以 JSON 内容为准。
+
+---
+
+## 退出码
+
+| 退出码 | 含义 |
+|--------|------|
+| `0` | 成功 |
+| `1` | 网络错误 / 数据源不可用 / 依赖缺失 |
+| `2` | 数据不存在（标的 / 交易记录未找到） |
+| `3` | 配置错误 |
+| `4` | 数据库错误 |
+| `5` | 参数校验失败 / 用户输入非法 |
+| `130` | 用户中止（`Ctrl-C` 或拒绝确认） |
+
+错误信息一律输出到 `stderr`，格式为 `错误（<退出码>）：<人类可读信息>`。
+完整规范见 [ERROR_HANDLING.md](ERROR_HANDLING.md)。

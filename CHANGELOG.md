@@ -36,14 +36,53 @@
   并提示缺失的数据源依赖。
 - `storage/db.py` 的 `connect()` 在建表失败时关闭连接，不再泄漏句柄；
   数据库目录创建失败包装为 `DatabaseError`。
+- `list --sort 盈亏率` 此前**静默失效**：中文表头被直接拿去和 DataFrame 的英文列名
+  （`profit_rate`）比较，永不匹配，于是既不排序也不报错——文档与 README 都写了这个
+  示例，用户以为排了序，拿到的其实是原始顺序。现建立中英列名映射，并用
+  `click.Choice` 校验取值，非法字段名返回退出码 5 而不是静默通过。
+- `holdings chart` 缺 plotly 时抛的是裸 `RuntimeError`，绕过退出码映射且只提示
+  「未安装 plotly」。现改为 `MissingDependencyError`（退出码 1），并给出可执行的
+  `pip install 'holdings[chart]'`。
+
+### Changed
+- 新增 `chart` 可选依赖组（`plotly`）。此前 plotly 只挂在 `gui` extra 里，
+  只装 `holdings[data]` 的用户跑 `holdings chart` 会缺依赖，安装提示还要求连
+  PySide6 一起装——画一张净值曲线不该需要 GUI 框架。
+- 从 `dev` extra 移除 `responses`：全项目零引用（见 [TESTING_STRATEGY](docs/TESTING_STRATEGY.md)）。
+
+### Docs
+- 全量核对文档与代码，修掉一批「文档承诺、代码没有」的陈述：
+  - 「三级降级 + 超时重试」名不副实：只有 A 股有 akshare→yfinance 的降级与 1 次重试，
+    美股是 yfinance 单一数据源，且**全项目没有任何网络超时设置**。
+    README / FEATURES / ROADMAP / FAQ 均已改为准确描述。
+  - `CONFIG_SPEC.md` 标注出 4 个**尚未生效**的配置项（`default_market`、
+    `data_sources.priority`、`sync.timeout_seconds`、`sync.retry_count`）——
+    此前文档把它们写成生效的行为，FAQ 甚至建议用户去调 `sync.retry_count` 排查网络问题，
+    而那个值根本没有代码读取。
+  - `CONFIG_SPEC.md` 修正 `save_config()`（不存在，实为 `Config.save()`）、
+    「文件不存在时自动生成配置」（实际不落盘）、字段取值校验（尚未实现）三处描述。
+  - `USER_GUIDE.md` 补上此前完全没写的第 10 个命令 `holdings check`；
+    修正 `add` 的「支持交互式输入」（不存在）、`snapshot --note "…"` 这个跑不通的示例
+    （`--total` 才是必填，且 `--note` 只回显不入库）、`report` 的「配置占比柱状图」
+    （实际是表格）、`chart --start`（预留参数，尚未生效）；新增退出码一览表。
+  - `TESTING_STRATEGY.md` 更新为真实的测试文件树与用例数，改正不存在的
+    `test_fetcher_mock.py`，补上实测覆盖率（全项目 67%，`calculator.py` 99%，
+    `metrics.py` 0%）与低于目标的区域。
+  - `FEATURES.md` 补上 `check` 命令行；说明 `AssetType` 的 `etf` 目前没有录入入口。
+  - `ARCHITECTURE.md` 目录树按实际文件重写；新增「铁律当前执行情况」一节，
+    如实记下铁律 3（`cli` 只经 `services`）被 `snapshot` / `remove` 两处违反，
+    `init` 作为引导命令属合理例外。
 
 ### Added
 - `holdings/exceptions.py`：统一的异常基类与退出码契约。
+- `MissingDependencyError`：可选依赖缺失（如画图缺 plotly），退出码 1，
+  与「数据源不可用」区分开——重试没有意义，必须给出安装命令。
 - `services/trade_service.py`：交易写入闸门（`add_transaction` / `add_transactions`）。
 - `storage/transaction_dao.add_many()`：单事务批量写入，支持整批回滚。
-- 测试从 56 个增至 104 个，新增 `test_validation.py`、`test_trade_service.py`、
-  `test_import_cmd.py`、`test_config.py`、`test_cli_errors.py`；
-  此前零覆盖的 `utils/` 与 `cli/` 错误路径开始有测试，退出码契约被逐条锁住。
+- `chart` 可选依赖组（见「Changed」）。
+- 测试从 56 个增至 112 个，新增 `test_validation.py`、`test_trade_service.py`、
+  `test_import_cmd.py`、`test_config.py`、`test_list_cmd.py`、`test_cli_errors.py`；
+  此前零覆盖的 `utils/` 与 `cli/` 错误路径开始有测试，退出码契约与排序契约被逐条锁住。
 
 ### Planned
 - **v1.0.0（2027 Q2）**：补齐单元测试覆盖率，稳定 CLI 交互与错误码；录制演示 GIF。

@@ -26,16 +26,23 @@
 ### 2027 Q1 —— v0.2.0（数据接入 + 报表）✅
 
 - [x] 集成 `akshare` 与 `yfinance`。
-- [x] 实现 `holdings sync`（三级降级 + 5 分钟缓存）。
+- [x] 实现 `holdings sync`（A 股降级 + 5 分钟缓存）。
 - [x] 先支持黄金 ETF（`518880`）与贵州茅台（`600519`）测试。
 - [x] 实现 `portfolio/calculator.py` 加权成本算法（含费用归集）。
-- [x] 实现 `holdings report`：表格 + 配比柱状图 + 费用汇总。
+- [x] 实现 `holdings report`：表格 + 配比表 + 费用汇总。
 
 ### 2027 Q2 —— v1.0.0（稳定 CLI）🚧
 
 - [x] 实现 `holdings snapshot` 与 `holdings chart` 净值曲线。
-- [x] 补齐单元测试，核心计算模块覆盖率达标。
-- [ ] 稳定 CLI 交互，完善错误码与异常处理。
+- [x] 补齐单元测试，核心计算模块覆盖率达标（`calculator.py` 99%，目标 ≥ 90%）。
+- [x] 稳定 CLI 交互，完善错误码与异常处理（入口点映射、参数校验、写入闸门已落地）。
+- [ ] 修复工程体检剩余发现（见 [CHANGELOG](../CHANGELOG.md) 与体检报告）：
+  - [ ] `asset_meta` 表接入 DAO 与展示，`portfolio/metrics.py` 接入 `report`
+  - [ ] 4 个未生效的配置项（`default_market` / `data_sources.priority` /
+        `sync.timeout_seconds` / `sync.retry_count`）接线或移除
+  - [ ] 网络请求补超时；`data/` 层降级路径补测试
+  - [ ] 配置项取值校验；`snapshot` 的 `--note` 持久化；`chart --start` 生效
+  - [ ] 统一 `check --json` 与文本模式的退出码
 - [ ] 用 `terminalizer` 录制演示 GIF，上传 GitHub。
 
 ### 2027 Q4 —— v2.0.0（GUI 预览）
@@ -47,4 +54,4 @@
 
 - [x] v0.1.0 已发布（2026-09-15）。
 - [x] v0.2.0 内容已随 v0.1.0 提前交付。
-- [ ] v1.0.0 进行中：功能已齐，剩余测试覆盖与交互打磨。
+- [ ] v1.0.0 进行中：功能已齐，剩余测试覆盖、体检发现的修复与交互打磨。

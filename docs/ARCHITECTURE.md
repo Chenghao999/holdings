@@ -9,44 +9,48 @@ holdings/
 ├── src/
 │   └── holdings/
 │       │
+│       ├── exceptions.py                    # 【基础层】全部自定义异常的基类，不 import 任何内部模块
+│       │
 │       ├── models/                          # 【基础层·无内部依赖】
 │       │   ├── transaction.py               #    仅依赖 pydantic，不 import 任何项目内部模块
 │       │   ├── snapshot.py                  #    定义与 storage 解耦的纯数据结构
-│       │   └── enums.py                     #    MarketType / TradeType（含 FEE）
+│       │   └── enums.py                     #    MarketType / AssetType / TradeType（含 FEE）
 │       │
 │       ├── utils/                           # 【基础层·无内部依赖】
 │       │   ├── config.py                    #    只做 YAML 读写 + 默认值，不引用业务模块
+│       │   ├── deps.py                      #    依赖包是否已安装的检测，纯函数
 │       │   ├── currency.py                  #    汇率换算（预留），独立纯函数
 │       │   └── formatter.py                 #    金额/百分比格式化，独立纯函数
 │       │
 │       ├── portfolio/                       # 【业务计算层·纯函数，零 IO】
-│       │   ├── calculator.py                #    加权成本/盈亏，只吃 models，不碰 storage/data
+│       │   ├── calculator.py                #    加权成本/盈亏/交易校验，只吃 models，不碰 storage/data
 │       │   ├── allocator.py                 #    配置占比，独立
 │       │   └── metrics.py                   #    年化/回撤/夏普，独立
 │       │
 │       ├── storage/                         # 【持久化层·只读写 DB，无业务计算】
-│       │   ├── db.py                        #    连接/建表/迁移，只依赖 models + utils/config
-│       │   ├── transaction_dao.py           #    交易 CRUD，只返回数据，不做计算
-│       │   └── snapshot_dao.py              #    快照 CRUD
+│       │   ├── db.py                        #    连接/建表/迁移
+│       │   ├── transaction_dao.py           #    交易 CRUD（含 add_many 单事务批量写）
+│       │   ├── snapshot_dao.py              #    快照 CRUD
+│       │   └── price_cache_dao.py           #    价格缓存 CRUD + TTL 新鲜度判断
 │       │
 │       ├── data/                            # 【数据获取层·只找外部 API，不碰 DB】
 │       │   ├── fetcher.py                   #    工厂统一入口，同步/异步双接口
-│       │   ├── a_stock.py                   #    akshare 实现，含重试/降级
-│       │   ├── us_stock.py                  #    yfinance 实现
+│       │   ├── a_stock.py                   #    akshare 实现，失败重试 1 次后降级 yfinance
+│       │   ├── us_stock.py                  #    yfinance 实现（单一数据源）
 │       │   └── gold.py                      #    黄金（国内现货优先，降级 GC=F）
 │       │
 │       ├── services/                        # 【编排层·唯一被 CLI/GUI 调用的入口】
 │       │   ├── portfolio_service.py         #    编排 portfolio + storage + data
+│       │   ├── trade_service.py             #    写入闸门：落库前的历史持仓校验
 │       │   ├── sync_service.py              #    编排 data + storage
-│       │   └── chart_service.py             #    编排 portfolio + storage，返回 Figure/JSON
+│       │   └── chart_service.py             #    编排 storage，返回 Figure/JSON
 │       │
 │       └── cli/                             # 【表现层·极薄，仅渲染输出】
-│           ├── main.py                      #    click 入口组，只转发到 services
+│           ├── main.py                      #    click 入口组 + 异常→退出码映射
 │           ├── commands/                    #    子命令：仅调用 service + 打印
-│           │   ├── add.py
-│           │   ├── list.py
-│           │   ├── sync.py
-│           │   └── report.py
+│           │   ├── init.py    add.py     check.py    list.py
+│           │   ├── import_cmd.py  sync.py   report.py
+│           │   └── snapshot.py  chart.py  remove.py
 │           └── renderers/                   #    把 Service 数据转为 Rich 表格/图表
 │               ├── table_renderer.py
 │               └── chart_renderer.py
@@ -56,8 +60,9 @@ holdings/
 ├── config.yaml                              # 用户配置
 ├── pyproject.toml
 └── tests/                                   # 每个模块独立测试，互不依赖
+    ├── conftest.py
     ├── test_calculator.py
-    └── test_fetcher_mock.py
+    └── test_data.py                         # 数据源工厂（不触网）
 ```
 
 ## 二、依赖方向（只能从上向下，禁止反向/跨层）
@@ -88,6 +93,28 @@ models / utils (基础层)
 | 4 | `services` 只做**编排**，不写具体 SQL、不发网络请求、不做算法 | 每个子模块可单独替换 |
 | 5 | `models` / `utils` 保持零内部依赖 | 基础层稳定，向上兼容 |
 | 6 | 返回值统一为 `dict` / `DataFrame` / `dataclass` / `pydantic` | 消除隐性共享可变状态 |
+
+### 铁律的当前执行情况（2026-09-15 核对）
+
+| # | 状态 | 说明 |
+|---|------|------|
+| 1 | ✅ | `portfolio/` `data/` `storage/` 三个核心层零 `print` / `click.echo` |
+| 2 | ✅ | `data/` 与 `storage/` 之间无相互引用 |
+| 3 | ⚠️ **3 处违反** | 见下方 |
+| 4 | ✅ | `services/` 内无裸 SQL、无网络请求 |
+| 5 | ✅ | `models/` `utils/` 只 import `exceptions`，无业务模块依赖 |
+| 6 | ✅ | |
+
+**铁律 3 的违反点**（`cli` 越过 `services` 直接触碰 `storage`）：
+
+| 文件 | 直接引用 | 待办 |
+|------|---------|------|
+| `cli/commands/snapshot.py` | `storage.snapshot_dao` | 需要一个 `snapshot_service` |
+| `cli/commands/remove.py` | `storage.transaction_dao` | 删除交易应收进 `trade_service` |
+| `cli/commands/init.py` | `storage.db.connect` | **可接受的例外**：`init` 是引导命令，它要建的正是其它 service 赖以工作的数据库 |
+
+补上前两个 service 后，本表只剩 `init` 这一条有理由的例外。在那之前，
+本项目的「cli 只经 services」是**未完全落实**的规范，不是已达成的事实。
 
 ## 四、模块职责 vs 禁止事项对照表
 
