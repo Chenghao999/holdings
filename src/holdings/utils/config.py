@@ -1,0 +1,106 @@
+"""配置的加载与写入（YAML）。
+
+支持读/写，供 CLI 与未来 GUI 共用。
+文件缺失时返回默认值，但仅在显式调用 save() 时落盘。
+"""
+
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass, field
+from pathlib import Path
+
+import yaml
+
+DEFAULT_CONFIG: dict = {
+    "default_market": "全部",
+    "cache_ttl_seconds": 300,
+    "data_sources": {
+        "priority": {
+            "A股": ["akshare", "yfinance"],
+            "美股": ["yfinance"],
+            "黄金": ["akshare", "yfinance"],
+        }
+    },
+    "sync": {"timeout_seconds": 10, "retry_count": 1},
+    "database_path": "data/holdings.db",
+    "default_group": "默认",
+}
+
+
+class ConfigError(Exception):
+    """配置文件缺失或字段非法。"""
+
+
+@dataclass
+class Config:
+    """配置对象，内部维护一份字典。"""
+
+    _data: dict = field(default_factory=lambda: dict(DEFAULT_CONFIG))
+    _path: Path | None = None
+
+    # 便捷访问
+    @property
+    def default_market(self) -> str:
+        return str(self._data["default_market"])
+
+    @property
+    def cache_ttl_seconds(self) -> int:
+        return int(self._data["cache_ttl_seconds"])
+
+    @property
+    def database_path(self) -> str:
+        return str(self._data["database_path"])
+
+    @property
+    def default_group(self) -> str:
+        return str(self._data["default_group"])
+
+    @property
+    def data_sources(self) -> dict:
+        return self._data["data_sources"]
+
+    @property
+    def sync(self) -> dict:
+        return self._data["sync"]
+
+    def get(self, key: str, default=None):
+        return self._data.get(key, default)
+
+    def set(self, key: str, value) -> None:
+        self._data[key] = value
+
+    def to_dict(self) -> dict:
+        return dict(self._data)
+
+    def save(self) -> None:
+        """将当前配置写入 YAML 文件（若未指定路径则写入默认位置）。"""
+        if self._path is None:
+            raise ConfigError("未指定配置文件路径，无法保存")
+        with open(self._path, "w", encoding="utf-8") as f:
+            yaml.safe_dump(self._data, f, allow_unicode=True, sort_keys=False)
+
+
+def _default_config_path() -> Path:
+    return Path("config.yaml")
+
+
+def load_config(path: str | os.PathLike | None = None) -> Config:
+    """加载配置。文件不存在时返回默认配置（不落盘）。"""
+    cfg_path = Path(path) if path else _default_config_path()
+    data = dict(DEFAULT_CONFIG)
+    if cfg_path.exists():
+        loaded = yaml.safe_load(cfg_path.read_text(encoding="utf-8")) or {}
+        if not isinstance(loaded, dict):
+            raise ConfigError(f"配置文件格式错误：{cfg_path}")
+        _deep_merge(data, loaded)
+    return Config(_data=data, _path=cfg_path)
+
+
+def _deep_merge(base: dict, override: dict) -> None:
+    """递归合并 override 到 base，保留 base 的默认结构。"""
+    for key, value in override.items():
+        if key in base and isinstance(base[key], dict) and isinstance(value, dict):
+            _deep_merge(base[key], value)
+        else:
+            base[key] = value

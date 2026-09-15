@@ -1,0 +1,302 @@
+好的，已根据您的要求修改了文档，重点增加了对**手续费（交易佣金）**和**基金托管费用**的完整支持。主要修改涉及：
+
+- 数据库 `transactions` 表增加 `fee` 字段，`trade_type` 扩展支持 `'FEE'` 类型记录定期费用；
+- CLI 命令 `add` 增加 `--fee` 参数，`import` 支持费用列映射；
+- 业务逻辑中明确费用计入持仓成本，并说明费用交易的独立处理方式；
+- 在多个章节补充相关说明，确保前后一致。
+
+以下是完整的修改后文档（修改处已用 `【修改】` 标记）：
+
+---
+
+# `holdings` —— 个人投资持仓追踪工具（全周期规划书）
+
+**项目口号**：*A CLI-first investment tracking tool, architected for future GUI/Web extensions.*  
+**开源协议**：MIT  
+**标签**：`#portfolio-cli` `#quant` `#python` `#akshare` `#yfinance`
+
+---
+
+## 一、项目定位与核心目标
+
+`holdings` 是一款专为 Python 开发者设计的本地化投资管理命令行工具，旨在解决支付宝、券商APP数据分散、历史回溯困难的问题。
+
+- **当前阶段（MVP）**：纯命令行交互，支持手动导入+自动同步价格，数据全量本地存储（SQLite）。  
+  **【修改】新增**：完整支持**交易手续费（佣金、印花税等）**和**基金托管费、管理费**的记录与成本核算，满足基金定投等场景的真实费用追踪。
+- **中期规划**：升级为 **Textual TUI**（终端仪表盘）或 **Streamlit Web看板**。
+- **远期规划**：基于 **PySide6** 打造跨平台桌面应用，或通过 **FastAPI** 提供RESTful服务。
+
+---
+
+## 二、技术栈推荐（细化 & GUI友好版）
+
+| 层级 | 推荐工具 | 版本/说明 | GUI适配备注 |
+|------|---------|----------|------------|
+| **CLI框架** | `click` | >=8.0.0 | 仅负责参数解析，所有逻辑下沉至Service层 |
+| **终端美化** | `rich` | >=13.0.0 | 仅用于CLI渲染；未来GUI将替换为Qt/Streamlit组件 |
+| **数据存储** | `sqlite3`(内置) + `pandas` | 内置 / >=2.0 | 无需服务器，单文件便携 |
+| **数据校验** | `pydantic` | >=2.0 | 定义前后端统一的DTO（数据传输对象） |
+| **A股数据** | `akshare` | 最新版 | 免费，无需API Key |
+| **美股/国际黄金** | `yfinance` | >=0.2.0 | 代码 `GC=F` 为黄金连续合约 |
+| **国内黄金现货** | `akshare` | - | 现货SGE或黄金ETF `518880` |
+| **配置管理** | `pyyaml` + `toml` | - | 提供 `load_config` / `save_config`（GUI设置界面依赖写入） |
+| **可视化** | `plotly` | >=5.0.0 | 生成交互式HTML；GUI中可直接嵌入 `QWebEngineView` |
+| **异步支持** | `asyncio` + `aiohttp` | 内置 | CLI暂用同步；GUI必须开线程/协程防卡顿 |
+| **测试** | `pytest` + `pytest-cov` | - | 重点覆盖 `portfolio/calculator.py` 的计算逻辑 |
+| **包管理** | `uv` 或 `poetry` | - | 支持 `extras` 标记可选GUI依赖 |
+
+---
+
+## 三、项目架构（严格三层分离，为GUI铺路）
+
+```text
+holdings/
+├── src/
+│   └── holdings/                          # 核心包
+│       ├── __init__.py
+│       │
+│       ├── services/                      # 【核心】统一服务层（GUI和CLI共用）
+│       │   ├── __init__.py
+│       │   ├── portfolio_service.py       # 获取持仓汇总、盈亏（返回dataclass/DataFrame）
+│       │   ├── sync_service.py            # 拉取价格、更新缓存（返回同步结果对象）
+│       │   └── chart_service.py           # 准备图表数据（返回plotly Figure或JSON）
+│       │
+│       ├── cli/                           # 【表现层-终端】仅做输入输出渲染
+│       │   ├── __init__.py
+│       │   ├── main.py                    # click主入口组
+│       │   ├── commands/                  # 子命令实现（极薄，仅调用service+打印）
+│       │   │   ├── add.py
+│       │   │   ├── list.py
+│       │   │   ├── sync.py
+│       │   │   └── report.py
+│       │   └── renderers/                 # 专门将Service数据转为Rich表格/进度条
+│       │       ├── table_renderer.py
+│       │       └── chart_renderer.py      # 调用plotly输出HTML
+│       │
+│       ├── models/                         # 【数据模型】Pydantic
+│       │   ├── transaction.py
+│       │   ├── snapshot.py
+│       │   └── enums.py                   # MarketType, TradeType（扩展FEE）
+│       │
+│       ├── data/                           # 【数据获取层】外部API封装
+│       │   ├── fetcher.py                 # 工厂模式，统一入口
+│       │   ├── a_stock.py                 # akshare实现（含重试/降级）
+│       │   ├── us_stock.py                # yfinance实现
+│       │   └── gold.py                    # 黄金（优先国内现货，降级至GC=F）
+│       │
+│       ├── portfolio/                      # 【业务逻辑层】纯计算，无IO，无print
+│       │   ├── calculator.py              # 加权平均成本、盈亏计算（纯函数，含费用处理）
+│       │   ├── allocator.py               # 资产配置占比
+│       │   └── metrics.py                 # 年化收益、夏普比率、最大回撤
+│       │
+│       ├── storage/                        # 【持久化层】SQLite CRUD
+│       │   ├── db.py                      # 连接管理、建表迁移
+│       │   ├── transaction_dao.py
+│       │   └── snapshot_dao.py
+│       │
+│       └── utils/                          # 工具函数
+│           ├── config.py                  # 加载 & 写入 YAML（支持GUI修改配置）
+│           ├── currency.py                # 汇率换算（预留）
+│           └── formatter.py               # 金额/百分比格式化
+│
+├── data/                                   # 本地数据目录（自动创建）
+│   └── holdings.db
+├── snapshots/                              # 图表HTML导出目录
+├── config.yaml                             # 用户配置（可读写）
+├── pyproject.toml                          # 依赖管理（含可选GUI依赖组）
+├── README.md
+└── tests/                                  # 单元测试
+    ├── test_calculator.py
+    └── test_fetcher_mock.py
+```
+
+---
+
+## 四、数据库设计（扩展版）
+
+> 在原有3张表基础上，新增 **`price_cache`** 表，并扩展 `transactions` 字段以支持多账户及费用记录。  
+> **【修改】明确支持手续费、基金托管费等各类费用。**
+
+```sql
+-- 1. 交易记录表（支持多账户/组合，且包含费用字段）
+CREATE TABLE transactions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    portfolio_group TEXT DEFAULT '默认',   -- 未来GUI支持多账户（如：养老金、压岁钱）
+    symbol TEXT NOT NULL,
+    market TEXT NOT NULL,                 -- 'A股' / '美股' / '黄金'
+    asset_type TEXT NOT NULL,             -- 'stock' / 'etf' / 'gold'
+    trade_date TEXT NOT NULL,
+    trade_type TEXT NOT NULL,             -- 'BUY' / 'SELL' / 'FEE'  【修改】新增FEE类型
+    quantity REAL NOT NULL,               -- 对于FEE类型，quantity填0
+    price REAL NOT NULL,                  -- 对于FEE类型，price填0
+    fee REAL DEFAULT 0,                   -- 【修改】统一费用字段（佣金、印花税、托管费等）
+    notes TEXT
+);
+
+-- 2. 每日快照表（净值曲线数据源）
+CREATE TABLE snapshots (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    snapshot_date TEXT NOT NULL UNIQUE,
+    total_value REAL NOT NULL,
+    cash_balance REAL DEFAULT 0,
+    equity_value REAL NOT NULL,
+    gold_value REAL NOT NULL,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 3. 资产基础信息表（名称缓存）
+CREATE TABLE asset_meta (
+    symbol TEXT PRIMARY KEY,
+    name TEXT,
+    market TEXT,
+    currency TEXT DEFAULT 'CNY',
+    annual_management_fee REAL DEFAULT 0,  -- 【修改】新增年化管理费率（如基金托管费），用于参考
+    updated_at TEXT
+);
+
+-- 4. 价格缓存表
+CREATE TABLE price_cache (
+    symbol TEXT PRIMARY KEY,
+    price REAL NOT NULL,
+    currency TEXT DEFAULT 'CNY',
+    update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    source TEXT                           -- 'akshare' / 'yfinance'
+);
+
+-- 索引优化
+CREATE INDEX idx_trans_symbol ON transactions(symbol);
+CREATE INDEX idx_trans_date ON transactions(trade_date);
+CREATE INDEX idx_cache_time ON price_cache(update_time);
+```
+
+---
+
+## 五、核心业务逻辑算法详解
+
+| 模块 | 核心算法 / 实现细节 |
+|------|-------------------|
+| **持仓成本计算** | 采用**移动加权平均法**，**【修改】在买入时计入`fee`字段**：<br>• 买入时：`新成本 = (旧数量×旧成本 + 新数量×新价 + 新费用) / (旧数量 + 新数量)`<br>• 卖出时：**数量减少，成本价保持不变**（简单且符合国内多数券商展示逻辑）<br>• `trade_type='FEE'` 的交易**不改变持仓数量和成本**，仅影响现金余额，在报表中单独列示费用支出。<br>• 该逻辑封装在 `portfolio/calculator.py` 中，**纯函数无状态**。 |
+| **盈亏与收益率** | • 持仓盈亏 = `(当前市价 - 平均成本) × 持仓数量 - 累计费用`（费用作为成本的一部分）<br>• 持仓收益率 = `(当前市价 / 平均成本 - 1) × 100%`（费用隐含在成本中） |
+| **数据同步与容错** | • **三级降级策略**：A股优先 `akshare` → 超时重试1次 → 降级至 `yfinance`（仅支持部分A股大盘）<br>• **防封禁缓存**：同一代码在 `price_cache` 中若更新时间 < 5分钟，直接返回缓存，不请求网络。<br>• **进度反馈**：CLI使用 `tqdm` 或 `rich.progress`；未来GUI通过信号槽（Signal/Slot）更新进度条。 |
+| **净值与回撤** | • 净值曲线：读取 `snapshots` 表，使用 `plotly` 绘制。<br>• 最大回撤：`(峰顶值 - 谷底值) / 峰顶值`，利用 `numpy` 向量化计算，无需循环。 |
+
+---
+
+## 六、CLI 命令设计（第一版用户体验）
+
+```bash
+# 初始化项目（创建数据库、config.yaml）
+holdings init
+
+# 添加一笔交易（支持交互式输入或全参数传入）
+# 【修改】增加 --fee 参数，用于记录手续费、托管费等
+holdings add --symbol 600519 --market A股 --type BUY --qty 100 --price 1680.5 --fee 5.0
+
+# 添加一笔基金托管费用（trade_type=FEE）
+holdings add --symbol 518880 --market A股 --type FEE --qty 0 --price 0 --fee 12.5 --notes "4月托管费"
+
+# 查看当前持仓明细（支持按盈亏率排序）
+holdings list --sort 盈亏率
+
+# 从支付宝/券商导出的CSV批量导入历史交易（支持费用列映射）
+# 【修改】import 命令支持 --fee-column 指定费用列，映射到 fee 字段
+holdings import --file trades.csv --group 养老金 --fee-column 手续费
+
+# 拉取所有资产的最新价格（更新price_cache和市值）
+holdings sync --market 全部     # 也可指定 A股 / 美股 / 黄金
+
+# 生成综合报表（终端显示表格+配比柱状图，费用支出单独汇总）
+holdings report --verbose
+
+# 记录当前时间点的总资产快照（用于净值追踪）
+holdings snapshot --note "月度定投第12期"
+
+# 生成交互式净值曲线图（自动打开浏览器预览HTML）
+holdings chart --output networth.html --start 2025-01-01
+
+# 删除指定ID的交易记录（需二次确认）
+holdings remove --id 3
+```
+
+---
+
+## 七、面向未来的 GUI 扩展策略（核心原则）
+
+### 1. 写 CLI 时必须遵守的 3 条铁律
+- **铁律一**：`portfolio/`、`data/`、`storage/` 目录下**严禁出现** `print`、`click.echo` 或 `rich.print`，所有返回必须是 `dict`、`DataFrame` 或 `Pydantic`/`dataclass` 对象。
+- **铁律二**：配置管理必须支持 **读/写**（`config.save()`），因为GUI设置界面需要修改配置并持久化。
+- **铁律三**：数据获取层（`data/fetcher.py`）同时提供 **同步方法**（供CLI）和 **异步方法**（供GUI协程），初期同步方法可直接调用 `asyncio.run()` 垫片。
+
+### 2. Service 层设计示例（纯数据返回）
+```python
+# src/holdings/services/portfolio_service.py
+from dataclasses import dataclass
+import pandas as pd
+
+@dataclass
+class PortfolioSummary:
+    total_value: float
+    total_cost: float          # 含累计费用
+    total_profit: float
+    profit_rate: float
+    total_fees: float          # 【修改】累计费用总额
+    allocation: dict           # {'stock': 0.7, 'gold': 0.3}
+    holdings_df: pd.DataFrame  # 持仓明细表
+    fee_breakdown: dict        # 【修改】按标的分项费用
+
+def get_summary(db_path: str) -> PortfolioSummary:
+    # 只做计算，不输出任何文字
+    df = transaction_dao.get_all(db_path)
+    # ... 纯计算，含费用累加 ...
+    return PortfolioSummary(...)
+```
+
+### 3. GUI 框架选型路线图
+| 阶段 | 框架 | 理由 | 开发成本 |
+|------|------|------|---------|
+| **中期（TUI）** | `Textual` | `rich`的升级版，终端内支持鼠标交互、实时刷新，用户无需离开终端即可获得“伪桌面”体验。 | 极低（2-3天） |
+| **中后期（Web）** | `Streamlit` | 直接调用 `services` 层，3天搭建数据看板，支持分享链接给朋友看持仓曲线。 | 极低 |
+| **远期（桌面）** | `PySide6` | 真正的跨平台EXE，可打包发布，支持系统托盘、通知提醒。 | 中等（需处理信号/槽） |
+| **远期（云端）** | `FastAPI + Vue` | 手机/平板随时随地查看，多端同步。 | 较高（需服务器运维） |
+
+### 4. 依赖管理（`pyproject.toml` 预留扩展）
+```toml
+[project.optional-dependencies]
+gui = ["PySide6>=6.6.0", "plotly>=5.0.0"]
+tui = ["textual>=0.50.0"]
+web = ["streamlit>=1.30.0", "fastapi>=0.100.0"]
+```
+
+---
+
+## 八、你需要向“谁”学习（具体指引）
+
+1. **学架构设计** → GitHub 上的 [`stonks-cli`](https://github.com/stonks-cli/stonks-cli)（学YAML配置与TUI布局）和 [`Optitrader`](https://github.com/robertmartin8/Optitrader)（学工厂模式与分层）。
+2. **学编码细节** → `Click` 作者 **Armin Ronacher** 的官方教程（学上下文传递）；`Rich` 作者 **Will McGugan** 的示例代码（学动态表格刷新）。
+3. **学金融计算** → 书籍 **《Python for Finance》** (Yves Hilpisch) 的第5、8章（波动率、回撤、夏普比率代码直接借鉴）。
+4. **学数据容错** → 去看 `akshare` 维护者 **Jimmy（赵一鸣）** 在 Issues 区关于“指数退避重试”和“多源降级”的回复。
+5. **学需求迭代** → **你自己的支付宝/券商交易记录**。先把真实历史数据导出来喂给程序，你会发现“分红处理”、“汇率换算”等真实需求。
+
+---
+
+## 九、开发路线图（分步实施建议）
+
+- **第1周（MVP）**：搭建项目骨架，完成 `storage/db.py` 建表 + `models` 定义。实现 `holdings add`（含 `--fee`）和 `holdings list`（手动输入价格，不联网）。跑通CRUD。
+- **第2周（数据接入）**：集成 `akshare` 和 `yfinance`，实现 `holdings sync`，先支持黄金ETF（`518880`）和贵州茅台（`600519`）测试。
+- **第3周（计算与报表）**：实现 `portfolio/calculator.py` 加权成本算法（含费用归集），`holdings report` 输出漂亮表格和配比柱状图，并汇总费用明细。
+- **第4周（回溯与可视化）**：实现 `holdings snapshot` 和 `holdings chart`，生成净值曲线。
+- **第5周（打磨与发布）**：完善 `README.md`，用 `terminalizer` 录制 GIF 演示，上传 GitHub 并打上标签。
+
+---
+
+项目名称 **`holdings`** 简洁有力，承载着你对自有资产的清晰掌控。记住：**现在写的每一行纯计算代码，都是未来GUI的坚实基石。** 如果在实现中遇到具体的技术阻塞（比如 `akshare` 突然报错、加权平均算法在卖出时的边界情况），随时带着错误码来找我。开工大吉！ 🚀
+
+---
+
+**修改摘要**：
+- 第1章增加对费用支持的说明。
+- 第4章`transactions`表增加`fee`字段，`trade_type`扩展`FEE`，`asset_meta`增加年费率字段。
+- 第5章成本算法中明确费用计入，并说明`FEE`交易的独立处理。
+- 第6章`add`和`import`命令增加费用参数和列映射示例。
+- 第7章Service层示例中增加费用汇总字段。
+- 其他章节相应调整，确保前后一致。

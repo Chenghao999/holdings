@@ -1,0 +1,79 @@
+问得非常专业。在软件开发中，**规划文档**和**技术方案**是两码事。你刚才拿到的是“技术设计文档（Technical Design）”，但要支撑一个从零到发布、再到持续维护的开源项目，你至少还需要以下 **5 大类、共 12 份核心文档**。
+
+我把它们按照“项目生命周期”整理成清单，并告诉你每份文档的核心内容，以及针对 `holdings` 项目的**具体落地建议**。你可以把这些文档都放在仓库根目录的 `docs/` 文件夹下。
+
+---
+
+### 第一类：策略与需求类（定方向）
+
+| 序号 | 文档名称 | 核心解决什么问题 | `holdings` 具体要写什么 |
+| :--- | :--- | :--- | :--- |
+| **1** | **项目愿景与范围文档** <br>`docs/VISION.md` | 明确“做与不做”，防止需求蔓延 | • **核心愿景**：做本地优先、隐私安全的极客投资记账工具。<br>• **明确排除**：不支持自动下单交易、不支持多币种复杂换算（初期）、不做社交分享。 |
+| **2** | **用户故事与用例文档** <br>`docs/USER_STORIES.md` | 站在用户角度描述功能价值 | • “作为定投用户，我希望每月自动记录快照，以便看到资产曲线。”<br>• “作为A股散户，我希望导入券商历史对账单，以便不用手工敲代码。” |
+| **3** | **功能清单（Feature List）** <br>`docs/FEATURES.md` | 向外界展示本项目的能力边界 | 分模块列出：<br>• **v1.0（CLI）**：增删改查交易、手动/自动同步价格、持仓盈亏报表、净值快照。<br>• **v2.0（GUI）**：可视化图表、拖拽导入CSV、系统托盘刷新。 |
+
+---
+
+### 第二类：设计与技术类（定架构）——*你已经有了雏形，需补充以下细节*
+
+| 序号 | 文档名称 | 核心解决什么问题 | `holdings` 具体要写什么 |
+| :--- | :--- | :--- | :--- |
+| **4** | **数据库实体关系图（ERD）说明** <br>`docs/SCHEMA.md` | 详细说明表结构、字段约束和索引策略 | 把之前给的 SQL 语句贴进去，并解释 `portfolio_group` 字段预留的意义，以及 `price_cache` 的过期策略（如5分钟）。 |
+| **5** | **错误码与异常处理规范** <br>`docs/ERROR_HANDLING.md` | 统一CLI和GUI的报错反馈格式 | 定义自定义异常类（如 `DataSourceUnavailableError`, `SymbolNotFoundError`），规定CLI返回非零退出码（如 `1`=网络错误，`2`=数据不存在）。 |
+| **6** | **配置项字典（Configuration Spec）** <br>`docs/CONFIG_SPEC.md` | 详细解释 `config.yaml` 里每一个字段的含义 | 解释 `default_market`, `cache_ttl_seconds`, `data_sources.priority`（优先akshare还是yfinance）等参数。 |
+
+---
+
+### 第三类：开发与协作类（定规范）——*开源项目必备*
+
+| 序号 | 文档名称 | 核心解决什么问题 | `holdings` 具体要写什么 |
+| :--- | :--- | :--- | :--- |
+| **7** | **开发者环境搭建指南** <br>`CONTRIBUTING.md`（根目录） | 让新人 5 分钟内跑起开发环境 | 写清楚：<br>• 使用 `uv` 或 `poetry` 安装依赖：`uv sync --all-extras`<br>• 初始化测试数据库：`holdings init --dev`<br>• 运行测试：`pytest tests/` |
+| **8** | **Git 提交规范与代码风格** <br>`docs/CODING_STANDARDS.md` | 保持代码整洁，方便Code Review | • 规定使用 `ruff` 做格式化（替代black/flake8）<br>• Git commit 遵循 [Conventional Commits](https://www.conventionalcommits.org/)（如 `feat: add sync command`, `fix: handle akshare timeout`） |
+| **9** | **测试策略文档** <br>`docs/TESTING_STRATEGY.md` | 明确哪些必须测，哪些可以Mock | • **必须测**：`portfolio/calculator.py` 里的加权平均算法（用假数据单元测试）。<br>• **可以Mock**：`data/fetcher.py` 网络请求（用 `responses` 库模拟API返回）。 |
+
+---
+
+### 第四类：用户与运营类（定体验）
+
+| 序号 | 文档名称 | 核心解决什么问题 | `holdings` 具体要写什么 |
+| :--- | :--- | :--- | :--- |
+| **10** | **用户手册 / CLI 命令大全** <br>`docs/USER_GUIDE.md` | 教普通用户如何使用每个命令 | 类似 `man` 手册：给出每个 `holdings` 子命令的完整示例，包括 `--help` 的输出截图。 |
+| **11** | **常见问题（FAQ）** <br>`docs/FAQ.md` | 降低Issue提问门槛 | 预设高频问题：<br>• “akshare 报错 ConnectionError 怎么办？”（答：检查网络或手动配置降级）<br>• “如何迁移数据库到另一台电脑？”（答：直接拷贝 `data/holdings.db`） |
+
+---
+
+### 第五类：发布与维护类（定节奏）
+
+| 序号 | 文档名称 | 核心解决什么问题 | `holdings` 具体要写什么 |
+| :--- | :--- | :--- | :--- |
+| **12** | **详细开发路线图（Roadmap）** <br>`docs/ROADMAP.md` | 管理用户预期，标注当前进度 | 按 **季度/里程碑** 列出：<br>• **2026 Q4**：发布 v0.1.0（基础CRUD + 手动输入价格）<br>• **2027 Q1**：发布 v0.2.0（集成akshare自动同步 + 报表）<br>• **2027 Q2**：发布 v1.0.0（稳定CLI + 完整测试覆盖）<br>• **2027 Q4**：启动 v2.0.0（Textual GUI 预览版） |
+| **13** | **变更日志（Changelog）** <br>`CHANGELOG.md`（根目录） | 记录每个版本的新增、修复和破坏性变更 | 遵循 [Keep a Changelog](https://keepachangelog.com/) 格式。 |
+
+---
+
+### 附加建议：建立 `docs/` 目录的索引
+
+为了让这些文档不“沉睡”，你需要在 `README.md` 里加上一句：
+
+```markdown
+## 📚 完整文档索引
+- [项目愿景与范围](docs/VISION.md)
+- [用户手册（命令大全）](docs/USER_GUIDE.md)
+- [开发者贡献指南](CONTRIBUTING.md)
+- [详细开发路线图](docs/ROADMAP.md)
+- [数据库设计说明](docs/SCHEMA.md)
+```
+
+---
+
+### 🚀 你现在最该先写哪 3 个？
+
+如果精力有限，我建议按这个顺序写（**MVP阶段必写**）：
+1. **`README.md`**（项目门面，包含安装和快速开始）
+2. **`docs/ROADMAP.md`**（给自己定Deadline，也给关注者画饼）
+3. **`CONTRIBUTING.md`**（如果你希望别人帮你提PR，这个必须要有）
+
+剩下那些 `VISION.md`、`SCHEMA.md`、`USER_GUIDE.md`，可以在核心代码写完后再补，或者直接用我在上一轮给你的“完整输出”拆解粘贴过去。
+
+你现在是需要我帮你**直接生成**其中某几份文档的完整 Markdown 内容（比如 `ROADMAP.md` 或 `CONTRIBUTING.md`），还是先确认这份清单就够了？
