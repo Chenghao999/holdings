@@ -19,6 +19,14 @@
 
 ### Fixed
 
+**加载配置会改写全局默认值**
+- `load_config()` 此前用 `dict(DEFAULT_CONFIG)` 复制默认配置——**浅拷贝**。
+  嵌套的 `data_sources` / `sync` 仍是同一批对象，`_deep_merge` 会顺着它们
+  就地改到模块级的 `DEFAULT_CONFIG` 上。后果是「加载过一份配置」这件事本身
+  改变了此后所有加载得到的默认值：同一进程内先读 A 再读 B，B 拿到的默认值
+  已经被 A 污染过。CLI 每次只跑一条命令所以看不出来，GUI 与测试里立刻现形。
+  现改为 `copy.deepcopy()`，并加了两条回归用例。
+
 **`sync` 会被不响应的数据源挂死**
 - 全项目此前**没有任何网络超时**：`akshare` 与 `yfinance` 都没有可用的超时手段
   （akshare 压根没有该参数），上游一旦卡住，`holdings sync` 会无限期等待，

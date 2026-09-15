@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import copy
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -117,7 +118,11 @@ def _default_config_path() -> Path:
 def load_config(path: str | os.PathLike | None = None) -> Config:
     """加载配置。文件不存在时返回默认配置（不落盘）。"""
     cfg_path = Path(path) if path else _default_config_path()
-    data = dict(DEFAULT_CONFIG)
+    # 必须深拷贝：`dict(DEFAULT_CONFIG)` 只复制了顶层，嵌套的 data_sources /
+    # sync 仍是同一批对象，_deep_merge 会顺着它们就地改到模块级的
+    # DEFAULT_CONFIG 上。后果是「加载过一次配置」这件事本身改变了此后所有
+    # 加载得到的默认值——进程内（GUI、测试）尤其明显。
+    data = copy.deepcopy(DEFAULT_CONFIG)
     if cfg_path.exists():
         try:
             raw = cfg_path.read_text(encoding="utf-8")

@@ -85,3 +85,33 @@ def test_save_then_reload_round_trips(tmp_path):
     cfg.set("cache_ttl_seconds", 42)
     cfg.save()
     assert load_config(path).cache_ttl_seconds == 42
+
+
+def test_loading_a_config_does_not_mutate_the_module_defaults(tmp_path):
+    """加载配置不能改到全局 DEFAULT_CONFIG。
+
+    `Config._data` 此前是 `dict(DEFAULT_CONFIG)` —— 浅拷贝。嵌套的
+    `data_sources` / `sync` 仍是同一批对象，`_deep_merge` 会顺着它们就地改到
+    模块级默认值上。于是「加载过一份配置」这件事本身改变了此后所有加载得到的
+    默认值：同一进程内先读 A 再读 B，B 拿到的默认值已经被 A 污染过。
+    CLI 每次只跑一条命令，看不出来；GUI 与测试里立刻现形。
+    """
+    (tmp_path / "config.yaml").write_text(
+        "data_sources:\n  priority:\n    A股: [sina]\n", encoding="utf-8"
+    )
+
+    load_config(tmp_path / "config.yaml")
+
+    assert DEFAULT_CONFIG["data_sources"]["priority"]["A股"] == ["akshare", "yfinance"]
+
+
+def test_two_consecutive_loads_are_independent(tmp_path):
+    """同一进程里连续读两份配置，第二份不该继承第一份的残留。"""
+    (tmp_path / "a.yaml").write_text("sync:\n  retry_count: 9\n", encoding="utf-8")
+    (tmp_path / "b.yaml").write_text("database_path: b.db\n", encoding="utf-8")
+
+    first = load_config(tmp_path / "a.yaml")
+    second = load_config(tmp_path / "b.yaml")
+
+    assert first.sync_retry_count == 9
+    assert second.sync_retry_count == 1, "b.yaml 没写 retry_count，应拿到默认值 1"
