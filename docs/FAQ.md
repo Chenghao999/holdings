@@ -8,8 +8,8 @@ A：这是网络或数据源波动导致的。A 股会按 `sync.retry_count` 重
 
 > **可调项**：`sync.retry_count`（重试次数）、`sync.timeout_seconds`（每个标的的
 > 等待上限，`0` 表示不限）、`cache_ttl_seconds`（缓存有效期）均已生效。
-> 仍**未接线**的是 `data_sources.priority` 与 `default_market`，改它们不会有任何
-> 效果（见 [CONFIG_SPEC](CONFIG_SPEC.md)）。
+> 仍**未接线**的只有 `data_sources.priority`（降级顺序仍硬编码在 `data/` 层），
+> 改它不会有任何效果（见 [CONFIG_SPEC](CONFIG_SPEC.md)）。
 
 ### Q：同一标的多久同步一次价格？
 

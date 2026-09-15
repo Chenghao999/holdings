@@ -117,9 +117,7 @@ def _ok(source: str = "akshare"):
 
 
 @pytest.mark.parametrize("configured", [0, 1, 3])
-def test_retry_count_controls_how_many_times_akshare_is_tried(
-    a_stock, monkeypatch, configured
-):
+def test_retry_count_controls_how_many_times_akshare_is_tried(a_stock, monkeypatch, configured):
     """BACKLOG B-05 的判据：retry_count 改成几，就试几次（外加首次共 +1 次）。"""
     monkeypatch.setattr(resilience, "retry_count", lambda: configured)
     calls = _source(monkeypatch, a_stock, "_from_akshare", [RuntimeError("akshare 挂了")])
@@ -190,9 +188,7 @@ def test_backoff_is_paid_once_per_retry_and_not_after_the_last_attempt(a_stock, 
 
 def test_retry_count_comes_from_config(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    (tmp_path / "config.yaml").write_text(
-        "sync:\n  retry_count: 3\n", encoding="utf-8"
-    )
+    (tmp_path / "config.yaml").write_text("sync:\n  retry_count: 3\n", encoding="utf-8")
 
     assert resilience.retry_count() == 3
 

@@ -12,10 +12,22 @@ ALL_MARKETS = "全部"
 _REQUIRED_PACKAGES = ("yfinance", "akshare")
 
 
+def _default_market() -> str:
+    """`--market` 的默认值取自 `config.yaml` 的 `default_market`。
+
+    用可调用默认值而不是在装饰器里直接求值：click 在**解析参数时**才调用它，
+    那时才该去读配置；写在装饰器里等于在导入期读一次，而导入期根本不保证
+    当前工作目录就是用户的项目目录（例如从别处 `holdings` 一下）。
+    """
+    from holdings.utils.config import load_config
+
+    return load_config().default_market
+
+
 @click.command()
 @click.option(
     "--market",
-    default=ALL_MARKETS,
+    default=_default_market,
     type=click.Choice([m.value for m in MarketType] + [ALL_MARKETS]),
     help="市场",
 )

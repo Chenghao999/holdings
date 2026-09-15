@@ -31,7 +31,11 @@
 - `sync.timeout_seconds` 与 `sync.retry_count` 此前都是「改了不起作用」的配置项，
   现均真正生效：重试次数读配置（默认 1 次重试 = 共 2 次尝试）。顺带修掉退避的
   位置——原先 `sleep` 写在 `except` 末尾，最后一次失败后还要白等 0.5 秒才降级。
-  `CONFIG_SPEC.md` / `FAQ.md` / `FEATURES.md` 的标注同步更新，尚未生效的从 4 项减到 2 项。
+- `default_market` 同样接通：`sync` 未显式指定 `--market` 时取该值。
+  取值非法（如写成不存在的市场）会按参数校验失败报错并返回退出码 5，
+  而不是悄悄按「全部」跑——静默回落会让用户以为配置生效了。
+  至此 4 个死配置项只剩 `data_sources.priority`；`CONFIG_SPEC.md` / `FAQ.md` /
+  `FEATURES.md` 的标注同步更新。
 
 **错误处理链路此前完全不生效**
 - `pyproject.toml` 的 console script 指向裸 click group `cli` 而非 `main`，导致

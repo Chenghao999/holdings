@@ -63,6 +63,7 @@ tests/
 ├── test_cli_errors.py     # 退出码契约（需通过 main()，见下）
 ├── test_import_cmd.py     # CSV 整批事务与表头校验
 ├── test_list_cmd.py       # --sort 排序契约
+├── test_sync_cmd.py       # --market 默认值来自 default_market
 └── test_report_cmd.py     # 绩效行：算不出来时必须显示 —，不是 0
 ```
 
@@ -73,7 +74,7 @@ tests/
 ## 覆盖率目标
 
 - `portfolio/calculator.py`：**≥ 90%**（关键在于费用与卖出边界）— 当前 **99%**。
-- 全项目行覆盖率：当前 **81%**（`python -m pytest --cov=holdings`）。
+- 全项目行覆盖率：当前 **82%**（`python -m pytest --cov=holdings`）。
 - 明确低于目标的区域：`cli/renderers/`（87%，空表分支未覆盖）、`utils/deps.py`（0%）、
   `data/` 三个 fetcher 的 `_from_*`（18%~29%）、`cli/commands/sync.py`（22%）。
   这几处分别对应 [BACKLOG](BACKLOG.md) 的 B-09、B-10 与 B-07。
