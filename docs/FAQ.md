@@ -4,11 +4,12 @@
 
 ### Q：akshare 报错 `ConnectionError` 怎么办？
 
-A：这是网络或数据源波动导致的。A 股会先重试 1 次，失败后降级至 yfinance；若彻底失败会以退出码 `1` 提示「数据源不可用」。可检查网络后重试。
+A：这是网络或数据源波动导致的。A 股会按 `sync.retry_count` 重试（默认 1 次），失败后降级至 yfinance；若彻底失败会以退出码 `1` 提示「数据源不可用」。可检查网络后重试。
 
-> **重试次数与降级顺序当前不可配置**：`config.yaml` 里的 `sync.retry_count` /
-> `sync.timeout_seconds` / `data_sources.priority` 尚未接线，改它们不会有任何效果
-> （见 [CONFIG_SPEC](CONFIG_SPEC.md)）。可调的只有 `cache_ttl_seconds`。
+> **可调项**：`sync.retry_count`（重试次数）、`sync.timeout_seconds`（每个标的的
+> 等待上限，`0` 表示不限）、`cache_ttl_seconds`（缓存有效期）均已生效。
+> 仍**未接线**的是 `data_sources.priority` 与 `default_market`，改它们不会有任何
+> 效果（见 [CONFIG_SPEC](CONFIG_SPEC.md)）。
 
 ### Q：同一标的多久同步一次价格？
 
