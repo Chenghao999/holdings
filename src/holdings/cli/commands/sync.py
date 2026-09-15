@@ -6,24 +6,42 @@ import click
 
 from holdings.models.enums import MarketType
 
+ALL_MARKETS = "全部"
+
+# 缺任一必需依赖（如全市场都要求 yfinance）时明确告知，避免用户只看到一堆「失败」。
+_REQUIRED_PACKAGES = ("yfinance", "akshare")
+
 
 @click.command()
-@click.option("--market", default="全部", help="市场：A股/美股/黄金/全部")
+@click.option(
+    "--market",
+    default=ALL_MARKETS,
+    type=click.Choice([m.value for m in MarketType] + [ALL_MARKETS]),
+    help="市场",
+)
 def sync_cmd(market: str) -> None:
-    """拉取最新价格并更新缓存。"""
+    """拉取最新价格并更新缓存。
+
+    只要有一个标的同步成功就以退出码 0 结束；全部失败则返回 1，
+    便于脚本据此判断（此前无论失败多少都返回 0）。
+    """
     from rich.console import Console
+    from rich.markup import escape
 
     from holdings.services.sync_service import sync
     from holdings.utils.config import load_config
+    from holdings.utils.deps import is_installed
 
     cfg = load_config()
     console = Console()
 
-    if market == "全部":
+    if market == ALL_MARKETS:
         markets = [MarketType.A_SHARE, MarketType.US_STOCK, MarketType.GOLD]
     else:
         markets = [MarketType(market)]
 
+    updated = 0
+    failed = 0
     for m in markets:
         result = sync(cfg.database_path, m, ttl_seconds=cfg.cache_ttl_seconds)
         for item in result.updated:
@@ -32,3 +50,18 @@ def sync_cmd(market: str) -> None:
             )
         for item in result.failed:
             console.print(f"[red]失败[/red] {item['symbol']}: {item['error']}")
+        updated += len(result.updated)
+        failed += len(result.failed)
+
+    if updated == 0 and failed == 0:
+        console.print("没有需要同步的标的（可能均命中缓存）")
+        return
+
+    if updated == 0:
+        missing = "、".join(p for p in _REQUIRED_PACKAGES if not is_installed(p))
+        hint = "请安装数据源依赖 pip install 'holdings[data]'" + (
+            f"（未安装：{missing}）" if missing else ""
+        )
+        # hint 里的 [data] 必须转义，否则 Rich 会把它当标记吃掉，给出的安装命令是错的。
+        console.print(f"[red]{failed} 个标的全部同步失败[/red]：{escape(hint)}")
+        raise SystemExit(1)

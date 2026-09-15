@@ -8,15 +8,19 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from holdings.exceptions import DataSourceUnavailableError, SymbolNotFoundError
 from holdings.models.enums import MarketType
 
-
-class DataSourceUnavailableError(Exception):
-    """数据源不可用或超时。"""
-
-
-class SymbolNotFoundError(Exception):
-    """标的代码不存在或无法识别。"""
+# 异常类现已移至 holdings.exceptions，此处保留重新导出，
+# 使 `from holdings.data.fetcher import DataSourceUnavailableError` 等历史路径继续可用。
+__all__ = [
+    "DataSourceUnavailableError",
+    "PriceResult",
+    "SymbolNotFoundError",
+    "afetch_price",
+    "fetch_price",
+    "get_fetcher",
+]
 
 
 @dataclass

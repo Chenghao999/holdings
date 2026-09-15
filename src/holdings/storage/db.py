@@ -8,6 +8,8 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
+from holdings.exceptions import DatabaseError
+
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS transactions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -56,17 +58,22 @@ CREATE INDEX IF NOT EXISTS idx_cache_time ON price_cache(update_time);
 """
 
 
-class DatabaseError(Exception):
-    """数据库读写失败。"""
-
-
 def connect(db_path: str) -> sqlite3.Connection:
     """建立连接并启用外键，自动建表。"""
-    Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+    try:
+        Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise DatabaseError(f"无法创建数据库目录：{exc}") from exc
+
     conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON")
-    init_schema(conn)
+    try:
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA foreign_keys = ON")
+        init_schema(conn)
+    except Exception:
+        # 建表失败时显式关闭，否则这条异常路径会把连接句柄泄漏掉。
+        conn.close()
+        raise
     return conn
 
 

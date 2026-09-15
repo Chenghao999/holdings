@@ -28,7 +28,10 @@ gui = ["PySide6>=6.6.0", "plotly>=5.0.0"]
 dev = ["pytest", "pytest-cov", "ruff>=0.16.7,<0.17", "responses"]
 
 [project.scripts]
-holdings = "holdings.cli.main:cli"
+# 必须指向 main 而不是裸 click group cli：异常→退出码的映射写在 main() 里，
+# 指向 cli 会让 ERROR_HANDLING.md 定义的退出码与「错误（N）：」前缀全部失效，
+# 用户看到的只是裸 traceback 和恒定的退出码 1。
+holdings = "holdings.cli.main:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

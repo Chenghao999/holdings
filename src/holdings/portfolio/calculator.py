@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from holdings.exceptions import TradeValidationError
 from holdings.models.transaction import Transaction
 
 
@@ -66,14 +67,45 @@ def _apply_fee(pos: Position, tx: Transaction) -> None:
     pos.total_fees += tx.fee
 
 
-def compute_positions(transactions: list[Transaction]) -> dict[str, Position]:
+def check_trade(pos: Position | None, tx: Transaction) -> None:
+    """校验单笔交易在**当前持仓状态**下是否合法，非法则抛 TradeValidationError。
+
+    独立于重放逻辑导出，便于写入路径在落库前单独调用。
+    """
+    held = pos.quantity if pos else 0.0
+    if tx.trade_type.value in ("BUY", "SELL") and tx.quantity <= 0:
+        raise TradeValidationError(
+            f"{tx.symbol} 的{tx.trade_type.value}数量必须大于 0，当前为 {tx.quantity}"
+        )
+    if tx.trade_type.value == "BUY" and tx.price < 0:
+        raise TradeValidationError(f"{tx.symbol} 的买入单价不能为负，当前为 {tx.price}")
+    if tx.trade_type.value == "SELL":
+        if tx.price < 0:
+            raise TradeValidationError(f"{tx.symbol} 的卖出单价不能为负，当前为 {tx.price}")
+        # 这条校验此前缺失：卖出超过持有量会把数量算成负数，
+        # 进而让总成本变成负数并被汇总悄悄吞掉（持仓在汇总时按数量<=0 跳过）。
+        if tx.quantity > held:
+            raise TradeValidationError(f"{tx.symbol} 卖出数量 {tx.quantity} 超过当时持有量 {held}")
+    if tx.fee < 0:
+        raise TradeValidationError(f"{tx.symbol} 的费用不能为负，当前为 {tx.fee}")
+
+
+def compute_positions(
+    transactions: list[Transaction], *, strict: bool = False
+) -> dict[str, Position]:
     """按标的对已排序交易序列做加权平均计算。
 
     若传入的 transactions 无序，需先自行排序（按 trade_date, id）。
+
+    `strict=True` 时在重放过程中逐笔校验，遇到非法交易立即抛 TradeValidationError。
+    写入账本前应当开启；**读取历史账本时必须关闭**——旧数据里可能已经存在越界记录，
+    开启会导致整段历史读不出来。汇总服务靠 `quantity <= 0` 跳过这类脏数据。
     """
     positions: dict[str, Position] = {}
     for tx in transactions:
         pos = positions.setdefault(tx.symbol, Position(symbol=tx.symbol))
+        if strict:
+            check_trade(pos, tx)
         if tx.trade_type.value == "BUY":
             _weighted_buy(pos, tx)
         elif tx.trade_type.value == "SELL":

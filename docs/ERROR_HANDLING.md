@@ -11,8 +11,13 @@
 | `HoldingsError` | 所有自定义异常的基类 | - |
 | `DataSourceUnavailableError` | 数据源（akshare / yfinance）不可用或超时 | 数据源不可用，请检查网络或稍后重试 |
 | `SymbolNotFoundError` | 标的代码不存在或无法识别 | 未找到该标的，请检查代码与市场 |
-| `ConfigError` | 配置文件缺失或字段非法 | 配置错误，请检查 config.yaml |
+| `ConfigError` | 配置文件缺失、YAML 语法错误或字段非法 | 配置错误，请检查 config.yaml |
 | `DatabaseError` | 数据库读写失败 | 数据库操作失败 |
+| `TradeValidationError` | 交易数据不合法（买入数量非正、卖出超过当时持有量、费用或单价为负） | 该笔交易不合法，已拒绝写入 |
+
+以上异常**均继承 `HoldingsError`**，实现位于 `holdings/exceptions.py`；
+`storage` / `data` / `utils` 各自重新导出对应异常，历史导入路径（如
+`from holdings.storage.db import DatabaseError`）继续可用。
 
 ## CLI 退出码规范
 
@@ -48,5 +53,12 @@
 
 1. 数据获取层（`data/`）对网络异常做**重试 + 降级**，仅在彻底失败时抛出 `DataSourceUnavailableError`。
 2. 存储层（`storage/`）将底层 SQLite 异常包装为 `DatabaseError`，不向上泄漏底层异常。
-3. 参数校验在命令入口完成，失败以退出码 `5` 返回。
+3. 参数校验分两处完成，失败均以退出码 `5` 返回：
+   - **取值合法性**（市场、交易类型、日期格式）在命令入口用 `click.Choice` / 回调完成；
+   - **领域合法性**（卖出不得超过当时持有量等，需要历史持仓才能判断）在
+     `portfolio.calculator.check_trade` 中定义，由 `services.trade_service` 在**落库前**
+     调用，`add` 与 `import` 两条写入路径都必须经过它。
 4. 任何异常不得使程序静默失败；CLI 必须输出明确提示并返回非零退出码。
+5. `pyproject.toml` 的 console script **必须指向 `holdings.cli.main:main`**。
+   指向裸 click group `cli` 会绕开下面的异常映射层，本文档定义的退出码与
+   `错误（N）：` 前缀将全部失效，用户只会看到裸 traceback 与恒定的退出码 1。

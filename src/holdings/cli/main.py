@@ -35,26 +35,40 @@ cli.add_command(remove_cmd, name="remove")
 
 
 def main() -> None:
-    """带异常->退出码映射的入口。"""
-    from holdings.data.fetcher import DataSourceUnavailableError, SymbolNotFoundError
-    from holdings.storage.db import DatabaseError
-    from holdings.utils.config import ConfigError
+    """带 异常→退出码 映射的入口，见 docs/ERROR_HANDLING.md。"""
+    from holdings.exceptions import (
+        ConfigError,
+        DatabaseError,
+        DataSourceUnavailableError,
+        HoldingsError,
+        SymbolNotFoundError,
+        TradeValidationError,
+    )
 
+    exit_codes: tuple[tuple[type[HoldingsError], int], ...] = (
+        (DataSourceUnavailableError, 1),
+        (SymbolNotFoundError, 2),
+        (ConfigError, 3),
+        (DatabaseError, 4),
+        (TradeValidationError, 5),
+    )
+
+    # standalone_mode=False 让 click 把用法错误抛出来而不是自己 exit(2)——
+    # click 默认的 2 与「标的未找到」的 2 撞码，这里统一按文档归到 5。
     try:
-        cli()
+        cli.main(standalone_mode=False)
+    except click.UsageError as exc:
+        click.echo(f"错误（5）：{exc.format_message()}", err=True)
+        raise SystemExit(5) from None
+    except click.Abort:
+        # click.confirm 被拒时抛 Abort；退出码 130 是「被中断」的惯例。
+        click.echo("已中止", err=True)
+        raise SystemExit(130) from None
     # 异常已在上面转成友好提示，退出时不必再链上原始 traceback，故用 `from None`。
-    except DataSourceUnavailableError as exc:
-        click.echo(f"错误（1）：{exc}", err=True)
-        raise SystemExit(1) from None
-    except SymbolNotFoundError as exc:
-        click.echo(f"错误（2）：{exc}", err=True)
-        raise SystemExit(2) from None
-    except ConfigError as exc:
-        click.echo(f"错误（3）：{exc}", err=True)
-        raise SystemExit(3) from None
-    except DatabaseError as exc:
-        click.echo(f"错误（4）：{exc}", err=True)
-        raise SystemExit(4) from None
+    except HoldingsError as exc:
+        code = next((c for t, c in exit_codes if isinstance(exc, t)), 1)
+        click.echo(f"错误（{code}）：{exc}", err=True)
+        raise SystemExit(code) from None
 
 
 if __name__ == "__main__":

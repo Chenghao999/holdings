@@ -42,29 +42,56 @@ def _row_to_transaction(row: sqlite3.Row) -> Transaction:
     )
 
 
+_INSERT_SQL = (
+    f"INSERT INTO transactions ({', '.join(_COLUMNS)}) VALUES ({', '.join('?' * len(_COLUMNS))})"
+)
+
+
+def _to_params(tx: Transaction) -> tuple:
+    return (
+        tx.portfolio_group,
+        tx.symbol,
+        tx.market.value,
+        tx.asset_type.value,
+        tx.trade_date.isoformat(),
+        tx.trade_type.value,
+        tx.quantity,
+        tx.price,
+        tx.fee,
+        tx.notes,
+    )
+
+
 def add(db_path: str, tx: Transaction) -> int:
     """新增交易，返回自增 id。"""
     conn = connect(db_path)
     try:
-        cur = conn.execute(
-            f"INSERT INTO transactions ({', '.join(_COLUMNS)}) "
-            f"VALUES ({', '.join('?' * len(_COLUMNS))})",
-            (
-                tx.portfolio_group,
-                tx.symbol,
-                tx.market.value,
-                tx.asset_type.value,
-                tx.trade_date.isoformat(),
-                tx.trade_type.value,
-                tx.quantity,
-                tx.price,
-                tx.fee,
-                tx.notes,
-            ),
-        )
+        cur = conn.execute(_INSERT_SQL, _to_params(tx))
         conn.commit()
         return int(cur.lastrowid)
     except sqlite3.Error as exc:
+        raise DatabaseError(f"新增交易失败：{exc}") from exc
+    finally:
+        conn.close()
+
+
+def add_many(db_path: str, txs: list[Transaction]) -> list[int]:
+    """在同一个事务内批量新增交易，返回自增 id 列表。
+
+    任一条失败则整批回滚：CSV 导入依赖这个语义，否则中途报错会留下一半数据。
+    """
+    if not txs:
+        return []
+    conn = connect(db_path)
+    ids: list[int] = []
+    try:
+        for tx in txs:
+            cur = conn.execute(_INSERT_SQL, _to_params(tx))
+            ids.append(int(cur.lastrowid))
+        conn.commit()
+        return ids
+    except sqlite3.Error as exc:
+        conn.rollback()
         raise DatabaseError(f"新增交易失败：{exc}") from exc
     finally:
         conn.close()

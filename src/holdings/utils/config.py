@@ -12,6 +12,8 @@ from pathlib import Path
 
 import yaml
 
+from holdings.exceptions import ConfigError
+
 DEFAULT_CONFIG: dict = {
     "default_market": "全部",
     "cache_ttl_seconds": 300,
@@ -26,10 +28,6 @@ DEFAULT_CONFIG: dict = {
     "database_path": "data/holdings.db",
     "default_group": "默认",
 }
-
-
-class ConfigError(Exception):
-    """配置文件缺失或字段非法。"""
 
 
 @dataclass
@@ -90,11 +88,33 @@ def load_config(path: str | os.PathLike | None = None) -> Config:
     cfg_path = Path(path) if path else _default_config_path()
     data = dict(DEFAULT_CONFIG)
     if cfg_path.exists():
-        loaded = yaml.safe_load(cfg_path.read_text(encoding="utf-8")) or {}
+        try:
+            raw = cfg_path.read_text(encoding="utf-8")
+        except OSError as exc:
+            raise ConfigError(f"配置文件无法读取：{cfg_path}（{exc}）") from exc
+        try:
+            loaded = yaml.safe_load(raw) or {}
+        except yaml.YAMLError as exc:
+            # YAML 语法错误由 yaml 库自己先抛 ParserError，必须在这里转成 ConfigError，
+            # 否则 CLI 拿不到「退出码 3」的契约，用户只会看到裸 traceback。
+            raise ConfigError(f"配置文件格式错误：{cfg_path}（{_brief_yaml_error(exc)}）") from exc
         if not isinstance(loaded, dict):
             raise ConfigError(f"配置文件格式错误：{cfg_path}")
         _deep_merge(data, loaded)
     return Config(_data=data, _path=cfg_path)
+
+
+def _brief_yaml_error(exc: yaml.YAMLError) -> str:
+    """取 YAML 异常的一行摘要。
+
+    PyYAML 的 str() 会把整段出错现场（前后若干行原文）都带上，
+    直接塞进 CLI 提示会刷屏；这里只保留出错位置与原因。
+    """
+    mark = getattr(exc, "problem_mark", None)
+    problem = getattr(exc, "problem", None)
+    if problem and mark is not None:
+        return f"第 {mark.line + 1} 行第 {mark.column + 1} 列：{problem}"
+    return str(exc).splitlines()[0] if str(exc) else exc.__class__.__name__
 
 
 def _deep_merge(base: dict, override: dict) -> None:

@@ -35,8 +35,12 @@ class PackageStatus:
     purpose: str = ""
 
 
-def _is_installed(import_name: str) -> bool:
+def is_installed(import_name: str) -> bool:
+    """判断某个 import 名当前是否可导入。"""
     return importlib.util.find_spec(import_name) is not None
+
+
+_is_installed = is_installed  # 兼容模块内既有调用
 
 
 def check_dependencies() -> list[PackageStatus]:
