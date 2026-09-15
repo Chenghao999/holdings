@@ -19,6 +19,18 @@
 
 ### Fixed
 
+**`sync` 会被不响应的数据源挂死**
+- 全项目此前**没有任何网络超时**：`akshare` 与 `yfinance` 都没有可用的超时手段
+  （akshare 压根没有该参数），上游一旦卡住，`holdings sync` 会无限期等待，
+  用户只能 Ctrl-C。现新增 `data/resilience.call_with_timeout`，在守护线程里执行
+  取价并按 `sync.timeout_seconds` 放弃等待，该标的记为失败、退出码 1。
+  超时是**每个标的**的预算；`0` 或负数表示不限时。
+- 超时的语义是「放弃等待」而不是「取消请求」：Python 没有安全的线程取消机制，
+  被放弃的请求仍会在后台跑完。守护线程保证它不会拖住进程退出——这正是这套
+  方案能成立的关键，`tests/test_resilience.py` 对这一点有专门断言。
+- `sync.timeout_seconds` 此前是 4 个「改了不起作用」的配置项之一，现真正生效；
+  `CONFIG_SPEC.md` 的标注同步更新。
+
 **错误处理链路此前完全不生效**
 - `pyproject.toml` 的 console script 指向裸 click group `cli` 而非 `main`，导致
   `docs/ERROR_HANDLING.md` 定义的退出码 1/2/3/4 与 `错误（N）：` 前缀对已安装用户

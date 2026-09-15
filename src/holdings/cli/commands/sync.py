@@ -43,7 +43,12 @@ def sync_cmd(market: str) -> None:
     updated = 0
     failed = 0
     for m in markets:
-        result = sync(cfg.database_path, m, ttl_seconds=cfg.cache_ttl_seconds)
+        result = sync(
+            cfg.database_path,
+            m,
+            ttl_seconds=cfg.cache_ttl_seconds,
+            timeout_seconds=cfg.sync_timeout_seconds,
+        )
         for item in result.updated:
             console.print(
                 f"[green]更新[/green] {item['symbol']}: {item['price']:.4f} ({item['source']})"
