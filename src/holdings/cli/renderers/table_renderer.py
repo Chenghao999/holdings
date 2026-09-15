@@ -107,3 +107,30 @@ def render_allocation_table(allocation: dict) -> Table:
     for atype, ratio in allocation.items():
         table.add_row(atype, f"{ratio * 100:.2f}%")
     return table
+
+
+def render_snapshots_table(snapshots) -> Table:
+    """渲染快照列表。
+
+    `note` 为空时留白，不印「—」：备注是可选信息，一片「—」反而像出了错。
+    """
+    table = Table(title="资产快照")
+    table.add_column("日期", justify="left")
+    table.add_column("总资产", justify="right")
+    table.add_column("权益", justify="right")
+    table.add_column("黄金", justify="right")
+    table.add_column("现金", justify="right")
+    table.add_column("备注", justify="left")
+    if not snapshots:
+        table.add_row("暂无快照", "", "", "", "", "用 holdings snapshot 记录一份")
+        return table
+    for s in snapshots:
+        table.add_row(
+            s.snapshot_date.isoformat(),
+            f"{s.total_value:,.2f}",
+            f"{s.equity_value:,.2f}",
+            f"{s.gold_value:,.2f}",
+            f"{s.cash_balance:,.2f}",
+            s.note or "",
+        )
+    return table

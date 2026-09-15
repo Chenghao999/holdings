@@ -62,3 +62,25 @@ def test_the_echo_still_shows_the_note(project, monkeypatch, capsys):
     _run(monkeypatch, "snapshot", "--total", "158000", "--note", "月度定投第12期")
 
     assert "月度定投第12期" in capsys.readouterr().out
+
+
+def test_snapshots_command_lists_the_note(project, monkeypatch, capsys):
+    """备注落库之后要能看见——写进去读不出来，与丢数据只差一步。"""
+    _run(monkeypatch, "snapshot", "--total", "158000", "--note", "月度定投第12期")
+    _run(monkeypatch, "snapshot", "--total", "160000", "--date", "2025-02-01")
+
+    code = _run(monkeypatch, "snapshots")
+    out = capsys.readouterr().out
+
+    assert code == 0
+    assert "月度定投第12期" in out
+    assert "158,000.00" in out
+    assert "2025-02-01" in out
+
+
+def test_snapshots_command_on_an_empty_database_says_how_to_start(project, monkeypatch, capsys):
+    """空列表要给出下一步，而不是只印一张空表。"""
+    code = _run(monkeypatch, "snapshots")
+
+    assert code == 0
+    assert "暂无快照" in capsys.readouterr().out

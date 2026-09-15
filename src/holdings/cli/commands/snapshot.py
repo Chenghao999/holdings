@@ -25,7 +25,7 @@ def snapshot_cmd(
     note: str | None,
 ) -> None:
     """记录当前时间点总资产快照。"""
-    from holdings.storage import snapshot_dao
+    from holdings.services import snapshot_service
     from holdings.utils.config import load_config
 
     cfg = load_config()
@@ -37,5 +37,5 @@ def snapshot_cmd(
         cash_balance=cash,
         note=note,
     )
-    snap_id = snapshot_dao.add(cfg.database_path, snap)
+    snap_id = snapshot_service.record(cfg.database_path, snap)
     click.echo(f"已记录快照 #{snap_id}" + (f"（{note}）" if note else ""))
