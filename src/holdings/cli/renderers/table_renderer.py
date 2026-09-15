@@ -15,6 +15,34 @@ if TYPE_CHECKING:
 # 「—」才是「这条数据算不出来」的诚实写法。
 _UNKNOWN = "—"
 
+#: 窄于这个宽度就只渲染简表。80 列是终端的默认宽度，而持仓表有 10 列——
+#: 放不下时 Rich 会平均截断每一列，代码列只剩 `6005…`，用户认不出自己持的是
+#: 什么。10 列本来也不是窄终端能承载的信息量，与其每列都看不清，不如只显示
+#: 真正要看的那几列。
+COMPACT_WIDTH_THRESHOLD = 100
+
+#: 简表显示的列：持的是什么、多少、现价、赚不赚。
+COMPACT_COLUMNS = ("symbol", "quantity", "current_price", "profit_rate")
+
+#: 标识列：这些列被截断就等于信息没了，所以设 no_wrap 并给出最小宽度，
+#: 让 Rich 优先牺牲数字列——数字被截断至少还能一眼看出是「某个数」。
+_IDENTIFIER_COLUMNS = {"symbol": 6, "market": 2, "asset_type": 4}
+
+#: 持仓表的列，顺序即显示顺序。渲染层与 `list --sort` 的取值都从这一份派生——
+#: 此前两处各写一份，靠一条「每个展示列都能排序」的用例盯着才没走样。
+HOLDINGS_COLUMNS = {
+    "symbol": "代码",
+    "market": "市场",
+    "asset_type": "类型",
+    "quantity": "数量",
+    "avg_cost": "成本价",
+    "current_price": "现价",
+    "market_value": "市值",
+    "total_fees": "累计费用",
+    "profit": "盈亏",
+    "profit_rate": "盈亏率",
+}
+
 
 def _percent(value: float | None) -> str:
     return _UNKNOWN if value is None else f"{value * 100:.2f}%"
@@ -55,30 +83,35 @@ def render_performance_line(perf: PerformanceSummary) -> str:
     return line
 
 
-def render_holdings_table(holdings_df) -> Table:
-    """根据持仓明细 DataFrame 渲染表格。"""
+def render_holdings_table(holdings_df, width: int | None = None) -> Table:
+    """根据持仓明细 DataFrame 渲染表格。
+
+    `width` 是终端宽度。窄于 `COMPACT_WIDTH_THRESHOLD` 时只渲染
+    `COMPACT_COLUMNS` 四列，理由是 10 列在 80 列终端里只能平均截断，
+    结果是代码列也认不出来——那比少显示几列更糟。
+    传 `None` 表示按全表渲染（测试与窄宽无关的调用方走这条）。
+    """
     table = Table(title="持仓明细")
     if holdings_df.empty:
         table.add_column("提示")
         table.add_row("暂无持仓")
         return table
 
-    columns = {
-        "symbol": "代码",
-        "market": "市场",
-        "asset_type": "类型",
-        "quantity": "数量",
-        "avg_cost": "成本价",
-        "current_price": "现价",
-        "market_value": "市值",
-        "total_fees": "累计费用",
-        "profit": "盈亏",
-        "profit_rate": "盈亏率",
-    }
-    for label in columns.values():
-        table.add_column(label, justify="right")
+    columns = HOLDINGS_COLUMNS
+    compact = width is not None and width < COMPACT_WIDTH_THRESHOLD
+    shown = [c for c in columns if not compact or c in COMPACT_COLUMNS]
+    for column in shown:
+        table.add_column(
+            columns[column],
+            justify="right",
+            no_wrap=column in _IDENTIFIER_COLUMNS,
+            min_width=_IDENTIFIER_COLUMNS.get(column),
+        )
 
     for _, row in holdings_df.iterrows():
+        if compact:
+            table.add_row(*_compact_cells(row))
+            continue
         table.add_row(
             str(row.get("symbol", "")),
             str(row.get("market", "")),
@@ -94,6 +127,16 @@ def render_holdings_table(holdings_df) -> Table:
             _UNKNOWN if _missing(row.get("profit_rate")) else f"{row['profit_rate']:.2f}%",
         )
     return table
+
+
+def _compact_cells(row) -> list[str]:
+    """简表的四个单元格，与 `COMPACT_COLUMNS` 一一对应。"""
+    return [
+        str(row.get("symbol", "")),
+        f"{row.get('quantity', 0):.4f}",
+        _UNKNOWN if _missing(row.get("current_price")) else f"{row['current_price']:.4f}",
+        _UNKNOWN if _missing(row.get("profit_rate")) else f"{row['profit_rate']:.2f}%",
+    ]
 
 
 def render_fee_table(fee_breakdown: dict) -> Table:
