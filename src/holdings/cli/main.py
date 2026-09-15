@@ -13,6 +13,7 @@ from holdings.cli.commands.list import list_cmd
 from holdings.cli.commands.remove import remove_cmd
 from holdings.cli.commands.report import report_cmd
 from holdings.cli.commands.snapshot import snapshot_cmd
+from holdings.cli.commands.snapshots import snapshots_cmd
 from holdings.cli.commands.sync import sync_cmd
 
 
@@ -30,6 +31,7 @@ cli.add_command(import_cmd, name="import")
 cli.add_command(sync_cmd, name="sync")
 cli.add_command(report_cmd, name="report")
 cli.add_command(snapshot_cmd, name="snapshot")
+cli.add_command(snapshots_cmd, name="snapshots")
 cli.add_command(chart_cmd, name="chart")
 cli.add_command(remove_cmd, name="remove")
 

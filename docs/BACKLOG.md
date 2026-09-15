@@ -30,7 +30,7 @@
 |----|--------|--------|------|
 | [B-01](#b-01) | P1 | `asset_meta` 表零 DAO，年化管理费率无处可填 | `storage/`、`cli/` |
 | [B-02](#b-02) | ✅ 已完成 | `metrics.py` 三个纯函数从未被调用 | `services/report_service.py` |
-| [B-03](#b-03) | P2 | `--note` 回显但不入库，静默丢数据 | `models/snapshot.py`、`storage/snapshot_dao.py` |
+| [B-03](#b-03) | ✅ 已完成 | `--note` 回显但不入库，静默丢数据 | `models/snapshot.py`、`storage/snapshot_dao.py` |
 | [B-04](#b-04) | P2 | `--start` 是空参数，传了不生效 | `cli/commands/chart.py`、`services/chart_service.py` |
 | [B-05](#b-05) | ✅ 已完成 | 4 个配置项改了不起作用；网络调用无超时 | `utils/config.py`、`data/` |
 | [B-06](#b-06) | P2 | 未同步时显示「−100%」，看起来像血亏 | `services/portfolio_service.py`、`cli/renderers/` |
@@ -38,7 +38,7 @@
 | [B-08](#b-08) | P2 | `remove` / `check` 不走统一前缀；`check --json` 漏报退出码 | `cli/commands/remove.py`、`check.py` |
 | [B-09](#b-09) | P3 | `deps.py` 零测试 | `tests/` |
 | [B-10](#b-10) | P3 | 三个 fetcher 覆盖率 18%~29%，降级路径无测试 | `tests/test_data.py` |
-| [B-11](#b-11) | P3 | `cli` 越过 `services` 直接碰 `storage` | `cli/commands/`、`services/` |
+| [B-11](#b-11) | P3 | `cli` 越过 `services` 直接碰 `storage`（剩 2 处） | `cli/commands/`、`services/` |
 | [B-12](#b-12) | P3 | 3 个模块/函数写完从未被调用 | `utils/`、`services/chart_service.py` |
 | [B-14](#b-14) | P3 | `config.yaml` 的字段取值没有校验 | `utils/config.py` |
 
@@ -153,8 +153,44 @@ tests/test_storage.py:26:        断言表存在
 
 ## B-03　`snapshot` 的 `--note` 持久化
 
-**优先级** P2 · 静默丢数据
+**优先级** ✅ 已完成（2026-09-15）
 **位置** `src/holdings/models/snapshot.py`、`src/holdings/storage/snapshot_dao.py`、`storage/db.py`
+
+### 完成情况
+
+两次提交：
+
+1. **落库与迁移**：建表语句、`Snapshot` 模型、`snapshot_dao.add` 补上 `note`；
+   `snapshot` 命令把 `--note` 传进模型（此前只拿去拼了一句回显）。
+   **本项真正的工作量在迁移**——`note` 是后加的列，而 `CREATE TABLE IF NOT EXISTS`
+   对已存在的表完全不生效，老库不会自己长出来。`db.py` 新增 `_migrate()`，
+   用 `PRAGMA table_info` 探测后 `ALTER TABLE` 补列；判定「列在不在」而不是查
+   版本号（这个库由用户直接拿着用，不会有谁维护 schema_version，而列的存不
+   存在是自证的，也就不会出现版本号与事实不符）。
+2. **让备注可见**：新增 `holdings snapshots` 命令与 `services/snapshot_service.py`。
+
+**条目原文的一处出入**：它写「下次 `list-snapshots` 看不到任何备注」，
+但项目里**从来没有 `list-snapshots` 这个命令**（与 B-05 把 `list --market`
+写进去是同一类笔误）。所以「展示」这一步不是接线，而是要新加一条命令——
+不做的话，备注写得进去、读不出来，只是把「静默丢数据」换成了「静默存数据」。
+
+**顺带收口铁律 3 的一处违反**：新增的 `snapshot_service` 同时接管了
+`snapshot` 命令对 `snapshot_dao` 的直接调用。再让新命令直接调 DAO，
+等于把违反从一处变成两处。[B-11](#b-11) 因此只剩 `remove` 与 `init`。
+
+**完成判据**
+
+- ✅ 新建库与旧库都能写入并读回 note —— `tests/test_storage.py` 的迁移用例
+  手工建了一张不含 `note` 的旧表并塞入数据，`connect()` 后确认列已补上、
+  旧数据未被动到、迁移后的库能正常写入与读回。
+- ✅ 写 note → 读回一致；不传 `--note` → 存 `NULL` 而非空串
+  （直接查库确认是 `NULL`）—— `tests/test_snapshot_cmd.py` 与 `test_storage.py`。
+- ✅ `SCHEMA.md` 补上该列与迁移策略；`USER_GUIDE.md` 补上新命令，
+  并把 `--note` 的说明从「仅回显，不写入数据库」改正。
+
+---
+
+*以下为动手前的原始分析，保留备查。*
 
 ### 现状
 

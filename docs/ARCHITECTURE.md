@@ -42,6 +42,7 @@ holdings/
 │       ├── services/                        # 【编排层·唯一被 CLI/GUI 调用的入口】
 │       │   ├── portfolio_service.py         #    编排 portfolio + storage + data
 │       │   ├── report_service.py            #    快照 → 回撤 / 年化 / 夏普（口径不成立时给 None）
+│       │   ├── snapshot_service.py          #    快照的记录与读取
 │       │   ├── trade_service.py             #    写入闸门：落库前的历史持仓校验
 │       │   ├── sync_service.py              #    编排 data + storage
 │       │   └── chart_service.py             #    编排 storage，返回 Figure/JSON
@@ -51,7 +52,7 @@ holdings/
 │           ├── commands/                    #    子命令：仅调用 service + 打印
 │           │   ├── init.py    add.py     check.py    list.py
 │           │   ├── import_cmd.py  sync.py   report.py
-│           │   └── snapshot.py  chart.py  remove.py
+│           │   └── snapshot.py  snapshots.py  chart.py  remove.py
 │           └── renderers/                   #    把 Service 数据转为 Rich 表格/图表
 │               ├── table_renderer.py
 │               └── chart_renderer.py
@@ -101,7 +102,7 @@ models / utils (基础层)
 |---|------|------|
 | 1 | ✅ | `portfolio/` `data/` `storage/` 三个核心层零 `print` / `click.echo` |
 | 2 | ✅ | `data/` 与 `storage/` 之间无相互引用 |
-| 3 | ⚠️ **3 处违反** | 见下方 |
+| 3 | ⚠️ **2 处违反** | 见下方 |
 | 4 | ✅ | `services/` 内无裸 SQL、无网络请求 |
 | 5 | ✅ | `models/` `utils/` 只 import `exceptions`，无业务模块依赖 |
 | 6 | ✅ | |
@@ -110,12 +111,13 @@ models / utils (基础层)
 
 | 文件 | 直接引用 | 待办 |
 |------|---------|------|
-| `cli/commands/snapshot.py` | `storage.snapshot_dao` | 需要一个 `snapshot_service` |
-| `cli/commands/remove.py` | `storage.transaction_dao` | 删除交易应收进 `trade_service` |
+| `cli/commands/remove.py` | `storage.transaction_dao` | 删除交易应收进 `trade_service`（[B-11](../docs/BACKLOG.md)） |
 | `cli/commands/init.py` | `storage.db.connect` | **可接受的例外**：`init` 是引导命令，它要建的正是其它 service 赖以工作的数据库 |
 
-补上前两个 service 后，本表只剩 `init` 这一条有理由的例外。在那之前，
-本项目的「cli 只经 services」是**未完全落实**的规范，不是已达成的事实。
+`snapshot` 一处已在 B-03 收口：新增 `services/snapshot_service.py`，
+`snapshot` / `snapshots` 两条命令都只经它访问 storage。补上 `remove` 之后，
+本表只剩 `init` 这一条有理由的例外。在那之前，本项目的「cli 只经 services」
+是**未完全落实**的规范，不是已达成的事实。
 
 ## 四、模块职责 vs 禁止事项对照表
 

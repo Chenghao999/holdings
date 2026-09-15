@@ -18,6 +18,12 @@
     相隔一天的两次快照能外推出天文数字的年化收益，那是数学上成立、决策上无用的数。
 
 ### Added
+- **`holdings snapshots`：列出已记录的快照**（[BACKLOG B-03](docs/BACKLOG.md)）。
+  与 `holdings snapshot`（单数）成对：那个写，这个看。没有它之前，`--note`
+  写进去也读不出来——数据落库了却没人看得见，与丢数据只差一步。
+- `services/snapshot_service.py`：快照的记录与读取。`snapshot` / `snapshots`
+  两条命令都只经它访问 `storage`，顺带收口了架构铁律 3 的一处违反
+  （`snapshot` 此前直接 import `snapshot_dao`）。
 - **数据源优先级可配置**（[BACKLOG B-05](docs/BACKLOG.md)）：新增 `data/sources.py`，
   按 `data_sources.priority` 依次尝试各数据源，重试与降级逻辑三市场共用一份
   （此前只有 A 股有重试，美股与黄金一次失败即结束——那是实现分散带来的偶然差异）。

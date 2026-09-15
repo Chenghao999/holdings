@@ -30,7 +30,7 @@
 ### 报表与可视化
 
 - 综合报表（`report`）：持仓表格 + 费用汇总（`--verbose` 追加费用分项表与配置占比表）。
-- 资产快照（`snapshot`）。
+- 资产快照：`snapshot` 记录（含备注），`snapshots` 查看。
 - 净值曲线图导出（`chart`，生成交互式 HTML，需 `holdings[chart]`）。
 
 ## v1.0 支持的市场与资产类型
