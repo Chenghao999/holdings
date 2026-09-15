@@ -41,6 +41,7 @@ holdings/
 │       │
 │       ├── services/                        # 【编排层·唯一被 CLI/GUI 调用的入口】
 │       │   ├── portfolio_service.py         #    编排 portfolio + storage + data
+│       │   ├── report_service.py            #    快照 → 回撤 / 年化 / 夏普（口径不成立时给 None）
 │       │   ├── trade_service.py             #    写入闸门：落库前的历史持仓校验
 │       │   ├── sync_service.py              #    编排 data + storage
 │       │   └── chart_service.py             #    编排 storage，返回 Figure/JSON

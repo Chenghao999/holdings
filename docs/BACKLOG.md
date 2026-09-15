@@ -29,7 +29,7 @@
 | ID | 优先级 | 一句话 | 位置 |
 |----|--------|--------|------|
 | [B-01](#b-01) | P1 | `asset_meta` 表零 DAO，年化管理费率无处可填 | `storage/`、`cli/` |
-| [B-02](#b-02) | P1 | `metrics.py` 三个纯函数从未被调用 | `services/report_service.py` |
+| [B-02](#b-02) | ✅ 已完成 | `metrics.py` 三个纯函数从未被调用 | `services/report_service.py` |
 | [B-03](#b-03) | P2 | `--note` 回显但不入库，静默丢数据 | `models/snapshot.py`、`storage/snapshot_dao.py` |
 | [B-04](#b-04) | P2 | `--start` 是空参数，传了不生效 | `cli/commands/chart.py`、`services/chart_service.py` |
 | [B-05](#b-05) | P2 | 4 个配置项改了不起作用；网络调用无超时 | `utils/config.py`、`data/` |
@@ -95,8 +95,25 @@ tests/test_storage.py:26:        断言表存在
 
 ## B-02　`metrics` 接入 `report`
 
-**优先级** P1 · 文档承诺了但功能不存在
+**优先级** ✅ 已完成（2026-09-15）
 **位置** `src/holdings/services/report_service.py`、`cli/renderers/`
+
+### 完成情况
+
+新增 `services/report_service.py`（`get_performance()`）与
+`portfolio/metrics.py` 的 `return_series()` / `periods_per_year()`，
+`report` 输出多一行绩效（`cli/renderers/table_renderer.py:render_performance_line`）。
+
+- `sharpe_ratio` 的 `periods_per_year` 改为**必填**，不再默认 252（见上面陷阱 1）：
+  原先硬编码 `sqrt(252)`，等于默认所有调用方传的都是日收益。
+- 间隔判据为变异系数 ≤ 25%，超过则夏普显示 `—` 并附原因；年化另设 30 天最小跨度。
+- `metrics.py` 覆盖率 0% → **100%**（`tests/test_metrics.py` 31 个用例），
+  `report_service.py` 100%，全项目 67% → 76%。
+- 端到端判据已锁在 `tests/test_report_cmd.py`：100/120/90/110 → `最大回撤 25.00%`。
+
+---
+
+*以下为动手前的原始分析，保留备查。*
 
 ### 现状
 

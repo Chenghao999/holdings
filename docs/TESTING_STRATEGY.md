@@ -13,9 +13,9 @@
 |------|---------------|---------|
 | `portfolio/calculator.py` | 加权平均成本（含费用归集）、买入/卖出/FEE 处理、盈亏与收益率计算 | ✅ 99% |
 | `portfolio/allocator.py` | 资产配置占比计算 | ✅ 100% |
-| `portfolio/metrics.py` | 年化收益、最大回撤、夏普比率 | ❌ 0%（模块尚未被任何命令调用） |
+| `portfolio/metrics.py` | 年化收益、最大回撤、夏普比率、采样口径判断 | ✅ 100% |
 | `storage/` DAO | 增删改查、事务回滚、约束冲突 | ✅ 80%~100% |
-| `services/` 编排层 | 汇总、同步缓存、写入闸门 | ✅ 98%~100% |
+| `services/` 编排层 | 汇总、绩效指标、同步缓存、写入闸门 | ✅ 98%~100% |
 
 ### 优先级最高：加权平均成本
 
@@ -52,14 +52,16 @@ tests/
 ├── test_calculator.py     # 核心：加权平均成本
 ├── test_validation.py     # 交易领域校验（check_trade）
 ├── test_allocator.py
+├── test_metrics.py        # 回撤 / 年化 / 夏普与采样口径
 ├── test_storage.py        # DAO + 建表
 ├── test_trade_service.py  # 写入闸门与乱序补录
-├── test_services.py       # 汇总 / 同步 / 图表数据
+├── test_services.py       # 汇总 / 绩效指标 / 同步
 ├── test_data.py           # 数据源工厂与导入链（不触网）
 ├── test_config.py         # 配置加载与 YAML 错误
 ├── test_cli_errors.py     # 退出码契约（需通过 main()，见下）
 ├── test_import_cmd.py     # CSV 整批事务与表头校验
-└── test_list_cmd.py       # --sort 排序契约
+├── test_list_cmd.py       # --sort 排序契约
+└── test_report_cmd.py     # 绩效行：算不出来时必须显示 —，不是 0
 ```
 
 > **`test_cli_errors.py` 必须走 `main()`**：`CliRunner` 会绕过 `main()` 里的
@@ -69,7 +71,7 @@ tests/
 ## 覆盖率目标
 
 - `portfolio/calculator.py`：**≥ 90%**（关键在于费用与卖出边界）— 当前 **99%**。
-- 全项目行覆盖率：当前 **67%**（`python -m pytest --cov=holdings`）。
-- 明确低于目标的区域：`portfolio/metrics.py`（0%）、`cli/renderers/`（15%~0%）、
-  `utils/deps.py`（0%）、`data/` 三个 fetcher（18%~29%）。
-  其中 `metrics.py` 的 0% 是「模块还没被接上」的直接后果，接线后应同步补测。
+- 全项目行覆盖率：当前 **76%**（`python -m pytest --cov=holdings`）。
+- 明确低于目标的区域：`cli/renderers/`（87%，空表分支未覆盖）、`utils/deps.py`（0%）、
+  `data/` 三个 fetcher（18%~29%）、`cli/commands/sync.py`（22%）。
+  这三处分别对应 [BACKLOG](BACKLOG.md) 的 B-09、B-10 与 B-07。
