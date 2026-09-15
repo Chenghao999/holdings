@@ -35,6 +35,7 @@ def snapshot_cmd(
         equity_value=equity,
         gold_value=gold,
         cash_balance=cash,
+        note=note,
     )
     snap_id = snapshot_dao.add(cfg.database_path, snap)
     click.echo(f"已记录快照 #{snap_id}" + (f"（{note}）" if note else ""))

@@ -30,6 +30,15 @@
 
 ### Fixed
 
+**`snapshot --note` 的备注根本没入库**
+- 终端回显「已记录快照 #2（月度定投第12期）」，但 `snapshots` 表没有 `note` 列、
+  `Snapshot` 模型没有该字段、`snapshot_dao.add` 只插 5 列——用户被告知存下了，
+  再去查却什么也没有。现补上该列并打通读写；不传 `--note` 存 `NULL` 而非空串。
+- 顺带补上**补列迁移**：`note` 是后加的列，而 `CREATE TABLE IF NOT EXISTS` 对
+  已存在的表完全不生效，老库不会自己长出这一列。`db._migrate()` 用
+  `PRAGMA table_info` 探测后 `ALTER TABLE` 补上（判定「列在不在」而非查版本号：
+  这个库由用户直接拿着用，不会有谁去维护 schema_version）。
+
 **加载配置会改写全局默认值**
 - `load_config()` 此前用 `dict(DEFAULT_CONFIG)` 复制默认配置——**浅拷贝**。
   嵌套的 `data_sources` / `sync` 仍是同一批对象，`_deep_merge` 会顺着它们

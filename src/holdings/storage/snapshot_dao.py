@@ -17,6 +17,7 @@ def _row_to_snapshot(row: sqlite3.Row) -> Snapshot:
         cash_balance=row["cash_balance"],
         equity_value=row["equity_value"],
         gold_value=row["gold_value"],
+        note=row["note"],
         created_at=(datetime.fromisoformat(row["created_at"]) if row["created_at"] else None),
     )
 
@@ -26,13 +27,14 @@ def add(db_path: str, snap: Snapshot) -> int:
     try:
         cur = conn.execute(
             "INSERT INTO snapshots (snapshot_date, total_value, cash_balance, "
-            "equity_value, gold_value) VALUES (?, ?, ?, ?, ?)",
+            "equity_value, gold_value, note) VALUES (?, ?, ?, ?, ?, ?)",
             (
                 snap.snapshot_date.isoformat(),
                 snap.total_value,
                 snap.cash_balance,
                 snap.equity_value,
                 snap.gold_value,
+                snap.note,
             ),
         )
         conn.commit()
