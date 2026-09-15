@@ -36,13 +36,18 @@
 - [x] 实现 `holdings snapshot` 与 `holdings chart` 净值曲线。
 - [x] 补齐单元测试，核心计算模块覆盖率达标（`calculator.py` 99%，目标 ≥ 90%）。
 - [x] 稳定 CLI 交互，完善错误码与异常处理（入口点映射、参数校验、写入闸门已落地）。
-- [ ] 修复工程体检剩余发现（见 [CHANGELOG](../CHANGELOG.md) 与体检报告）：
-  - [ ] `asset_meta` 表接入 DAO 与展示，`portfolio/metrics.py` 接入 `report`
-  - [ ] 4 个未生效的配置项（`default_market` / `data_sources.priority` /
-        `sync.timeout_seconds` / `sync.retry_count`）接线或移除
-  - [ ] 网络请求补超时；`data/` 层降级路径补测试
-  - [ ] 配置项取值校验；`snapshot` 的 `--note` 持久化；`chart --start` 生效
-  - [ ] 统一 `check --json` 与文本模式的退出码
+- [ ] 清掉工程体检的剩余发现 —— **完整清单见 [待办清单（BACKLOG）](BACKLOG.md)**，
+      本节只列里程碑层面的大项，不重复维护细节：
+  - [ ] P1：`asset_meta` 表接入（[B-01](BACKLOG.md#b-01)）、
+        `metrics.py` 接入 `report`（[B-02](BACKLOG.md#b-02)）
+  - [ ] P2：网络请求补超时与 4 个死配置项（[B-05](BACKLOG.md#b-05)）、
+        无行情时的「−100%」误导（[B-06](BACKLOG.md#b-06)）、
+        窄终端表格截断（[B-07](BACKLOG.md#b-07)）、
+        报错格式与退出码统一（[B-08](BACKLOG.md#b-08)）
+  - [ ] P2：`snapshot --note` 持久化（[B-03](BACKLOG.md#b-03)）、
+        `chart --start` 生效（[B-04](BACKLOG.md#b-04)）
+  - [ ] P3：`utils` / `data` 层测试缺口（[B-09](BACKLOG.md#b-09)、[B-10](BACKLOG.md#b-10)）、
+        铁律 3 的违反（[B-11](BACKLOG.md#b-11)）、零引用死代码（[B-12](BACKLOG.md#b-12)）
 - [ ] 用 `terminalizer` 录制演示 GIF，上传 GitHub。
 
 ### 2027 Q4 —— v2.0.0（GUI 预览）

@@ -60,4 +60,5 @@ holdings sync --market 全部
 - [用户手册（CLI 命令大全）](docs/USER_GUIDE.md)
 - [常见问题（FAQ）](docs/FAQ.md)
 - [详细开发路线图](docs/ROADMAP.md)
+- [待办清单](docs/BACKLOG.md)
 - [变更日志](CHANGELOG.md)
