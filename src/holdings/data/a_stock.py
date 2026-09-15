@@ -15,16 +15,17 @@ class AStockFetcher:
 
     def _with_fallback(self, symbol: str) -> PriceResult:
         last_err: Exception | None = None
-        for attempt in range(2):  # 超时重试 1 次
+        for _ in range(2):  # 超时重试 1 次
+            # 重试循环的 try 必须在循环体内，PERF203 在此不适用。
             try:
                 return self._from_akshare(symbol)
-            except Exception as exc:  # noqa: BLE001 - 降级捕获所有异常
+            except Exception as exc:  # noqa: PERF203 - 降级捕获所有异常
                 last_err = exc
                 time.sleep(0.5)
         # 降级至 yfinance（仅支持部分 A 股大盘）
         try:
             return self._from_yfinance(symbol)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:  # 降级捕获所有异常
             last_err = exc
         raise DataSourceUnavailableError(f"A股数据源不可用：{symbol}") from last_err
 
