@@ -28,7 +28,7 @@ def report_cmd(verbose: bool) -> None:
     performance = get_performance(cfg.database_path)
 
     console = Console()
-    console.print(render_holdings_table(summary.holdings_df))
+    console.print(render_holdings_table(summary.holdings_df, width=console.width))
     console.print(render_summary_line(summary))
     hint = render_unpriced_hint(summary)
     if hint:

@@ -34,7 +34,7 @@
 | [B-04](#b-04) | P2 | `--start` 是空参数，传了不生效 | `cli/commands/chart.py`、`services/chart_service.py` |
 | [B-05](#b-05) | ✅ 已完成 | 4 个配置项改了不起作用；网络调用无超时 | `utils/config.py`、`data/` |
 | [B-06](#b-06) | ✅ 已完成 | 未同步时显示「−100%」，看起来像血亏 | `services/portfolio_service.py`、`cli/renderers/` |
-| [B-07](#b-07) | P2 | 80 列终端下代码列只剩 `6005…` | `cli/renderers/` |
+| [B-07](#b-07) | ✅ 已完成 | 80 列终端下代码列只剩 `6005…` | `cli/renderers/` |
 | [B-08](#b-08) | P2 | `remove` / `check` 不走统一前缀；`check --json` 漏报退出码 | `cli/commands/remove.py`、`check.py` |
 | [B-09](#b-09) | P3 | `deps.py` 零测试 | `tests/` |
 | [B-10](#b-10) | P3 | 三个 fetcher 覆盖率 18%~29%，降级路径无测试 | `tests/test_data.py` |
@@ -416,8 +416,36 @@ current_price = cached.price if cached else 0.0
 
 ## B-07　窄终端下持仓表截断到无法辨认
 
-**优先级** P2 · 可用性
+**优先级** ✅ 已完成（2026-09-15）
 **位置** `src/holdings/cli/renderers/`
+
+### 完成情况
+
+采纳了条目里倾向的**按宽度分档**方案：
+
+- `render_holdings_table(df, width=None)`：窄于 `COMPACT_WIDTH_THRESHOLD`（100 列）
+  只渲染 `COMPACT_COLUMNS` 四列（代码 / 数量 / 现价 / 盈亏率）；宽终端仍是十列，
+  与改动前一致。`width=None` 保持全表，既有的调用方与测试不必关心终端宽度。
+- 标识列（代码 / 市场 / 类型）设 `no_wrap` 与 `min_width`，让 Rich 优先牺牲数字列。
+- `list` / `report` 把 `console.width` 传给渲染层——渲染层不自己造 Console，
+  否则测试与真实终端会看到两个不同的宽度来源。
+
+**顺带收掉一处重复**：渲染层的 `columns` 字典与 `list` 的 `_SORT_ALIASES` 此前
+各写一份同样的列清单，靠 `test_every_displayed_column_is_sortable` 盯着才没走样。
+现改为渲染层导出 `HOLDINGS_COLUMNS`，排序别名从它派生。
+
+**完成判据**
+
+- ✅ 80 列下代码列完整可见（`600519` 而不是 `6005…`），且整表不出现省略号 ——
+  `tests/test_narrow_terminal.py::test_symbol_is_fully_visible_at_80_columns`。
+- ✅ 行宽不超过终端宽度 —— `test_no_line_exceeds_the_terminal_width`。
+- ✅ 宽终端下列数与改动前一致 —— `test_wide_terminal_still_shows_every_column`
+  直接断言表头列表等于 `HOLDINGS_COLUMNS` 的全部值。
+- ✅ 用例用固定宽度的 `Console` 渲染（`Console(width=…)` + `export_text()`）。
+
+---
+
+*以下为动手前的原始分析，保留备查。*
 
 ### 现状
 

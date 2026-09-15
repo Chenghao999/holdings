@@ -4,20 +4,15 @@ from __future__ import annotations
 
 import click
 
+from holdings.cli.renderers.table_renderer import HOLDINGS_COLUMNS
+
 # 表格里的列名是中文，DataFrame 的列名是英文，`--sort 盈亏率` 直接拿去和
 # df.columns 比会永远不匹配——此前它不报错也不排序，静默失效。
 # 中文表头既是对用户展示的名字，就让它成为对用户输入的名字。
+# 别名表从渲染层那份列定义派生，两处不再各维护一份。
 _SORT_ALIASES = {
-    "代码": "symbol",
-    "市场": "market",
-    "类型": "asset_type",
-    "数量": "quantity",
-    "成本价": "avg_cost",
-    "现价": "current_price",
-    "市值": "market_value",
-    "累计费用": "total_fees",
-    "盈亏": "profit",
-    "盈亏率": "profit_rate",
+    **{label: column for column, label in HOLDINGS_COLUMNS.items()},
+    **{column: column for column in HOLDINGS_COLUMNS},
 }
 # 中英文都接受：中文是文档里的写法，英文列名保留给老脚本。
 _SORT_CHOICES = [*_SORT_ALIASES, *_SORT_ALIASES.values()]
@@ -56,7 +51,7 @@ def list_cmd(sort_key: str | None, group: str | None) -> None:
             df = df.sort_values(by=column, ascending=False, na_position="last")
 
     console = Console()
-    console.print(render_holdings_table(df))
+    console.print(render_holdings_table(df, width=console.width))
     console.print(render_summary_line(summary))
     hint = render_unpriced_hint(summary)
     if hint:
