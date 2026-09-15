@@ -12,7 +12,12 @@ def networth_figure(db_path: str) -> Any:
     try:
         import plotly.graph_objects as go  # 懒加载
     except ImportError as exc:
-        raise RuntimeError("未安装 plotly，无法生成图表") from exc
+        # 此前抛裸 RuntimeError：绕过 main() 的退出码映射，用户看到 traceback。
+        from holdings.exceptions import MissingDependencyError
+
+        raise MissingDependencyError(
+            "未安装 plotly，无法生成图表；请运行 pip install 'holdings[chart]'"
+        ) from exc
 
     snaps = snapshot_dao.get_all(db_path)
     dates = [s.snapshot_date for s in snaps]

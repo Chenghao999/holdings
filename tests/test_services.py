@@ -206,3 +206,28 @@ def test_sync_on_empty_db_is_noop(db_path, monkeypatch):
 
     assert result.updated == []
     assert result.failed == []
+
+
+# ------------------------------------------------------------ chart_service
+
+
+def test_chart_without_plotly_raises_missing_dependency(db_path, monkeypatch):
+    """缺 plotly 时必须是 MissingDependencyError（退出码 1），而不是裸 RuntimeError。
+
+    裸 RuntimeError 会绕过 main() 的映射层，用户看到的是 traceback。
+    """
+    import sys
+
+    from holdings.exceptions import HoldingsError, MissingDependencyError
+    from holdings.services import chart_service
+
+    # 把子模块置为 None 是模拟 ImportError 的标准做法
+    monkeypatch.setitem(sys.modules, "plotly", None)
+    monkeypatch.setitem(sys.modules, "plotly.graph_objects", None)
+
+    with pytest.raises(MissingDependencyError) as exc:
+        chart_service.networth_figure(db_path)
+
+    assert issubclass(MissingDependencyError, HoldingsError)
+    # 提示必须给出可执行的安装命令，而不是只说「未安装」
+    assert "holdings[chart]" in str(exc.value)

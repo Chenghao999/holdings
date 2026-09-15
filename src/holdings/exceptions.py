@@ -45,3 +45,11 @@ class DatabaseError(HoldingsError):
 
 class TradeValidationError(HoldingsError):
     """交易数据不合法，例如买入数量非正、卖出超过当时持有量。"""
+
+
+class MissingDependencyError(HoldingsError):
+    """某个可选依赖未安装，当前命令无法执行（如画图缺 plotly）。
+
+    与 `DataSourceUnavailableError` 分开：那是网络/上游的问题，
+    这是本机环境缺包，重试没有意义，提示必须给出可执行的安装命令。
+    """

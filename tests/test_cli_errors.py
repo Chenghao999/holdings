@@ -20,6 +20,7 @@ from holdings.exceptions import (
     DatabaseError,
     DataSourceUnavailableError,
     HoldingsError,
+    MissingDependencyError,
     SymbolNotFoundError,
     TradeValidationError,
 )
@@ -29,6 +30,7 @@ from holdings.exceptions import (
     ("exc_type", "expected"),
     [
         (DataSourceUnavailableError, 1),
+        (MissingDependencyError, 1),
         (SymbolNotFoundError, 2),
         (ConfigError, 3),
         (DatabaseError, 4),

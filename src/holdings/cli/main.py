@@ -41,12 +41,14 @@ def main() -> None:
         DatabaseError,
         DataSourceUnavailableError,
         HoldingsError,
+        MissingDependencyError,
         SymbolNotFoundError,
         TradeValidationError,
     )
 
     exit_codes: tuple[tuple[type[HoldingsError], int], ...] = (
         (DataSourceUnavailableError, 1),
+        (MissingDependencyError, 1),
         (SymbolNotFoundError, 2),
         (ConfigError, 3),
         (DatabaseError, 4),

@@ -22,10 +22,13 @@ dependencies = [
 
 [project.optional-dependencies]
 data = ["akshare", "yfinance>=0.2.0"]
+# 单独一档：chart 只需要 plotly，此前它只挂在 gui 里，
+# 于是只装 [data] 的用户跑 holdings chart 会缺依赖，还被要求连 PySide6 一起装。
+chart = ["plotly>=5.0.0"]
 tui = ["textual>=0.50.0"]
 web = ["streamlit>=1.30.0", "fastapi>=0.100.0"]
 gui = ["PySide6>=6.6.0", "plotly>=5.0.0"]
-dev = ["pytest", "pytest-cov", "ruff>=0.16.7,<0.17", "responses"]
+dev = ["pytest", "pytest-cov", "ruff>=0.16.7,<0.17"]
 
 [project.scripts]
 # 必须指向 main 而不是裸 click group cli：异常→退出码的映射写在 main() 里，
