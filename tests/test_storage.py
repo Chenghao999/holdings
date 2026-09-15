@@ -1,12 +1,13 @@
 """storage 层（db / transaction_dao / snapshot_dao / price_cache_dao）的单元测试。"""
 
+import sqlite3
 from datetime import date
 
 import pytest
 
 from holdings.models.enums import AssetType, MarketType, TradeType
 from holdings.models.snapshot import Snapshot
-from holdings.storage import price_cache_dao, snapshot_dao, transaction_dao
+from holdings.storage import db, price_cache_dao, snapshot_dao, transaction_dao
 from holdings.storage.db import DatabaseError, connect
 
 # --------------------------------------------------------------------------- db
@@ -182,6 +183,79 @@ def test_snapshot_duplicate_date_raises(db_path):
 
 def test_snapshot_get_all_on_empty_db(db_path):
     assert snapshot_dao.get_all(db_path) == []
+
+
+def test_snapshot_note_round_trips(db_path):
+    """备注要真的进库、真的读得回来。
+
+    此前 `snapshot --note` 只在终端回显一句「已记录快照 #2（月度定投第12期）」，
+    备注根本没有落库——用户被告知存下了，再去查却什么也没有。
+    """
+    snap = _snap(1)
+    snap.note = "月度定投第12期"
+    snapshot_dao.add(db_path, snap)
+
+    assert snapshot_dao.get_all(db_path)[0].note == "月度定投第12期"
+
+
+def test_snapshot_without_a_note_stores_null_not_an_empty_string(db_path):
+    """不传备注存 NULL。「没写备注」与「写了个空备注」在查询与展示上是两回事。"""
+    snapshot_dao.add(db_path, _snap(1))
+
+    conn = sqlite3.connect(db_path)
+    try:
+        raw = conn.execute("SELECT note FROM snapshots").fetchone()[0]
+    finally:
+        conn.close()
+
+    assert raw is None
+
+
+def test_connect_migrates_a_database_created_before_note_existed(tmp_path):
+    """老库缺少 note 列时，connect() 要把它补上，且不动已有数据。
+
+    `CREATE TABLE IF NOT EXISTS` 对已存在的表完全不生效，所以历史上的新列
+    不会自己出现——这一条锁住那段补列逻辑。
+    """
+    old_db = tmp_path / "old.db"
+    conn = sqlite3.connect(old_db)
+    try:
+        # 用改动前的建表语句造一个「老库」，并塞一行数据
+        conn.executescript(
+            """
+            CREATE TABLE snapshots (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                snapshot_date TEXT NOT NULL UNIQUE,
+                total_value REAL NOT NULL,
+                cash_balance REAL DEFAULT 0,
+                equity_value REAL NOT NULL,
+                gold_value REAL NOT NULL,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            );
+            INSERT INTO snapshots (snapshot_date, total_value, equity_value, gold_value)
+            VALUES ('2025-01-01', 1000.0, 800.0, 200.0);
+            """
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    db.connect(str(old_db))  # 迁移在这里发生
+
+    probe = sqlite3.connect(old_db)
+    try:
+        assert "note" in db._columns(probe, "snapshots")
+    finally:
+        probe.close()
+    got = snapshot_dao.get_all(str(old_db))
+    assert got[0].total_value == 1000.0, "补列不该动到已有数据"
+    assert got[0].note is None
+
+    # 迁移后的库要能正常写入并读回备注
+    snap = _snap(2)
+    snap.note = "迁移之后记的"
+    snapshot_dao.add(str(old_db), snap)
+    assert snapshot_dao.get_all(str(old_db))[1].note == "迁移之后记的"
 
 
 # --------------------------------------------------------------- price_cache_dao

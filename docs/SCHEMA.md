@@ -51,6 +51,7 @@ CREATE TABLE snapshots (
     cash_balance REAL DEFAULT 0,
     equity_value REAL NOT NULL,
     gold_value REAL NOT NULL,
+    note TEXT,                             -- 备注，不传存 NULL（不是空串）
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -103,6 +104,17 @@ CREATE INDEX idx_cache_time ON price_cache(update_time);
 | `BUY` | 买入 | 数量增加，费用计入成本 |
 | `SELL` | 卖出 | 数量减少，成本价不变 |
 | `FEE` | 定期/独立费用 | 不改变数量与成本，仅影响现金余额，报表单独列示 |
+
+### snapshots 字段说明
+
+- `snapshot_date` 唯一：同一天只保留一份快照，重复写入报错而不是覆盖。
+- `note`：`holdings snapshot --note "…"` 写的备注。不传存 `NULL`——「没写备注」
+  与「写了个空备注」在查询与展示上是两回事。
+
+> **补列迁移**：`note` 是后加的列，而 `CREATE TABLE IF NOT EXISTS` 对**已经存在**
+> 的表完全不生效，老库不会自己长出这一列。`storage/db.py` 的 `_migrate()` 用
+> `PRAGMA table_info` 探测后 `ALTER TABLE` 补上，判定「这一列在不在」而不是查
+> 版本号——这个库由用户直接拿着用，不会有谁去维护 schema_version。
 
 ### asset_meta 字段说明
 
