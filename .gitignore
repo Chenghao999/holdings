@@ -41,8 +41,11 @@ htmlcov/
 .pyre/
 
 # 运行时本地数据（用户私有，不入库）
-data/
-snapshots/
+# 注意：必须加前导斜杠锚定到具体目录。写成 `data/` 会匹配任意层级的 data
+# 目录，把源码包 src/holdings/data/ 一并排除掉（曾因此漏提交整个包）。
+/data/
+/snapshots/
+/_smoke/data/
 config.yaml
 
 # 图表 HTML 导出
