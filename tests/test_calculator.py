@@ -74,6 +74,34 @@ def test_holding_profit_and_rate():
     assert round(h.profit_rate, 4) == 10.0
 
 
+def test_holding_without_a_price_has_no_numbers():
+    """没有行情时市值/盈亏/盈亏率都是 None，不是 0。
+
+    按 0 算出来的盈亏率是 −100%，看着像血亏；实际只是还没同步过。
+    """
+    pos = compute_positions([_tx("BUY", 100, 10.0)])["600519"]
+
+    h = holding_for(pos, current_price=None)
+
+    assert h.current_price is None
+    assert h.market_value is None
+    assert h.profit is None
+    assert h.profit_rate is None
+    # 数量、成本价、累计费用与行情无关，照常给出
+    assert h.quantity == 100
+    assert h.avg_cost == 10.0
+
+
+def test_holding_with_zero_cost_has_no_rate():
+    """零成本持仓的收益率无定义——给 0.00% 会看着像「不赚不亏」这个结论。"""
+    pos = compute_positions([_tx("BUY", 100, 0.0)])["600519"]
+
+    h = holding_for(pos, current_price=11.0)
+
+    assert h.market_value == 1100.0
+    assert h.profit_rate is None
+
+
 def test_fee_breakdown_by_symbol():
     txs = [
         _tx("BUY", 100, 10.0, fee=5.0, symbol="A"),

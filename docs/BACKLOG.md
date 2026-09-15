@@ -33,7 +33,7 @@
 | [B-03](#b-03) | ✅ 已完成 | `--note` 回显但不入库，静默丢数据 | `models/snapshot.py`、`storage/snapshot_dao.py` |
 | [B-04](#b-04) | P2 | `--start` 是空参数，传了不生效 | `cli/commands/chart.py`、`services/chart_service.py` |
 | [B-05](#b-05) | ✅ 已完成 | 4 个配置项改了不起作用；网络调用无超时 | `utils/config.py`、`data/` |
-| [B-06](#b-06) | P2 | 未同步时显示「−100%」，看起来像血亏 | `services/portfolio_service.py`、`cli/renderers/` |
+| [B-06](#b-06) | ✅ 已完成 | 未同步时显示「−100%」，看起来像血亏 | `services/portfolio_service.py`、`cli/renderers/` |
 | [B-07](#b-07) | P2 | 80 列终端下代码列只剩 `6005…` | `cli/renderers/` |
 | [B-08](#b-08) | P2 | `remove` / `check` 不走统一前缀；`check --json` 漏报退出码 | `cli/commands/remove.py`、`check.py` |
 | [B-09](#b-09) | P3 | `deps.py` 零测试 | `tests/` |
@@ -349,8 +349,40 @@ id | snapshot_date | total_value | cash_balance | equity_value | gold_value | cr
 
 ## B-06　无行情时的「现价 0 / −100%」误导
 
-**优先级** P2 · 误导
-**位置** `src/holdings/services/portfolio_service.py:50`、`cli/renderers/`
+**优先级** ✅ 已完成（2026-09-15）
+**位置** `src/holdings/services/portfolio_service.py`、`portfolio/calculator.py`、`cli/renderers/`
+
+### 完成情况
+
+一次提交，从计算层一路改到渲染层：
+
+- `calculator.Holding` 的 `current_price` / `market_value` / `profit` / `profit_rate`
+  放宽为 `float | None`；`holding_for(pos, None)` 返回的市值与盈亏都是 `None`。
+  零成本持仓的收益率同样从 `0.0` 改为 `None`——`0.00%` 看着像「不赚不亏」这个
+  结论，而事实是这个比值没有定义。
+- `portfolio_service` 不再用 `0.0` 兜底缺价，并把汇总口径收敛为**有行情的标的**，
+  同时报出 `unpriced_symbols` / `unpriced_cost` 供提示行使用。
+- 渲染层：表格里空值显示 `—`；新增 `render_summary_line` / `render_unpriced_hint`，
+  `list` 与 `report` 共用（此前那段汇总行是两处复制粘贴，改一处忘一处的风险是实的）。
+- 排序 `na_position="last"`。
+
+**一处口径判断**（条目只说了「市值不计入总市值」）：盈亏率的分母同样只算有行情的
+成本。分子里的盈亏只含有行情的标的，分母若含全部成本，会算出一个既不是「全体」
+也不是「部分」的数。相应地**总成本也改为只算有行情的部分**——否则「总市值 0 /
+总成本 1000」看起来像巨亏，与这一项要修的毛病是同一类。没计入的部分由提示行
+如实说明数量与成本合计。
+
+**完成判据**
+
+- ✅ 清空 `price_cache` 后 `holdings list` 盈亏列显示 `—`、不出现 `-100.00%`、
+  有提示行 —— `tests/test_unpriced.py::test_list_shows_dashes_and_a_hint_instead_of_a_fake_loss`。
+- ✅ `sync` 成功后同样的命令恢复正常数字 —— `test_list_recovers_after_sync`。
+- ✅ 混合场景（部分有行情、部分没有）断言无行情那些显示 `—` ——
+  `test_unpriced_holding_carries_no_numbers` 与 `test_totals_only_cover_the_priced_positions`。
+
+---
+
+*以下为动手前的原始分析，保留备查。*
 
 ### 现状
 
