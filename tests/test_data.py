@@ -87,10 +87,13 @@ def test_afetch_price_wraps_sync_version(monkeypatch):
 
 @pytest.fixture
 def a_stock(monkeypatch):
-    """A 股 fetcher，且退避不真睡（否则每个用例白等 0.5 秒 × 重试次数）。"""
-    from holdings.data import a_stock as module
+    """A 股 fetcher，且退避不真睡（否则每个用例白等 0.5 秒 × 重试次数）。
 
-    monkeypatch.setattr(module.time, "sleep", lambda _seconds: None)
+    退避与重试循环已收进 `data/sources.py`，所有市场共用，故打桩打在那里。
+    """
+    from holdings.data import sources
+
+    monkeypatch.setattr(sources.time, "sleep", lambda _seconds: None)
     return AStockFetcher()
 
 
@@ -166,24 +169,48 @@ def test_both_sources_failing_raises_data_source_unavailable(a_stock, monkeypatc
     assert "600519" in str(exc.value)
 
 
-def test_backoff_is_paid_once_per_retry_and_not_after_the_last_attempt(a_stock, monkeypatch):
-    """退避只在「接下来还有一次尝试」时付出，失败收尾不该再白等一次。
+def test_each_source_gets_its_own_retry_budget(a_stock, monkeypatch):
+    """`retry_count` 是**每个源**的重试次数，不是整条链的总次数。
 
-    原先的写法把 sleep 放在 except 末尾，最后一次失败后仍要睡满才降级——
-    用户多等半秒，什么也没等到。
+    akshare 用尽重试后，yfinance 也享有同样次数的机会——此前只有 akshare 会被
+    重试、yfinance 一次失败即结束，那是硬编码降级链留下的偶然差异。
     """
-    from holdings.data import a_stock as module
+    from holdings.data import sources as module
 
+    retry_count = 3
     slept: list[float] = []
     monkeypatch.setattr(module.time, "sleep", slept.append)
-    monkeypatch.setattr(resilience, "retry_count", lambda: 3)
+    monkeypatch.setattr(resilience, "retry_count", lambda: retry_count)
     _source(monkeypatch, a_stock, "_from_akshare", [RuntimeError("一直失败")])
     _source(monkeypatch, a_stock, "_from_yfinance", [RuntimeError("也失败")])
 
     with pytest.raises(fetcher.DataSourceUnavailableError):
         a_stock.fetch("600519")
 
-    assert slept == [module.RETRY_BACKOFF_SECONDS] * 3, "3 次重试 = 3 次退避，不多不少"
+    assert slept == [module.RETRY_BACKOFF_SECONDS] * (retry_count * 2), (
+        "两个源各退避 retry_count 次"
+    )
+
+
+def test_backoff_is_not_paid_after_the_last_attempt(a_stock, monkeypatch):
+    """退避只在「接下来还有一次尝试」时付出，失败收尾不该再白等一次。
+
+    原先的写法把 sleep 放在 except 末尾，最后一次失败后仍要睡满才降级——
+    用户多等半秒，什么也没等到。
+    """
+    from holdings.data import sources as module
+
+    slept: list[float] = []
+    monkeypatch.setattr(module.time, "sleep", slept.append)
+    monkeypatch.setattr(resilience, "retry_count", lambda: 2)
+    # 只配 yfinance 一个源，退避次数就等于重试次数本身
+    monkeypatch.setattr(module, "priority_for", lambda market: ["yfinance"])
+    _source(monkeypatch, a_stock, "_from_yfinance", [RuntimeError("一直失败")])
+
+    with pytest.raises(fetcher.DataSourceUnavailableError):
+        a_stock.fetch("600519")
+
+    assert slept == [module.RETRY_BACKOFF_SECONDS] * 2, "2 次重试 = 2 次退避，收尾不睡"
 
 
 def test_retry_count_comes_from_config(tmp_path, monkeypatch):
@@ -199,3 +226,117 @@ def test_retry_count_falls_back_when_the_config_is_unusable(tmp_path, monkeypatc
     (tmp_path / "config.yaml").write_text("sync:\n  retry_count: 很多次\n", encoding="utf-8")
 
     assert resilience.retry_count() == resilience.DEFAULT_RETRY_COUNT
+
+
+# ------------------------------------------------------- 数据源优先级配置
+
+
+def test_priority_order_comes_from_config(a_stock, monkeypatch, tmp_path):
+    """配置里把 yfinance 排在前面，就该先试 yfinance。"""
+    from holdings.data import sources as module
+
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "config.yaml").write_text(
+        "data_sources:\n  priority:\n    A股: [yfinance, akshare]\n", encoding="utf-8"
+    )
+    monkeypatch.setattr(module.time, "sleep", lambda _seconds: None)
+    akshare_calls = _source(monkeypatch, a_stock, "_from_akshare", [_ok("akshare")])
+    yf_calls = _source(monkeypatch, a_stock, "_from_yfinance", [_ok("yfinance")])
+    assert yf_calls is not None  # 两个源都替换掉，避免任何真联网的可能
+
+    result = a_stock.fetch("600519")
+
+    assert result.source == "yfinance"
+    assert akshare_calls == [], "yfinance 已经成功了，不该再去碰 akshare"
+
+
+def test_priority_falls_back_to_the_builtin_order_when_the_config_is_odd(tmp_path, monkeypatch):
+    """配置写空列表是笔误，按内置顺序跑比整个同步失败有用。"""
+    from holdings.data import sources as module
+
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "config.yaml").write_text(
+        "data_sources:\n  priority:\n    A股: []\n", encoding="utf-8"
+    )
+
+    assert module.priority_for(MarketType.A_SHARE) == ["akshare", "yfinance"]
+
+
+def test_unknown_source_names_are_skipped_rather_than_fatal(a_stock, monkeypatch, tmp_path):
+    """配置里列了当前市场没有实现的源：跳过它，用剩下的那个。"""
+    from holdings.data import sources as module
+
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "config.yaml").write_text(
+        "data_sources:\n  priority:\n    A股: [sina, yfinance]\n", encoding="utf-8"
+    )
+    monkeypatch.setattr(module.time, "sleep", lambda _seconds: None)
+    yf_calls = _source(monkeypatch, a_stock, "_from_yfinance", [_ok("yfinance")])
+
+    assert a_stock.fetch("600519").source == "yfinance"
+    assert len(yf_calls) == 1
+
+
+def test_a_market_with_no_usable_source_says_so(a_stock, monkeypatch, tmp_path):
+    """一个都配不出来时明确指出，不让人对着「数据源不可用」猜。"""
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "config.yaml").write_text(
+        "data_sources:\n  priority:\n    A股: [sina]\n", encoding="utf-8"
+    )
+
+    with pytest.raises(fetcher.DataSourceUnavailableError) as exc:
+        a_stock.fetch("600519")
+
+    assert "sina" in str(exc.value)
+
+
+# ------------------------------------------------------------------ 黄金选路
+
+
+def test_a_domestic_gold_symbol_never_gets_the_international_price(monkeypatch):
+    """518880 拉不到价时应当失败，而不是拿 GC=F 的价格顶上。
+
+    `sync_service` 按**请求的代码**入库（它不看 PriceResult.symbol），所以把
+    国内链路失败回退到国际金价，等于把美元/盎司的报价存成一只人民币 ETF 的
+    行情——数字差三个数量级，而且看不出来。
+    """
+    from holdings.data.a_stock import AStockFetcher
+    from holdings.data.gold import GoldFetcher
+
+    monkeypatch.setattr(
+        AStockFetcher,
+        "_from_akshare",
+        lambda self, symbol: (_ for _ in ()).throw(RuntimeError("挂了")),
+    )
+    monkeypatch.setattr(
+        AStockFetcher,
+        "_from_yfinance",
+        lambda self, symbol: (_ for _ in ()).throw(RuntimeError("也挂了")),
+    )
+    international_calls: list[str] = []
+    monkeypatch.setattr(
+        GoldFetcher,
+        "_international_gold",
+        lambda self: (
+            international_calls.append("GC=F")
+            or fetcher.PriceResult(symbol="GC=F", price=2000.0, source="yfinance")
+        ),
+    )
+
+    with pytest.raises(fetcher.DataSourceUnavailableError):
+        GoldFetcher().fetch("518880")
+
+    assert international_calls == [], "国内代码失败后绝不能去取国际金价顶上"
+
+
+def test_the_international_symbol_goes_to_the_international_quote(monkeypatch):
+    """`GC=F` 走国际金价；国内代码走 A 股链路——由代码选路，不靠配置。"""
+    from holdings.data.gold import GoldFetcher
+
+    monkeypatch.setattr(
+        GoldFetcher,
+        "_international_gold",
+        lambda self, symbol: fetcher.PriceResult(symbol="GC=F", price=2000.0, source="yfinance"),
+    )
+
+    assert GoldFetcher().fetch("GC=F").price == 2000.0

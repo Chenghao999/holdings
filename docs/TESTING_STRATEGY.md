@@ -57,7 +57,7 @@ tests/
 ├── test_storage.py        # DAO + 建表
 ├── test_trade_service.py  # 写入闸门与乱序补录
 ├── test_services.py       # 汇总 / 绩效指标 / 同步
-├── test_data.py           # 数据源工厂、A 股降级链路与重试次数（不触网）
+├── test_data.py           # 数据源工厂、降级链路、重试次数与优先级（不触网）
 ├── test_resilience.py     # 网络超时：sync 不被不响应的数据源挂死
 ├── test_config.py         # 配置加载与 YAML 错误
 ├── test_cli_errors.py     # 退出码契约（需通过 main()，见下）
@@ -76,5 +76,6 @@ tests/
 - `portfolio/calculator.py`：**≥ 90%**（关键在于费用与卖出边界）— 当前 **99%**。
 - 全项目行覆盖率：当前 **82%**（`python -m pytest --cov=holdings`）。
 - 明确低于目标的区域：`cli/renderers/`（87%，空表分支未覆盖）、`utils/deps.py`（0%）、
-  `data/` 三个 fetcher 的 `_from_*`（18%~29%）、`cli/commands/sync.py`（22%）。
+  `data/` 三个 fetcher 的 `_from_*`（28%~55%，都是需要联网的解析分支，用
+  monkeypatch 伪造 `akshare` / `yfinance` 模块即可补）、`cli/commands/sync.py`（22%）。
   这几处分别对应 [BACKLOG](BACKLOG.md) 的 B-09、B-10 与 B-07。

@@ -1,40 +1,25 @@
-"""A 股行情（akshare 实现，降级至 yfinance，含超时重试）。"""
+"""A 股行情：默认可选 akshare，失败降级 yfinance。
+
+降级顺序不写死在这里，由 `data_sources.priority` 决定（见 `data/sources.py`）。
+"""
 
 from __future__ import annotations
 
-import time
-
-from holdings.data import resilience
+from holdings.data import sources
 from holdings.data.fetcher import DataSourceUnavailableError, PriceResult
-
-#: 两次尝试之间的退避秒数。
-RETRY_BACKOFF_SECONDS = 0.5
+from holdings.models.enums import MarketType
 
 
 class AStockFetcher:
-    """A 股数据获取，优先 akshare，降级 yfinance。"""
+    """A 股数据获取。"""
 
     def fetch(self, symbol: str) -> PriceResult:
-        return self._with_fallback(symbol)
-
-    def _with_fallback(self, symbol: str) -> PriceResult:
-        last_err: Exception | None = None
-        # 尝试次数取自 sync.retry_count（默认 1 次重试 = 共 2 次尝试）。
-        for attempt in range(resilience.retry_count() + 1):
-            if attempt:
-                # 退避放在**重试之前**：原先写在 except 末尾，最后一次失败之后
-                # 还会白等 0.5 秒才降级，用户多等半秒却什么也没等到。
-                time.sleep(RETRY_BACKOFF_SECONDS)
-            try:
-                return self._from_akshare(symbol)
-            except Exception as exc:  # 降级要捕获所有异常：任何一种都不该中断取价
-                last_err = exc
-        # 降级至 yfinance（仅支持部分 A 股大盘）
-        try:
-            return self._from_yfinance(symbol)
-        except Exception as exc:  # 降级捕获所有异常
-            last_err = exc
-        raise DataSourceUnavailableError(f"A股数据源不可用：{symbol}") from last_err
+        return sources.fetch_with_fallback(
+            symbol,
+            MarketType.A_SHARE,
+            {"akshare": self._from_akshare, "yfinance": self._from_yfinance},
+            f"A股数据源不可用：{symbol}",
+        )
 
     def _from_akshare(self, symbol: str) -> PriceResult:
         try:

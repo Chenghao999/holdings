@@ -6,10 +6,11 @@
 
 A：这是网络或数据源波动导致的。A 股会按 `sync.retry_count` 重试（默认 1 次），失败后降级至 yfinance；若彻底失败会以退出码 `1` 提示「数据源不可用」。可检查网络后重试。
 
-> **可调项**：`sync.retry_count`（重试次数）、`sync.timeout_seconds`（每个标的的
-> 等待上限，`0` 表示不限）、`cache_ttl_seconds`（缓存有效期）均已生效。
-> 仍**未接线**的只有 `data_sources.priority`（降级顺序仍硬编码在 `data/` 层），
-> 改它不会有任何效果（见 [CONFIG_SPEC](CONFIG_SPEC.md)）。
+> **可调项**：`sync.retry_count`（每个数据源各自的重试次数）、
+> `sync.timeout_seconds`（每个标的的等待上限，`0` 表示不限）、
+> `cache_ttl_seconds`（缓存有效期）、`data_sources.priority`（各市场按什么顺序
+> 尝试数据源）均已生效。唯一例外是黄金——它的两个源是两种不同的标的，
+> 由代码选路，配置里的 `黄金:` 一项会被忽略（见 [CONFIG_SPEC](CONFIG_SPEC.md)）。
 
 ### Q：同一标的多久同步一次价格？
 

@@ -32,7 +32,7 @@
 | [B-02](#b-02) | ✅ 已完成 | `metrics.py` 三个纯函数从未被调用 | `services/report_service.py` |
 | [B-03](#b-03) | P2 | `--note` 回显但不入库，静默丢数据 | `models/snapshot.py`、`storage/snapshot_dao.py` |
 | [B-04](#b-04) | P2 | `--start` 是空参数，传了不生效 | `cli/commands/chart.py`、`services/chart_service.py` |
-| [B-05](#b-05) | P2 | 4 个配置项改了不起作用；网络调用无超时 | `utils/config.py`、`data/` |
+| [B-05](#b-05) | ✅ 已完成 | 4 个配置项改了不起作用；网络调用无超时 | `utils/config.py`、`data/` |
 | [B-06](#b-06) | P2 | 未同步时显示「−100%」，看起来像血亏 | `services/portfolio_service.py`、`cli/renderers/` |
 | [B-07](#b-07) | P2 | 80 列终端下代码列只剩 `6005…` | `cli/renderers/` |
 | [B-08](#b-08) | P2 | `remove` / `check` 不走统一前缀；`check --json` 漏报退出码 | `cli/commands/remove.py`、`check.py` |
@@ -40,6 +40,7 @@
 | [B-10](#b-10) | P3 | 三个 fetcher 覆盖率 18%~29%，降级路径无测试 | `tests/test_data.py` |
 | [B-11](#b-11) | P3 | `cli` 越过 `services` 直接碰 `storage` | `cli/commands/`、`services/` |
 | [B-12](#b-12) | P3 | 3 个模块/函数写完从未被调用 | `utils/`、`services/chart_service.py` |
+| [B-14](#b-14) | P3 | `config.yaml` 的字段取值没有校验 | `utils/config.py` |
 
 ---
 
@@ -220,8 +221,53 @@ id | snapshot_date | total_value | cash_balance | equity_value | gold_value | cr
 
 ## B-05　四个死配置项与网络超时
 
-**优先级** P2 · 配置项骗人
-**位置** `src/holdings/utils/config.py`、`src/holdings/data/a_stock.py`、`us_stock.py`、`gold.py`
+**优先级** ✅ 已完成（2026-09-15）
+**位置** `src/holdings/utils/config.py`、`src/holdings/data/`
+
+### 完成情况
+
+四项分三次提交，每一项独立可回滚：
+
+1. **超时**（`d717f1b`）：新增 `data/resilience.call_with_timeout`，把取价放进
+   **守护线程**并按 `sync.timeout_seconds` 放弃等待。粒度是**每个标的**而不是
+   每次请求——用户关心的是「一个标的最多等多久」，这个口径也让下面的判据成立。
+   用 `ThreadPoolExecutor` 试过：`with` 块退出时 `shutdown(wait=True)` 把省下的
+   时间又等回去，显式 `wait=False` 也仍会被 atexit 的 join 拦住，超时形同虚设。
+   代价是被放弃的请求仍在后台跑完，这一点在 docstring 与 CONFIG_SPEC 里如实写明，
+   没有假装超时能中断请求。
+2. **`sync.retry_count`**（`7d633ce`）：改为读配置，默认 1 次重试 = 共 2 次尝试，
+   与改动前行为一致。顺带修掉退避的位置——原先 `sleep` 写在 `except` 末尾，
+   最后一次失败后还要白等 0.5 秒才降级。
+3. **`default_market`**（`b2ccd69`）：接到 `sync --market` 的默认值上。
+   条目原文写的是「接到 `sync` / `list` 的 `--market`」，但 `list` 根本没有
+   `--market` 选项；CONFIG_SPEC 自己的描述就是「当前 `sync` 的默认值是硬编码的
+   『全部』」。按后者理解，只接 `sync`。
+4. **`data_sources.priority`**：新增 `data/sources.py`，顺序由配置决定，
+   重试与降级三市场共用一份。
+
+**动手时发现并单独修掉的缺陷**（`1a8beb9`）：`load_config()` 用浅拷贝复制默认配置，
+`_deep_merge` 会就地改到模块级的 `DEFAULT_CONFIG` 上——「加载过一份配置」这件事
+本身改变了此后所有加载得到的默认值。是做第 4 项时被「配置写空列表应回落到内置
+顺序」的用例抓出来的：回落取到的正是被上一次加载改写过的值。
+
+**冲突与取舍**：黄金的两个源（国内现货/ETF 与 `GC=F`）曾被按优先级做成可互相
+回退的两个源。这会**写坏数据**：`sync` 按请求的代码入库（不看 `PriceResult.symbol`），
+518880 在 akshare 失败时会拿到 GC=F 的价格（美元/盎司）并以 518880 的名义缓存。
+改为由代码选路，黄金不参与 `priority`，默认配置里移除 `黄金:` 一项
+（老配置里留着的会被忽略）。`tests/test_data.py` 对这条有专门断言。
+
+**完成判据**
+
+- ✅ `timeout_seconds` 改成 1 后，对不响应的源执行 `sync` 在 ~1 秒内返回并给出
+  退出码 1 —— `tests/test_resilience.py::test_sync_command_returns_instead_of_hanging`。
+- ✅ `retry_count` 改成 0 / 3 时 fetcher 的调用次数与配置一致 ——
+  `tests/test_data.py::test_retry_count_controls_how_many_times_akshare_is_tried`。
+- ✅ `CONFIG_SPEC.md` 里四个配置项的 ⚠️ 标注全部消除。**另有一处与这四项无关的
+  ⚠️（字段取值未校验）仍在**，那是个独立问题，已记为 [B-14](#b-14)。
+
+---
+
+*以下为动手前的原始分析，保留备查。*
 
 ### 现状
 
@@ -560,6 +606,47 @@ $ grep -rn "currency.convert" src/ tests/
 **一项改动一个提交**——一个条目至少一个提交，条目内部互不依赖的部分再拆。
 提交信息带上条目编号（如 `fix: 给网络调用加超时 (B-05)`）。这条是硬性要求，
 理由与细则见 [编码与提交规范](CODING_STANDARDS.md#提交粒度一项改动一个提交硬性要求)。
+
+---
+
+---
+
+<a id="b-14"></a>
+
+## B-14　`config.yaml` 字段取值没有校验
+
+**优先级** P3 · 配置项骗人（做得不彻底的那一半）
+**位置** `src/holdings/utils/config.py`
+
+### 现状
+
+`CONFIG_SPEC.md` 的第 4 条约束写着「⚠️ 字段取值暂未做校验」。语法错误的 YAML 会被
+拦成 `ConfigError`（退出码 3），但**取值**不合法不会：
+
+- `cache_ttl_seconds: abc` 或 `-1`，要到某条命令真去读它时才炸，用户看到的是裸
+  traceback（退出码退化成 1），而不是「错误（3）：…」；
+- `database_path: []`、`default_group: 3` 同理。
+
+B-05 修的是「配置项改了不起作用」，这一条是它没覆盖的另一半：**配置项改错了也不吭声**。
+两者合起来才是「配置可信」。
+
+### 要做什么
+
+- 在 `load_config()` 里做一次字段校验，不合法抛 `ConfigError`（退出码 3），
+  消息指出是哪个字段、当前值是什么、期望什么。
+- 至少覆盖：`cache_ttl_seconds`（非负整数）、`sync.timeout_seconds`（数字）、
+  `sync.retry_count`（非负整数）、`database_path` / `default_group` / `default_market`（字符串）、
+  `data_sources.priority`（map，值是字符串列表）。
+- 校验通过后，`Config` 上那几个**取值兜底**的属性（`sync_timeout_seconds` /
+  `sync_retry_count`）就变成不可达代码，一并去掉，只留一套机制。
+  `resilience.retry_count()` 里的兜底同理——但要保留它「配置坏了不影响取价」的
+  语义，改成捕获 `ConfigError` 返回默认值。
+
+### 完成判据
+
+- `cache_ttl_seconds: abc` → `holdings list` 输出 `错误（3）：…`，退出码 3，无 traceback。
+- 每个受校验字段都有一条参数化用例（合法值通过、非法值抛 `ConfigError`）。
+- `CONFIG_SPEC.md` 第 4 条约束的 ⚠️ 去掉，改成如实描述校验范围。
 
 ---
 
