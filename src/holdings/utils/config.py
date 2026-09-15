@@ -19,10 +19,13 @@ DEFAULT_CONFIG: dict = {
     "default_market": "全部",
     "cache_ttl_seconds": 300,
     "data_sources": {
+        # 各市场的数据源顺序。
+        # **黄金故意不在此列**：它的两个源是两种不同的标的（国内现货/ETF 与
+        # 国际 GC=F），不是彼此的备份，按优先级互相回退会把 GC=F 的价格存成
+        # 518880 的行情。详见 data/gold.py 的模块说明。
         "priority": {
             "A股": ["akshare", "yfinance"],
             "美股": ["yfinance"],
-            "黄金": ["akshare", "yfinance"],
         }
     },
     "sync": {"timeout_seconds": 10, "retry_count": 1},
