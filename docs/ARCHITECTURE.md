@@ -35,9 +35,11 @@ holdings/
 │       │
 │       ├── data/                            # 【数据获取层·只找外部 API，不碰 DB】
 │       │   ├── fetcher.py                   #    工厂统一入口，同步/异步双接口
-│       │   ├── a_stock.py                   #    akshare 实现，失败重试 1 次后降级 yfinance
+│       │   ├── sources.py                   #    按 data_sources.priority 依次尝试各源
+│       │   ├── resilience.py                #    网络调用的超时（守护线程）与重试次数
+│       │   ├── a_stock.py                   #    akshare / yfinance 两个源，顺序由配置决定
 │       │   ├── us_stock.py                  #    yfinance 实现（单一数据源）
-│       │   └── gold.py                      #    黄金（国内现货优先，降级 GC=F）
+│       │   └── gold.py                      #    黄金：按代码选路，不参与优先级配置
 │       │
 │       ├── services/                        # 【编排层·唯一被 CLI/GUI 调用的入口】
 │       │   ├── portfolio_service.py         #    编排 portfolio + storage + data
@@ -62,10 +64,13 @@ holdings/
 ├── config.yaml                              # 用户配置
 ├── pyproject.toml
 └── tests/                                   # 每个模块独立测试，互不依赖
-    ├── conftest.py
-    ├── test_calculator.py
-    └── test_data.py                         # 数据源工厂（不触网）
+                                             # 完整文件树与覆盖率见测试策略文档
 ```
+
+> 新增/删除模块时**必须同步这棵树**。它是「代码实际长什么样」的索引，
+> 一旦落后于代码，读者就分不清哪些是规范、哪些是历史。
+> 测试目录的完整清单在 [TESTING_STRATEGY](TESTING_STRATEGY.md#测试目录约定)，
+> 此处不重复维护一份必然走样的副本。
 
 ## 二、依赖方向（只能从上向下，禁止反向/跨层）
 
