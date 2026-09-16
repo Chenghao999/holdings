@@ -4,6 +4,10 @@
 只断言「调用了几次、走的哪条路」。
 """
 
+import sys
+import types
+
+import pandas as pd
 import pytest
 
 from holdings.data import fetcher, resilience
@@ -300,9 +304,12 @@ def test_a_domestic_gold_symbol_never_gets_the_international_price(monkeypatch):
     国内链路失败回退到国际金价，等于把美元/盎司的报价存成一只人民币 ETF 的
     行情——数字差三个数量级，而且看不出来。
     """
+    from holdings.data import sources
     from holdings.data.a_stock import AStockFetcher
     from holdings.data.gold import GoldFetcher
 
+    # 两个源都会失败，重试的退避要打桩——否则这个用例真的睡满 1 秒。
+    monkeypatch.setattr(sources.time, "sleep", lambda _seconds: None)
     monkeypatch.setattr(
         AStockFetcher,
         "_from_akshare",
@@ -340,3 +347,144 @@ def test_the_international_symbol_goes_to_the_international_quote(monkeypatch):
     )
 
     assert GoldFetcher().fetch("GC=F").price == 2000.0
+
+
+# ------------------------------------------------ 各数据源的解析与懒加载分支
+
+
+def _akshare_module(df):
+    """伪造 akshare 模块：只提供 `_from_akshare` 用到的那一个函数。"""
+    module = types.ModuleType("akshare")
+    module.stock_zh_a_spot_em = lambda: df
+    return module
+
+
+def _yfinance_module(history, seen: list[str] | None = None):
+    """伪造 yfinance 模块；`seen` 用来记录 Ticker 收到的代码（验后缀推导）。"""
+    module = types.ModuleType("yfinance")
+
+    class _Ticker:
+        def __init__(self, symbol: str):
+            if seen is not None:
+                seen.append(symbol)
+
+        def history(self, period: str):
+            return history
+
+    module.Ticker = _Ticker
+    return module
+
+
+def _spot(price: float):
+    return pd.DataFrame({"代码": ["600519"], "最新价": [price]})
+
+
+def _history(close: float):
+    return pd.DataFrame({"Close": [close]})
+
+
+def test_akshare_parses_the_latest_price(monkeypatch):
+    monkeypatch.setitem(sys.modules, "akshare", _akshare_module(_spot(1680.5)))
+
+    result = AStockFetcher()._from_akshare("600519")
+
+    assert result.price == 1680.5
+    assert result.currency == "CNY"
+    assert result.source == "akshare"
+
+
+def test_akshare_reports_a_missing_symbol(monkeypatch):
+    monkeypatch.setitem(sys.modules, "akshare", _akshare_module(_spot(1680.5)))
+
+    with pytest.raises(fetcher.SymbolNotFoundError):
+        AStockFetcher()._from_akshare("000000")
+
+
+def test_missing_akshare_raises_data_source_unavailable(monkeypatch):
+    """懒加载：没装 akshare 时要报「未安装」，而不是漏一个 ImportError 出去。"""
+    monkeypatch.setitem(sys.modules, "akshare", None)
+
+    with pytest.raises(fetcher.DataSourceUnavailableError, match="akshare"):
+        AStockFetcher()._from_akshare("600519")
+
+
+@pytest.mark.parametrize(
+    ("symbol", "expected"),
+    [("600519", "600519.SS"), ("000001", "000001.SZ"), ("300750", "300750.SZ")],
+)
+def test_yfinance_appends_the_right_suffix(monkeypatch, symbol, expected):
+    """上交所是 `.SS`、深交所是 `.SZ`——判据是 6 开头。
+
+    推错后缀不会报错，只会查到一个不存在的代码然后「未找到标的」，
+    排查起来毫无线索。
+    """
+    seen: list[str] = []
+    monkeypatch.setitem(sys.modules, "yfinance", _yfinance_module(_history(10.0), seen))
+
+    AStockFetcher()._from_yfinance(symbol)
+
+    assert seen == [expected]
+
+
+def test_yfinance_reports_a_missing_symbol(monkeypatch):
+    monkeypatch.setitem(sys.modules, "yfinance", _yfinance_module(pd.DataFrame()))
+
+    with pytest.raises(fetcher.SymbolNotFoundError):
+        AStockFetcher()._from_yfinance("600519")
+
+
+def test_missing_yfinance_raises_data_source_unavailable(monkeypatch):
+    monkeypatch.setitem(sys.modules, "yfinance", None)
+
+    with pytest.raises(fetcher.DataSourceUnavailableError, match="yfinance"):
+        AStockFetcher()._from_yfinance("600519")
+
+
+def test_us_stock_parses_the_close_price(monkeypatch):
+    monkeypatch.setitem(sys.modules, "yfinance", _yfinance_module(_history(189.5)))
+
+    result = USStockFetcher()._from_yfinance("AAPL")
+
+    assert result.price == 189.5
+    assert result.currency == "USD", "美股按美元计价"
+
+
+def test_us_stock_reports_a_missing_symbol(monkeypatch):
+    monkeypatch.setitem(sys.modules, "yfinance", _yfinance_module(pd.DataFrame()))
+
+    with pytest.raises(fetcher.SymbolNotFoundError):
+        USStockFetcher()._from_yfinance("NOPE")
+
+
+def test_gold_uses_the_international_contract(monkeypatch):
+    seen: list[str] = []
+    monkeypatch.setitem(sys.modules, "yfinance", _yfinance_module(_history(2000.0), seen))
+
+    result = GoldFetcher()._international_gold()
+
+    assert seen == ["GC=F"], "国际金价走的是 GC=F 这个合约"
+    assert result.symbol == "GC=F"
+    assert result.currency == "USD"
+
+
+def test_us_stock_without_yfinance_raises_data_source_unavailable(monkeypatch):
+    monkeypatch.setitem(sys.modules, "yfinance", None)
+
+    with pytest.raises(fetcher.DataSourceUnavailableError, match="yfinance"):
+        USStockFetcher()._from_yfinance("AAPL")
+
+
+def test_international_gold_without_yfinance_raises_data_source_unavailable(monkeypatch):
+    monkeypatch.setitem(sys.modules, "yfinance", None)
+
+    with pytest.raises(fetcher.DataSourceUnavailableError, match="yfinance"):
+        GoldFetcher()._international_gold()
+
+
+def test_a_domestic_gold_code_goes_through_the_a_share_path(monkeypatch):
+    """国内代码（如 518880）交给 A 股链路，它自己有降级与重试。"""
+    monkeypatch.setitem(sys.modules, "akshare", _akshare_module(_spot(4.85)))
+
+    result = GoldFetcher().fetch("600519")
+
+    assert result.source == "akshare", "走的是 A 股那条链，而不是国际金价"
