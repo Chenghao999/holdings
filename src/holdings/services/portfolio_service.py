@@ -10,6 +10,26 @@ from holdings.models.enums import MarketType
 from holdings.portfolio import allocator, calculator
 from holdings.storage import asset_meta_dao, price_cache_dao, transaction_dao
 
+#: 持仓表的列与显示名，顺序即显示顺序。
+#:
+#: 放在这里而不是某个界面里：它是「服务产出什么」与「界面怎么显示」之间的契约。
+#: CLI 的表格、`--sort` 的取值、TUI 的表头都从这一份派生——各家自己写一份的话，
+#: 服务改了列名只会让其中一家悄悄出错。文字标签放在服务层确实不算常见，
+#: 但**同一张表在两个界面里叫法不一致**是更实际的问题。
+HOLDINGS_COLUMNS = {
+    "symbol": "代码",
+    "name": "名称",
+    "market": "市场",
+    "asset_type": "类型",
+    "quantity": "数量",
+    "avg_cost": "成本价",
+    "current_price": "现价",
+    "market_value": "市值",
+    "total_fees": "累计费用",
+    "profit": "盈亏",
+    "profit_rate": "盈亏率",
+}
+
 
 @dataclass
 class PortfolioSummary:

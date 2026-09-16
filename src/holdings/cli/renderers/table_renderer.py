@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 from rich.table import Table
 
+from holdings.services.portfolio_service import HOLDINGS_COLUMNS
 from holdings.utils.formatter import (
     UNKNOWN,
     format_money,
@@ -36,22 +37,6 @@ COMPACT_COLUMNS = ("symbol", "quantity", "current_price", "profit_rate")
 #: 标识列：这些列被截断就等于信息没了，所以设 no_wrap 并给出最小宽度，
 #: 让 Rich 优先牺牲数字列——数字被截断至少还能一眼看出是「某个数」。
 _IDENTIFIER_COLUMNS = {"symbol": 6, "market": 2, "asset_type": 4}
-
-#: 持仓表的列，顺序即显示顺序。渲染层与 `list --sort` 的取值都从这一份派生——
-#: 此前两处各写一份，靠一条「每个展示列都能排序」的用例盯着才没走样。
-HOLDINGS_COLUMNS = {
-    "symbol": "代码",
-    "name": "名称",
-    "market": "市场",
-    "asset_type": "类型",
-    "quantity": "数量",
-    "avg_cost": "成本价",
-    "current_price": "现价",
-    "market_value": "市值",
-    "total_fees": "累计费用",
-    "profit": "盈亏",
-    "profit_rate": "盈亏率",
-}
 
 
 def render_performance_line(perf: PerformanceSummary) -> str:

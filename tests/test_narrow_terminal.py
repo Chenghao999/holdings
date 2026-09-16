@@ -17,11 +17,11 @@ from rich.console import Console
 from holdings.cli.renderers.table_renderer import (
     COMPACT_COLUMNS,
     COMPACT_WIDTH_THRESHOLD,
-    HOLDINGS_COLUMNS,
     render_holdings_table,
 )
 from holdings.models.enums import AssetType, MarketType, TradeType
 from holdings.models.transaction import Transaction
+from holdings.services.portfolio_service import HOLDINGS_COLUMNS
 from holdings.storage import price_cache_dao
 from holdings.storage.transaction_dao import add_many
 
