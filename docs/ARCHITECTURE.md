@@ -14,6 +14,7 @@ holdings/
 │       ├── models/                          # 【基础层·无内部依赖】
 │       │   ├── transaction.py               #    仅依赖 pydantic，不 import 任何项目内部模块
 │       │   ├── snapshot.py                  #    定义与 storage 解耦的纯数据结构
+│       │   ├── asset_meta.py                #    标的名称 / 币种 / 年化管理费率（仅展示用）
 │       │   └── enums.py                     #    MarketType / AssetType / TradeType（含 FEE）
 │       │
 │       ├── utils/                           # 【基础层·无内部依赖】
@@ -31,6 +32,7 @@ holdings/
 │       │   ├── db.py                        #    连接/建表/迁移
 │       │   ├── transaction_dao.py           #    交易 CRUD（含 add_many 单事务批量写）
 │       │   ├── snapshot_dao.py              #    快照 CRUD
+│       │   ├── asset_meta_dao.py            #    资产基础信息 CRUD
 │       │   └── price_cache_dao.py           #    价格缓存 CRUD + TTL 新鲜度判断
 │       │
 │       ├── data/                            # 【数据获取层·只找外部 API，不碰 DB】
