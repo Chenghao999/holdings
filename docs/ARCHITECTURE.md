@@ -47,6 +47,7 @@ holdings/
 │       │   ├── portfolio_service.py         #    编排 portfolio + storage + data
 │       │   ├── report_service.py            #    快照 → 回撤 / 年化 / 夏普（口径不成立时给 None）
 │       │   ├── snapshot_service.py          #    快照的记录与读取
+│       │   ├── asset_meta_service.py        #    标的名称 / 币种 / 年化管理费率的读写
 │       │   ├── chart_service.py             #    净值曲线：取数与筛日期（plotly 懒加载）
 │       │   ├── trade_service.py             #    写入闸门：落库前的历史持仓校验
 │       │   ├── sync_service.py              #    编排 data + storage
@@ -56,7 +57,7 @@ holdings/
 │           ├── main.py                      #    click 入口组 + 异常→退出码映射
 │           ├── dates.py                     #    日期参数的解析与校验，各命令共用
 │           ├── commands/                    #    子命令：仅调用 service + 打印
-│           │   ├── init.py    add.py     check.py    list.py
+│           │   ├── init.py    add.py     check.py    list.py    meta.py
 │           │   ├── import_cmd.py  sync.py   report.py
 │           │   └── snapshot.py  snapshots.py  chart.py  remove.py
 │           └── renderers/                   #    把 Service 数据转为 Rich 表格/图表
