@@ -36,8 +36,8 @@
 - [x] 实现 `holdings snapshot` 与 `holdings chart` 净值曲线。
 - [x] 补齐单元测试，核心计算模块覆盖率达标（`calculator.py` 99%，目标 ≥ 90%）。
 - [x] 稳定 CLI 交互，完善错误码与异常处理（入口点映射、参数校验、写入闸门已落地）。
-- [ ] 清掉工程体检的剩余发现 —— **完整清单见 [待办清单（BACKLOG）](BACKLOG.md)**，
-      本节只列里程碑层面的大项，不重复维护细节：
+- [x] 清掉工程体检的剩余发现（12 项）与执行期间拆出的 3 项 ——
+      **完整清单见 [待办清单（BACKLOG）](BACKLOG.md)**：
   - ✅ P1 已完成：`metrics.py` 接入 `report`（[B-02](BACKLOG.md#b-02)）、
         `asset_meta` 表接入（[B-01](BACKLOG.md#b-01)）
   - ✅ P2 已完成：网络超时与 4 个死配置项（[B-05](BACKLOG.md#b-05)）、
@@ -51,12 +51,17 @@
   - [ ] P3 待做：`utils` / `data` 层测试缺口（[B-09](BACKLOG.md#b-09)、[B-10](BACKLOG.md#b-10)）、
         铁律 3 的剩余违反（[B-11](BACKLOG.md#b-11)）、零引用死代码（[B-12](BACKLOG.md#b-12)）、
         配置字段校验（[B-14](BACKLOG.md#b-14)）
-- [ ] 用 `terminalizer` 录制演示 GIF，上传 GitHub。
+- [ ] 用 `terminalizer` / `asciinema` 录制演示，放进 README（[B-18](BACKLOG.md#b-18)）。
+- [ ] 收尾发布：版本号到 `1.0.0`、CHANGELOG 收口、打 tag（[B-18](BACKLOG.md#b-18)）。
+- [ ] 清掉发布前扫出的两处「说了没做」：[B-16](BACKLOG.md#b-16)、[B-17](BACKLOG.md#b-17)。
 
-### 2027 Q4 —— v2.0.0（GUI 预览）
+### 2027 Q4 —— v2.0.0（界面与多币种）
 
 - [x] 基于 Textual 的 TUI 终端仪表盘预览版（[B-15](BACKLOG.md#b-15)）——
       持仓 + 报表两屏已可运行，数据全部来自 `services/`。
+- [ ] Web 界面，只读看板起手（[B-20](BACKLOG.md#b-20)）。
+- [ ] 多币种：基准货币人民币，先在汇总里如实排除非 CNY 标的（[B-19](BACKLOG.md#b-19)）。
+- [ ] 多账户管理（[B-21](BACKLOG.md#b-21)）。
 - [x] GUI 直接复用 `services/` 层 —— **前置条件已落实**：
       `tests/test_layering.py` 在 CI 里守着「核心层零输出、零终端依赖、
       依赖方向合规、只 import 核心层不会拖进 click / rich」。
