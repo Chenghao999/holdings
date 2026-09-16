@@ -9,14 +9,16 @@ import click
 @click.option("--id", "tx_id", type=int, required=True, help="交易记录 ID")
 def remove_cmd(tx_id: int) -> None:
     """删除指定 ID 的交易记录（需二次确认）。"""
+    from holdings.exceptions import RecordNotFoundError
     from holdings.storage import transaction_dao
     from holdings.utils.config import load_config
 
     cfg = load_config()
     tx = transaction_dao.get(cfg.database_path, tx_id)
     if tx is None:
-        click.echo(f"未找到交易 #{tx_id}", err=True)
-        raise SystemExit(2)
+        # 抛出去由 main() 统一成「错误（2）：…」。此前这里自己 echo + SystemExit(2)：
+        # 退出码是对的，但文案绕过了统一前缀，脚本按前缀匹配时会漏掉这一条。
+        raise RecordNotFoundError(f"未找到交易 #{tx_id}")
 
     if click.confirm(f"确认删除交易 #{tx_id}（{tx.symbol} {tx.trade_type.value}）？"):
         transaction_dao.remove(cfg.database_path, tx_id)

@@ -35,7 +35,7 @@
 | [B-05](#b-05) | ✅ 已完成 | 4 个配置项改了不起作用；网络调用无超时 | `utils/config.py`、`data/` |
 | [B-06](#b-06) | ✅ 已完成 | 未同步时显示「−100%」，看起来像血亏 | `services/portfolio_service.py`、`cli/renderers/` |
 | [B-07](#b-07) | ✅ 已完成 | 80 列终端下代码列只剩 `6005…` | `cli/renderers/` |
-| [B-08](#b-08) | P2 | `remove` / `check` 不走统一前缀；`check --json` 漏报退出码 | `cli/commands/remove.py`、`check.py` |
+| [B-08](#b-08) | ✅ 已完成 | `remove` / `check` 不走统一前缀；`check --json` 漏报退出码 | `cli/commands/remove.py`、`check.py` |
 | [B-09](#b-09) | P3 | `deps.py` 零测试 | `tests/` |
 | [B-10](#b-10) | P3 | 三个 fetcher 覆盖率 18%~29%，降级路径无测试 | `tests/test_data.py` |
 | [B-11](#b-11) | P3 | `cli` 越过 `services` 直接碰 `storage`（剩 2 处） | `cli/commands/`、`services/` |
@@ -481,8 +481,46 @@ current_price = cached.price if cached else 0.0
 
 ## B-08　报错格式与退出码统一
 
-**优先级** P2 · 契约不一致
-**位置** `src/holdings/cli/commands/remove.py`、`check.py`、`cli/main.py`
+**优先级** ✅ 已完成（2026-09-15）
+**位置** `src/holdings/cli/commands/`、`cli/main.py`、`exceptions.py`
+
+### 完成情况
+
+两次提交：
+
+1. **「缺少依赖」拆出退出码 6**（采纳条目里「倾向拆分」的建议）。1 此后只表示
+   「网络 / 数据源不可用」。理由：两者的处置相反——缺依赖重试没有用、要装包，
+   网络故障才值得重试；并到同一个码会让 CI 里「网络抖了一下」和「环境没装好」
+   看起来是同一种故障，而它们的修法一个是重跑、一个是改 Dockerfile。
+2. **统一报错格式**：`remove` / `sync` / `check` 三处不再自己 `SystemExit`，
+   全部抛异常交 `main()` 映射。`check --json` 的退出码与文本模式由同一个出口
+   决定，不可能再不一致；JSON 改为对象并带上 `"ok"` 字段。
+
+**顺带**：映射表从 `main()` 的函数体提到模块级的 `exit_code_for()`。此前它藏在
+函数里，用例只能断言「返回值落在 1~5 之间」——一个漏掉的分支不会被任何用例发现，
+而这张表本身就是契约。新增一条结构性用例用 AST 扫描命令目录，防止后来者再绕过
+映射层（用 AST 而不是文本匹配：注释里提到 `SystemExit` 是正常的，要解释为什么
+不再用它）。
+
+**一处判断**：条目说「`init.py` 等引导命令若确有必要，在 `ARCHITECTURE.md` 里
+记为例外」。实际核对下来 `init.py` 并没有用到 `SystemExit`，命令目录里一处也
+没有，因此**不需要例外**——`ERROR_HANDLING.md` 的原则写成「唯一的例外是
+`main()` 自身，它正是那个映射层」。
+
+**完成判据**
+
+- ✅ `holdings remove --id 99999` 输出 `错误（2）：未找到交易 #99999`，退出码 2 ——
+  `tests/test_cli_errors.py::test_remove_of_a_missing_record_exits_2_with_the_prefix`。
+- ✅ `holdings check` 缺依赖输出 `错误（6）：…`；`--json` 退出码与文本模式一致，
+  且带 `"ok": false` —— `tests/test_check_cmd.py` 的 7 条用例，其中一条专门
+  参数化两种模式断言退出码相等。
+- ✅ `tests/test_cli_errors.py` 的参数化表改为断言真实映射（含 6 与
+  `RecordNotFoundError`），并仍走 `main()` 而非 `CliRunner`。
+- ✅ `ERROR_HANDLING.md`、`USER_GUIDE.md`、`README.md` 三处退出码表同步更新。
+
+---
+
+*以下为动手前的原始分析，保留备查。*
 
 ### 现状
 

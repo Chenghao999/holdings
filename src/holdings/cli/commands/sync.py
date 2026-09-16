@@ -38,8 +38,8 @@ def sync_cmd(market: str) -> None:
     便于脚本据此判断（此前无论失败多少都返回 0）。
     """
     from rich.console import Console
-    from rich.markup import escape
 
+    from holdings.exceptions import DataSourceUnavailableError
     from holdings.services.sync_service import sync
     from holdings.utils.config import load_config
     from holdings.utils.deps import is_installed
@@ -79,6 +79,7 @@ def sync_cmd(market: str) -> None:
         hint = "请安装数据源依赖 pip install 'holdings[data]'" + (
             f"（未安装：{missing}）" if missing else ""
         )
-        # hint 里的 [data] 必须转义，否则 Rich 会把它当标记吃掉，给出的安装命令是错的。
-        console.print(f"[red]{failed} 个标的全部同步失败[/red]：{escape(hint)}")
-        raise SystemExit(1)
+        # 抛异常而不是自己 SystemExit(1)：文案统一成「错误（1）：…」，
+        # 与其它失败路径一致。顺带不再需要 escape()——那是给 Rich 的标记转义，
+        # 而这条消息现在走 click.echo 输出，`[data]` 不会被吃掉。
+        raise DataSourceUnavailableError(f"{failed} 个标的全部同步失败：{hint}")
