@@ -52,13 +52,16 @@ holdings/
 │       │   ├── sync_service.py              #    编排 data + storage
 │       │   └── chart_service.py             #    编排 storage，返回 Figure/JSON
 │       │
+│       ├── tui/                             # 【表现层·与 cli 平级，互不 import】
+│       │   └── app.py                       #    Textual 界面：持仓 + 报表两屏
+│       │
 │       └── cli/                             # 【表现层·极薄，仅渲染输出】
 │           ├── main.py                      #    click 入口组 + 异常→退出码映射
 │           ├── dates.py                     #    日期参数的解析与校验，各命令共用
 │           ├── commands/                    #    子命令：仅调用 service + 打印
 │           │   ├── init.py    add.py     check.py    list.py    meta.py
 │           │   ├── import_cmd.py  sync.py   report.py
-│           │   └── snapshot.py  snapshots.py  chart.py  remove.py
+│           │   └── snapshot.py  snapshots.py  chart.py  remove.py  tui.py
 │           └── renderers/                   #    把 Service 数据转为 Rich 表格/图表
 │               ├── table_renderer.py
 │               └── chart_renderer.py
@@ -79,7 +82,7 @@ holdings/
 ## 二、依赖方向（只能从上向下，禁止反向/跨层）
 
 ```text
-cli (表现层)
+cli / tui (表现层，两者平级、互不 import)
   └── 只允许 import → services（以及 models / utils / exceptions 三个基础层）
 
 services (编排层)
@@ -159,6 +162,7 @@ models / utils (基础层)
 | `data/` | 封装外部行情 API | 不写 DB、不算盈亏、不 print |
 | `services/` | 跨模块编排、组装返回对象 | 不写 SQL、不发请求、不算算法 |
 | `cli/` | 参数解析、调用 service、渲染 | 不写业务、不写 SQL、不发请求 |
+| `tui/` | 终端界面（Textual） | 同上；也不 import `cli/`——两个界面各自演进，共用 `services/` |
 
 ## 五、独立性验证清单（写代码前的自查）
 

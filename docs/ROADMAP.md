@@ -55,7 +55,8 @@
 
 ### 2027 Q4 —— v2.0.0（GUI 预览）
 
-- [ ] 基于 Textual 的 TUI 终端仪表盘预览版（[B-15](BACKLOG.md#b-15)）。
+- [x] 基于 Textual 的 TUI 终端仪表盘预览版（[B-15](BACKLOG.md#b-15)）——
+      持仓 + 报表两屏已可运行，数据全部来自 `services/`。
 - [x] GUI 直接复用 `services/` 层 —— **前置条件已落实**：
       `tests/test_layering.py` 在 CI 里守着「核心层零输出、零终端依赖、
       依赖方向合规、只 import 核心层不会拖进 click / rich」。

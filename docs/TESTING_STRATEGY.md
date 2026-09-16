@@ -44,7 +44,8 @@
 | 单元测试 | `portfolio/` 计算逻辑，`storage/` DAO 逻辑（临时文件 SQLite） |
 | 结构测试 | `test_layering.py`：用 AST 扫源码，守分层铁律与「UI 可复用」——这类约束用运行时断言测不出来 |
 | 集成测试 | CLI 命令端到端（`import` → 落库、`add` → 校验、退出码契约） |
-| Mock 测试 | `data/` 数据获取层（待补） |
+| Mock 测试 | `data/` 数据获取层（伪造 `akshare` / `yfinance` 模块，不触网） |
+| 界面测试 | `test_tui.py` 用 Textual 的 `app.run_test()` headless 跑真实渲染；`textual` 在 `dev` extra 里 |
 
 ## 测试目录约定
 
@@ -55,17 +56,27 @@ tests/
 ├── test_validation.py     # 交易领域校验（check_trade）
 ├── test_allocator.py
 ├── test_metrics.py        # 回撤 / 年化 / 夏普与采样口径
-├── test_storage.py        # DAO + 建表
+├── test_storage.py        # 四个 DAO + 建表 + 补列迁移
 ├── test_trade_service.py  # 写入闸门与乱序补录
-├── test_services.py       # 汇总 / 绩效指标 / 同步
-├── test_data.py           # 数据源工厂、降级链路、重试次数与优先级（不触网）
+├── test_services.py       # 汇总 / 绩效指标 / 同步 / 图表
+├── test_data.py           # 数据源：工厂、降级链路、重试、优先级、解析分支（不触网）
 ├── test_resilience.py     # 网络超时：sync 不被不响应的数据源挂死
-├── test_config.py         # 配置加载与 YAML 错误
+├── test_config.py         # 配置加载、YAML 错误与字段取值校验
 ├── test_cli_errors.py     # 退出码契约（需通过 main()，见下）
 ├── test_import_cmd.py     # CSV 整批事务与表头校验
 ├── test_list_cmd.py       # --sort 排序契约
 ├── test_sync_cmd.py       # --market 默认值来自 default_market
-└── test_report_cmd.py     # 绩效行：算不出来时必须显示 —，不是 0
+├── test_report_cmd.py     # 绩效行：算不出来时必须显示 —，不是 0
+├── test_snapshot_cmd.py   # 快照备注的写入、读取与列在不在
+├── test_unpriced.py       # 没有行情时显示 —，不显示 −100%
+├── test_narrow_terminal.py # 窄终端下代码列完整可见
+├── test_chart_cmd.py      # --start 真的筛日期；空区间报错而非空白图
+├── test_meta_cmd.py       # meta 录入/查看/删除；费率不影响成本与盈亏
+├── test_check_cmd.py      # check 的报错前缀与两种模式退出码一致
+├── test_formatter.py      # 数值显示：— 的语义、ratio 与 percent 不可互换
+├── test_deps.py           # 依赖检测：缺包判定与 check 命令的依据
+├── test_layering.py       # 分层铁律：核心层零输出、零终端依赖、依赖方向
+└── test_tui.py            # TUI：headless 跑真实界面；缺 textual 时的退出码
 ```
 
 > **`test_cli_errors.py` 必须走 `main()`**：`CliRunner` 会绕过 `main()` 里的
