@@ -1,13 +1,20 @@
-"""storage 层（db / transaction_dao / snapshot_dao / price_cache_dao）的单元测试。"""
+"""storage 层的单元测试（db / 四个 DAO）。"""
 
 import sqlite3
 from datetime import date
 
 import pytest
 
+from holdings.models.asset_meta import AssetMeta
 from holdings.models.enums import AssetType, MarketType, TradeType
 from holdings.models.snapshot import Snapshot
-from holdings.storage import db, price_cache_dao, snapshot_dao, transaction_dao
+from holdings.storage import (
+    asset_meta_dao,
+    db,
+    price_cache_dao,
+    snapshot_dao,
+    transaction_dao,
+)
 from holdings.storage.db import DatabaseError, connect
 
 # --------------------------------------------------------------------------- db
@@ -348,3 +355,106 @@ def test_is_fresh_false_for_unparsable_timestamp(db_path):
         conn.close()
 
     assert price_cache_dao.is_fresh(db_path, "600519", 300) is False
+
+
+# ---------------------------------------------------------------- asset_meta_dao
+
+
+def _meta(symbol: str = "518880", **kwargs) -> AssetMeta:
+    return AssetMeta(symbol=symbol, **kwargs)
+
+
+def test_asset_meta_upsert_then_get(db_path):
+    asset_meta_dao.upsert(
+        db_path, _meta(name="黄金ETF", market="A股", currency="CNY", annual_management_fee=0.5)
+    )
+
+    got = asset_meta_dao.get(db_path, "518880")
+
+    assert got.name == "黄金ETF"
+    assert got.market == "A股"
+    assert got.annual_management_fee == 0.5
+    assert got.updated_at is not None
+
+
+def test_asset_meta_get_returns_none_for_an_unknown_symbol(db_path):
+    """没有记录就是没有，不要造一条默认值出来——回落逻辑由调用方决定。"""
+    assert asset_meta_dao.get(db_path, "不存在的代码") is None
+
+
+def test_asset_meta_upsert_twice_updates_in_place(db_path):
+    """`symbol` 是主键：重复写入是覆盖，不是插第二条（这是唯一约束的意义）。"""
+    asset_meta_dao.upsert(db_path, _meta(name="旧名字", annual_management_fee=0.5))
+    asset_meta_dao.upsert(db_path, _meta(name="新名字", annual_management_fee=0.8))
+
+    got = asset_meta_dao.get(db_path, "518880")
+
+    assert got.name == "新名字"
+    assert got.annual_management_fee == 0.8
+    conn = sqlite3.connect(db_path)
+    try:
+        count = conn.execute("SELECT COUNT(*) FROM asset_meta").fetchone()[0]
+    finally:
+        conn.close()
+    assert count == 1, "主键冲突应更新而不是新增一行"
+
+
+def test_asset_meta_upsert_keeps_only_the_given_fields(db_path):
+    """只传名称时，费率回到默认值而不是保留上一次的——写的是整条记录。"""
+    asset_meta_dao.upsert(db_path, _meta(name="黄金ETF", annual_management_fee=0.5))
+    asset_meta_dao.upsert(db_path, _meta(name="黄金ETF"))
+
+    assert asset_meta_dao.get(db_path, "518880").annual_management_fee == 0.0
+
+
+def test_asset_meta_get_all_is_sorted_by_symbol(db_path):
+    asset_meta_dao.upsert(db_path, _meta("600519", name="贵州茅台"))
+    asset_meta_dao.upsert(db_path, _meta("518880", name="黄金ETF"))
+
+    assert [m.symbol for m in asset_meta_dao.get_all(db_path)] == ["518880", "600519"]
+
+
+def test_asset_meta_get_all_on_empty_db(db_path):
+    assert asset_meta_dao.get_all(db_path) == []
+
+
+def test_asset_meta_delete_reports_whether_it_removed_anything(db_path):
+    asset_meta_dao.upsert(db_path, _meta(name="黄金ETF"))
+
+    assert asset_meta_dao.delete(db_path, "518880") is True
+    assert asset_meta_dao.get(db_path, "518880") is None
+    assert asset_meta_dao.delete(db_path, "518880") is False, "重复删除应返回 False"
+
+
+class _FailingConnection:
+    """执行任何语句都抛 sqlite3 异常的假连接。"""
+
+    def execute(self, *_args, **_kwargs):
+        raise sqlite3.OperationalError("database is locked")
+
+    def commit(self) -> None:
+        raise sqlite3.OperationalError("database is locked")
+
+    def close(self) -> None:
+        pass
+
+
+@pytest.mark.parametrize(
+    "call",
+    [
+        pytest.param(lambda path: asset_meta_dao.get(path, "518880"), id="get"),
+        pytest.param(asset_meta_dao.get_all, id="get_all"),
+        pytest.param(lambda path: asset_meta_dao.upsert(path, _meta()), id="upsert"),
+        pytest.param(lambda path: asset_meta_dao.delete(path, "518880"), id="delete"),
+    ],
+)
+def test_asset_meta_wraps_sqlite_errors(monkeypatch, call):
+    """底层 sqlite 异常必须包成 DatabaseError。
+
+    漏出去的话会绕过 `main()` 的退出码映射（`sqlite3.Error` 不是 `HoldingsError`），
+    用户看到的是裸 traceback 而不是「错误（4）：…」。
+    """
+    monkeypatch.setattr(asset_meta_dao, "connect", lambda _path: _FailingConnection())
+
+    with pytest.raises(DatabaseError):
+        call("unused.db")
