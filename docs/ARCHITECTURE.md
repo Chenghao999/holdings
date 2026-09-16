@@ -76,7 +76,7 @@ holdings/
 
 ```text
 cli (表现层)
-  └── 只允许 import → services
+  └── 只允许 import → services（以及 models / utils / exceptions 三个基础层）
 
 services (编排层)
   └── 允许 import → portfolio / storage / data / models / utils
@@ -100,6 +100,27 @@ models / utils (基础层)
 | 4 | `services` 只做**编排**，不写具体 SQL、不发网络请求、不做算法 | 每个子模块可单独替换 |
 | 5 | `models` / `utils` 保持零内部依赖 | 基础层稳定，向上兼容 |
 | 6 | 返回值统一为 `dict` / `DataFrame` / `dataclass` / `pydantic` | 消除隐性共享可变状态 |
+
+### 这六条铁律现在有用例守着
+
+上面这张执行情况表此前只是**声明**：往 `portfolio/` 里写一句 `print`、给
+`storage/` 加一个 `rich` 依赖，CI 不会有任何反应，直到真的去接 UI 的那一天
+才发现核心层早就黏上了终端。
+
+现在由 `tests/test_layering.py` 用 AST 守着（用 AST 不用文本匹配：注释里提到
+`print` / `click` 是正常的，它们恰恰是在解释为什么不这么做）：
+
+| 用例 | 守的是 |
+|------|--------|
+| `test_non_ui_layers_never_write_to_the_terminal` | 铁律 1：六个非表现层零 `print` / `echo` |
+| `test_non_ui_layers_do_not_depend_on_terminal_libraries` | 非表现层不 import `rich` / `click` |
+| `test_imports_follow_the_layer_diagram` | 上面「二、依赖方向」那幅图 |
+| `test_cli_reaches_core_layers_only_through_services` | 铁律 3，含已知越界的精确清单 |
+| `test_services_can_be_used_without_touching_the_cli` | 服务层可脱离 CLI 使用 |
+| `test_core_layers_import_cleanly_without_the_cli_package` | 只 import 核心层不会把 click / rich 拖进来 |
+
+最后一条是「可直接被 GUI / Web 复用」最直接的检验：在子进程里只 import 核心层，
+然后检查 `sys.modules` 里没有 click / rich。
 
 ### 铁律的当前执行情况（2026-09-15 核对）
 

@@ -34,6 +34,16 @@
     的行情——数字差三个数量级且看不出来。代码已经说明了用户要哪一个，不需要
     配置再替他决定。`DEFAULT_CONFIG` 相应移除 `黄金:` 一项（老配置里留着的会被忽略）。
 
+### Added
+- **分层铁律有了可执行的守卫**（`tests/test_layering.py`）。VISION 的成功标准
+  第 3 条是「核心计算逻辑为纯函数，可直接被 GUI / Web 层复用」，
+  ARCHITECTURE 也列了六条铁律并逐条宣称达成——但在此之前**这些声明没有任何
+  用例守着**：往 `portfolio/` 里写一句 `print`、给 `storage/` 加一个 `rich`
+  依赖，CI 不会有任何反应，直到真的去接 UI 的那天才发现核心层早已黏上终端。
+  现在由 AST 扫描逐条守住：六个非表现层零 `print` / `echo`、不 import
+  `rich` / `click`、依赖方向符合架构图、`services` 不反向依赖 `cli`，
+  以及「只 import 核心层不会把 click / rich 拖进来」（子进程里验 `sys.modules`）。
+
 ### Changed
 
 **`check --json` 的输出结构变了（BREAKING CHANGE）**
