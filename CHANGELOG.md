@@ -86,6 +86,12 @@
   而且会掩盖「配置被静默忽略」这件事。
 
 ### Added
+- **`holdings tui`：Textual 终端界面**（[BACKLOG B-15](docs/BACKLOG.md)）。
+  持仓 + 报表两屏，`q` 退出、`r` 刷新。数据全部来自 `services/`——界面里没有
+  一行 SQL、一个网络请求，因为核心层「不许输出、不许依赖终端库、依赖方向合规」
+  已经有 `tests/test_layering.py` 守着。Textual 是可选依赖（`holdings[tui]`），
+  缺了抛 `MissingDependencyError`（退出码 6）并给出安装命令。
+  顺带把 `HOLDINGS_COLUMNS` 从渲染层搬到服务层：表头是两个界面共用的契约。
 - **数据层各数据源的解析分支补测**（[BACKLOG B-10](docs/BACKLOG.md)）：
   用 `monkeypatch.setitem(sys.modules, …)` 伪造 `akshare` / `yfinance`，
   覆盖三个 fetcher 的解析、代码不存在、缺依赖三条路径，以及 A 股代码的

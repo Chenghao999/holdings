@@ -294,7 +294,26 @@ holdings remove --id 3
 
 ---
 
-### 12. `holdings check` —— 检查运行环境
+### 12. `holdings tui` —— 终端界面
+
+```bash
+pip install 'holdings[tui]'    # 需要 Textual，默认不装
+holdings tui
+```
+
+持仓与报表两屏，数据与 CLI 完全同源（都来自 `services/`）。`q` 退出，`r` 刷新。
+
+| 界面元素 | 说明 |
+|---------|------|
+| 持仓页 | 持仓表 + 汇总行；没同步过的标的显示 `—` 并提示去 `sync` |
+| 报表页 | 绩效指标（最大回撤 / 年化 / 夏普），口径与 `holdings report` 一致 |
+
+> 界面与 CLI 是**平级的两个入口**，各自演进、共用同一套服务层。缺 Textual 时
+> 报 `错误（6）：…` 并给出安装命令。
+
+---
+
+### 13. `holdings check` —— 检查运行环境
 
 ```bash
 holdings check

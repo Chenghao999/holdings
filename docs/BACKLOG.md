@@ -41,7 +41,7 @@
 | [B-11](#b-11) | ✅ 已完成 | `cli` 越过 `services` 直接碰 `storage` | `cli/commands/`、`services/` |
 | [B-12](#b-12) | ✅ 已完成 | 3 个模块/函数写完从未被调用 | `utils/`、`services/chart_service.py` |
 | [B-14](#b-14) | ✅ 已完成 | `config.yaml` 的字段取值没有校验 | `utils/config.py` |
-| [B-15](#b-15) | P3 | UI 层（v2.0.0）——前置条件已具备 | 新增 `ui/` 或 `tui/` |
+| [B-15](#b-15) | ✅ 已完成 | UI 层（v2.0.0） | `tui/` |
 
 ---
 
@@ -989,8 +989,31 @@ B-05 修的是「配置项改了不起作用」，这一条是它没覆盖的另
 
 ## B-15　UI 层（v2.0.0）
 
-**优先级** P3 · 路线图事项，不在体检范围内
-**位置** 待定（Textual TUI 起手，见 [ROADMAP](ROADMAP.md) 的 v2.0.0）
+**优先级** ✅ 已完成（2026-09-16）
+**位置** `src/holdings/tui/`、`cli/commands/tui.py`
+
+### 完成情况
+
+起手做了 TUI（`holdings tui`）：持仓表 + 报表两屏，`q` 退出、`r` 刷新。
+
+- **数据全部来自 `services/`**，界面里一行 SQL、一个网络请求都没有。
+  这也让「前置条件已具备」从判断变成了可验证的事实——`tests/test_layering.py`
+  断言 `tui/` 层不允许 import `cli/`、`storage/`、`data/`、`portfolio/`。
+- **`HOLDINGS_COLUMNS` 从渲染层搬到服务层**（前一个提交）：表头是两个界面
+  共用的契约，各写一份迟早叫法不一致。
+- 口径与 CLI 一致：无行情显示 `—` 并提示去 sync，绩效算不出来时不显示数字。
+- Textual 是可选依赖，缺了抛 `MissingDependencyError`（退出码 6）并给出
+  `pip install 'holdings[tui]'`。
+- `textual` 同时进 `dev` extra——否则 CI 只能测「缺依赖时报错」那一条，
+  界面本身永远测不到。界面用 Textual 的 headless 测试跑真实渲染。
+
+**完成判据**
+
+- ✅ TUI 启动、能看持仓与报表，且不 import `cli/`（覆盖率 100%）——
+  `tests/test_tui.py` 用 `app.run_test()` 跑真实界面：表格行数、无行情提示、
+  报表页的最大回撤、`r` 刷新后跟着库变。
+- ✅ 缺 textual 时退出码 6 并给出安装命令。
+- ✅ ARCHITECTURE 的目录树与依赖方向图补上这一层。
 
 ### 现状
 
