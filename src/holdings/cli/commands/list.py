@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import click
 
-from holdings.cli.renderers.table_renderer import HOLDINGS_COLUMNS
+from holdings.services.portfolio_service import HOLDINGS_COLUMNS
 
 # 表格里的列名是中文，DataFrame 的列名是英文，`--sort 盈亏率` 直接拿去和
 # df.columns 比会永远不匹配——此前它不报错也不排序，静默失效。

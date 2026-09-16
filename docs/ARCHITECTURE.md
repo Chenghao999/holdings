@@ -43,7 +43,7 @@ holdings/
 │       │   └── gold.py                      #    黄金：按代码选路，不参与优先级配置
 │       │
 │       ├── services/                        # 【编排层·唯一被 CLI/GUI 调用的入口】
-│       │   ├── portfolio_service.py         #    编排 portfolio + storage + data
+│       │   ├── portfolio_service.py         #    编排 portfolio + storage + data；持仓表的列契约
 │       │   ├── report_service.py            #    快照 → 回撤 / 年化 / 夏普（口径不成立时给 None）
 │       │   ├── snapshot_service.py          #    快照的记录与读取
 │       │   ├── asset_meta_service.py        #    标的名称 / 币种 / 年化管理费率的读写
