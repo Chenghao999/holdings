@@ -4,10 +4,11 @@
 契约见 docs/ERROR_HANDLING.md：
 
     1  数据源不可用 / 网络错误
-    2  标的未找到
+    2  数据不存在（标的 / 记录未找到）
     3  配置错误
     4  数据库错误
     5  参数校验失败
+    6  缺少依赖（要装包，重试没有用）
 
 实现模块（storage / data / utils）只从本模块导入异常类并对外重新导出，
 以保证 `from holdings.storage.db import DatabaseError` 这类历史导入路径继续可用。
@@ -37,6 +38,15 @@ class SymbolNotFoundError(HoldingsError):
 
 class ConfigError(HoldingsError):
     """配置文件缺失、格式错误或字段取值非法。"""
+
+
+class RecordNotFoundError(HoldingsError):
+    """要操作的记录不存在（如 `remove --id` 给的交易号）。
+
+    与 `SymbolNotFoundError` 分开：那是「标的不存在」，这是「这条记录不存在」。
+    两者都映射到退出码 2（数据不存在），但把它们混为一类会让报错文案与
+    未来的 GUI 提示都失去区分度。
+    """
 
 
 class DatabaseError(HoldingsError):

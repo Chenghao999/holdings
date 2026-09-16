@@ -14,13 +14,14 @@ import sys
 
 import pytest
 
-from holdings.cli.main import main
+from holdings.cli.main import exit_code_for, main
 from holdings.exceptions import (
     ConfigError,
     DatabaseError,
     DataSourceUnavailableError,
     HoldingsError,
     MissingDependencyError,
+    RecordNotFoundError,
     SymbolNotFoundError,
     TradeValidationError,
 )
@@ -30,16 +31,31 @@ from holdings.exceptions import (
     ("exc_type", "expected"),
     [
         (DataSourceUnavailableError, 1),
-        (MissingDependencyError, 1),
         (SymbolNotFoundError, 2),
+        (RecordNotFoundError, 2),
         (ConfigError, 3),
         (DatabaseError, 4),
         (TradeValidationError, 5),
+        (MissingDependencyError, 6),
     ],
 )
-def test_all_custom_exceptions_share_the_base_class(exc_type, expected):
+def test_the_exit_code_mapping_covers_every_exception(exc_type, expected):
+    """映射表本身就是契约，直接断言它，而不是「跑一遍看退出码」。
+
+    这张表此前藏在 main() 的函数体里，用例只能断言「返回值在 1~5 之间」——
+    一个漏掉的分支不会被任何用例发现。
+    """
     assert issubclass(exc_type, HoldingsError)
-    assert expected in (1, 2, 3, 4, 5)
+    assert exit_code_for(exc_type()) == expected
+
+
+def test_an_unmapped_holdings_error_defaults_to_1():
+    """将来新增异常却忘了进映射表时，落到 1 而不是 0——不能静默成功。"""
+
+    class _BrandNewError(HoldingsError):
+        pass
+
+    assert exit_code_for(_BrandNewError()) == 1
 
 
 def run_main(monkeypatch, *argv: str) -> int:

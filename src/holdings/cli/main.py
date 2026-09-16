@@ -36,26 +36,41 @@ cli.add_command(chart_cmd, name="chart")
 cli.add_command(remove_cmd, name="remove")
 
 
-def main() -> None:
-    """带 异常→退出码 映射的入口，见 docs/ERROR_HANDLING.md。"""
+def exit_code_for(exc: BaseException, default: int = 1) -> int:
+    """异常 → 退出码。契约见 docs/ERROR_HANDLING.md。
+
+    映射表放在模块级而不是 `main()` 里：测试要断言的是这张表本身，
+    藏在函数体里就只能靠「跑一遍命令看退出码」间接验证——那样每加一条
+    分支都要跑一次完整的 CLI，而漏加的映射反而不会被发现。
+    """
     from holdings.exceptions import (
         ConfigError,
         DatabaseError,
         DataSourceUnavailableError,
-        HoldingsError,
         MissingDependencyError,
+        RecordNotFoundError,
         SymbolNotFoundError,
         TradeValidationError,
     )
 
-    exit_codes: tuple[tuple[type[HoldingsError], int], ...] = (
+    #: 「缺少依赖」单独占一个码：它与「网络不通」是两种完全不同的处置——
+    #: 前者要装包（重试多少次都没用），后者才值得重试。CI 里靠退出码分流时，
+    #: 把这两种故障并到同一个 1 会让「网络抖动」和「环境没装好」看起来一样。
+    mapping: tuple[tuple[type[BaseException], int], ...] = (
+        (MissingDependencyError, 6),
         (DataSourceUnavailableError, 1),
-        (MissingDependencyError, 1),
         (SymbolNotFoundError, 2),
+        (RecordNotFoundError, 2),
         (ConfigError, 3),
         (DatabaseError, 4),
         (TradeValidationError, 5),
     )
+    return next((code for exc_type, code in mapping if isinstance(exc, exc_type)), default)
+
+
+def main() -> None:
+    """带 异常→退出码 映射的入口，见 docs/ERROR_HANDLING.md。"""
+    from holdings.exceptions import HoldingsError
 
     # standalone_mode=False 让 click 把用法错误抛出来而不是自己 exit(2)——
     # click 默认的 2 与「标的未找到」的 2 撞码，这里统一按文档归到 5。
@@ -70,7 +85,7 @@ def main() -> None:
         raise SystemExit(130) from None
     # 异常已在上面转成友好提示，退出时不必再链上原始 traceback，故用 `from None`。
     except HoldingsError as exc:
-        code = next((c for t, c in exit_codes if isinstance(exc, t)), 1)
+        code = exit_code_for(exc)
         click.echo(f"错误（{code}）：{exc}", err=True)
         raise SystemExit(code) from None
 
