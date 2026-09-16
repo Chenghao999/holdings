@@ -76,7 +76,7 @@ tests/
 
 - `portfolio/calculator.py`：**≥ 90%**（关键在于费用与卖出边界）— 当前 **99%**。
 - 全项目行覆盖率：当前 **90%**（`python -m pytest --cov=holdings`）。
-- 明确低于目标的区域：`cli/renderers/`（93%，费用表与占比表的空分支未覆盖）、`utils/deps.py`（0%）、
+- 明确低于目标的区域：`cli/renderers/`（93%，费用表与占比表的空分支未覆盖）、
   `data/` 三个 fetcher 的 `_from_*`（28%~55%，都是需要联网的解析分支，用
   monkeypatch 伪造 `akshare` / `yfinance` 模块即可补）、`cli/commands/sync.py`（22%）。
   这几处分别对应 [BACKLOG](BACKLOG.md) 的 B-09、B-10 与 B-07。

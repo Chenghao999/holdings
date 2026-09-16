@@ -1,4 +1,9 @@
-"""依赖包检测：检查运行与可选依赖是否已安装（纯函数，无 IO 输出）。"""
+"""依赖包检测：检查运行与可选依赖是否已安装（纯函数，无 IO 输出）。
+
+`check_dependencies` 直接调模块级的 `is_installed`，中间不套别名——
+套一层别名会让「`monkeypatch.setattr(deps, "is_installed", ...)`」这个最自然的
+打桩方式静默失效（别名在导入时就绑定了原函数）。
+"""
 
 from __future__ import annotations
 
@@ -40,9 +45,6 @@ def is_installed(import_name: str) -> bool:
     return importlib.util.find_spec(import_name) is not None
 
 
-_is_installed = is_installed  # 兼容模块内既有调用
-
-
 def check_dependencies() -> list[PackageStatus]:
     """返回所有依赖的安装状态。"""
     statuses: list[PackageStatus] = []
@@ -51,7 +53,7 @@ def check_dependencies() -> list[PackageStatus]:
             PackageStatus(
                 import_name=import_name,
                 package_name=package_name,
-                installed=_is_installed(import_name),
+                installed=is_installed(import_name),
                 required=True,
                 purpose="必需",
             )
@@ -61,7 +63,7 @@ def check_dependencies() -> list[PackageStatus]:
             PackageStatus(
                 import_name=import_name,
                 package_name=import_name,
-                installed=_is_installed(import_name),
+                installed=is_installed(import_name),
                 required=False,
                 purpose=purpose,
             )

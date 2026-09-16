@@ -77,6 +77,12 @@
 - 映射表从 `main()` 的函数体提到模块级——它本身就是契约，测试现在直接断言它，
   而不是断言「返回值落在 1~5 之间」这种什么也锁不住的写法。
 
+### Added
+- **`deps.py` 的测试**（[BACKLOG B-09](docs/BACKLOG.md)）：`check` 命令直接依赖的
+  三个纯函数此前零覆盖。顺带删掉 `check_dependencies` 里那个模块级别名
+  `_is_installed`——它在导入时就绑定原函数，让 `monkeypatch.setattr(deps,
+  "is_installed", …)` 静默失效。
+
 ### Changed
 - **清掉零引用的死代码**（[BACKLOG B-12](docs/BACKLOG.md)）：`utils/formatter.py`
   接到渲染层（渲染层各写各的格式化与空值判断，现在只有一处定义）；

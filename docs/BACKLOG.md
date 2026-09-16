@@ -36,7 +36,7 @@
 | [B-06](#b-06) | ✅ 已完成 | 未同步时显示「−100%」，看起来像血亏 | `services/portfolio_service.py`、`cli/renderers/` |
 | [B-07](#b-07) | ✅ 已完成 | 80 列终端下代码列只剩 `6005…` | `cli/renderers/` |
 | [B-08](#b-08) | ✅ 已完成 | `remove` / `check` 不走统一前缀；`check --json` 漏报退出码 | `cli/commands/remove.py`、`check.py` |
-| [B-09](#b-09) | P3 | `deps.py` 零测试 | `tests/` |
+| [B-09](#b-09) | ✅ 已完成 | `deps.py` 零测试 | `tests/` |
 | [B-10](#b-10) | P3 | 三个 fetcher 覆盖率 18%~29%，降级路径无测试 | `tests/test_data.py` |
 | [B-11](#b-11) | ✅ 已完成 | `cli` 越过 `services` 直接碰 `storage` | `cli/commands/`、`services/` |
 | [B-12](#b-12) | ✅ 已完成 | 3 个模块/函数写完从未被调用 | `utils/`、`services/chart_service.py` |
@@ -646,8 +646,33 @@ current_price = cached.price if cached else 0.0
 
 ## B-09　`utils/` 层测试缺口
 
-**优先级** P3
-**位置** `tests/`
+**优先级** ✅ 已完成（2026-09-16）
+**位置** `tests/test_deps.py`
+
+### 完成情况
+
+补上 `utils/deps.py` 的用例（新增 `tests/test_deps.py`，9 条）：
+`is_installed` 对不存在的包为 `False`、对标准库为 `True`；
+`check_dependencies` 覆盖全部声明过的包且字段完整、必需/可选标记正确；
+`missing_required` 在缺包时返回包名、不缺时为空、**可选包缺失不算缺依赖**；
+以及 `yaml` 的 pip 包名是 `pyyaml`（安装提示给用户的是包名，不是 import 名）。
+
+**顺带修掉一个打桩陷阱**：`check_dependencies` 原本调的是模块级别的别名
+`_is_installed`，而别名在导入时就绑定了原函数——`monkeypatch.setattr(deps,
+"is_installed", ...)` 这个最自然的做法会**静默失效**，测试写出来是绿的看着
+像在测东西，实际什么都没换掉。别名只在模块内用，已删除。
+
+`utils/formatter.py` 与 `utils/currency.py` 由 [B-12](#b-12) 处理（前者接上并补测，
+后者删除）。
+
+**完成判据**
+
+- ✅ `utils/deps.py` 覆盖率 **100%**（要求 ≥ 90%）。
+- ✅ 全项目行覆盖率 89% → **90%**；`TESTING_STRATEGY.md` 与本文的覆盖率数字同步更新。
+
+---
+
+*以下为动手前的原始分析，保留备查。*
 
 ### 现状
 
