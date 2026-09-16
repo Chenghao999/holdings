@@ -118,7 +118,25 @@ CREATE INDEX idx_cache_time ON price_cache(update_time);
 
 ### asset_meta 字段说明
 
-- `annual_management_fee`：年化管理费率（如基金托管费），用于参考展示，不直接参与单笔成本计算。真实费用通过 `transactions.fee` 逐笔记录。
+| 字段 | 说明 |
+|------|------|
+| `symbol` | 主键，标的代码；重复写入是**覆盖**而不是插第二条 |
+| `name` | 标的名称，`holdings list` 的名称列取自这里；没有记录时回落显示代码 |
+| `market` | 市场（当前仅记录，不参与计算） |
+| `currency` | 币种，默认 `CNY` |
+| `annual_management_fee` | 年化管理费率（%），**仅作参考展示，不直接参与单笔成本计算** |
+
+> ⚠️ **`annual_management_fee` 不参与任何成本计算。** 真实费用通过
+> `transactions.fee` 逐笔记录（`holdings add --fee`）。
+> `holdings report` 会印一行「年化管理费率合计 x%（仅供参考，未计入成本）」，
+> 那只是「你填过的费率加起来是多少」。
+>
+> **不要把它做成「按持仓天数自动计提管理费」**：那会让 `holdings list` 的成本价
+> 随日历漂移，与 `portfolio/calculator.py` 的移动加权平均成本法直接冲突。
+> `tests/test_meta_cmd.py::test_the_rate_changes_nothing_about_the_numbers`
+> 守着这条——录入费率前后，成本价与盈亏必须逐项相等。
+
+录入方式见 [USER_GUIDE 的第 4 节](USER_GUIDE.md)。
 
 ## 价格缓存过期策略
 

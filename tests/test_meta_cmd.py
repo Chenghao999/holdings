@@ -114,3 +114,143 @@ def test_symbol_is_required(use_db, monkeypatch, capsys):
 
     assert code == 5
     assert "错误（5）：" in capsys.readouterr().err
+
+
+# ------------------------------------------------------------------ 展示
+
+
+def test_the_rate_changes_nothing_about_the_numbers(use_db, monkeypatch):
+    """BACKLOG B-01 的核心判据：录入费率前后，成本价与盈亏**完全一致**。
+
+    这是「费率只作参考展示、不参与成本计算」这句话唯一的客观证明。
+    如果哪天有人顺手把费率摊进成本，这条会立刻红。
+    """
+    from datetime import date
+
+    from holdings.models.enums import AssetType, MarketType, TradeType
+    from holdings.models.transaction import Transaction
+    from holdings.services import portfolio_service
+    from holdings.storage import price_cache_dao, transaction_dao
+
+    transaction_dao.add(
+        use_db,
+        Transaction(
+            symbol="518880",
+            market=MarketType.A_SHARE,
+            asset_type=AssetType.STOCK,
+            trade_date=date(2025, 1, 1),
+            trade_type=TradeType.BUY,
+            quantity=1000.0,
+            price=4.85,
+            fee=5.0,
+        ),
+    )
+    price_cache_dao.upsert(use_db, "518880", 5.1, "CNY", "test")
+
+    before = portfolio_service.get_summary(use_db)
+
+    _run(monkeypatch, "--symbol", "518880", "--name", "黄金ETF", "--fee-rate", "0.5")
+
+    after = portfolio_service.get_summary(use_db)
+
+    assert after.total_cost == before.total_cost
+    assert after.total_value == before.total_value
+    assert after.total_profit == before.total_profit
+    for column in ("avg_cost", "market_value", "profit", "profit_rate"):
+        assert after.holdings_df.iloc[0][column] == before.holdings_df.iloc[0][column]
+
+
+def test_list_shows_the_name(use_db, monkeypatch, capsys):
+    from datetime import date
+
+    from holdings.models.enums import AssetType, MarketType, TradeType
+    from holdings.models.transaction import Transaction
+    from holdings.storage import transaction_dao
+
+    transaction_dao.add(
+        use_db,
+        Transaction(
+            symbol="518880",
+            market=MarketType.A_SHARE,
+            asset_type=AssetType.STOCK,
+            trade_date=date(2025, 1, 1),
+            trade_type=TradeType.BUY,
+            quantity=1000.0,
+            price=4.85,
+        ),
+    )
+    _run(monkeypatch, "--symbol", "518880", "--name", "黄金ETF")
+
+    monkeypatch.setattr(sys, "argv", ["holdings", "list"])
+    main()
+
+    assert "黄金ETF" in capsys.readouterr().out
+
+
+def test_without_a_record_the_name_column_falls_back_to_the_symbol(use_db, monkeypatch):
+    """没记过名称就用代码顶上——名称是用来认人的，没有名字时代码就是名字。"""
+    from datetime import date
+
+    from holdings.models.enums import AssetType, MarketType, TradeType
+    from holdings.models.transaction import Transaction
+    from holdings.services import portfolio_service
+    from holdings.storage import transaction_dao
+
+    transaction_dao.add(
+        use_db,
+        Transaction(
+            symbol="600519",
+            market=MarketType.A_SHARE,
+            asset_type=AssetType.STOCK,
+            trade_date=date(2025, 1, 1),
+            trade_type=TradeType.BUY,
+            quantity=100.0,
+            price=1680.5,
+        ),
+    )
+
+    row = portfolio_service.get_summary(use_db).holdings_df.iloc[0]
+
+    assert row["name"] == "600519"
+
+
+def test_report_shows_the_fee_rate_line_only_when_something_is_recorded(
+    use_db, monkeypatch, capsys
+):
+    from datetime import date
+
+    from holdings.models.enums import AssetType, MarketType, TradeType
+    from holdings.models.transaction import Transaction
+    from holdings.storage import transaction_dao
+
+    transaction_dao.add(
+        use_db,
+        Transaction(
+            symbol="518880",
+            market=MarketType.A_SHARE,
+            asset_type=AssetType.STOCK,
+            trade_date=date(2025, 1, 1),
+            trade_type=TradeType.BUY,
+            quantity=1000.0,
+            price=4.85,
+        ),
+    )
+
+    monkeypatch.setattr(sys, "argv", ["holdings", "report"])
+    main()
+    assert "年化管理费率合计" not in capsys.readouterr().out, "没填过就别印这行"
+
+    _run(monkeypatch, "--symbol", "518880", "--fee-rate", "0.5")
+    monkeypatch.setattr(sys, "argv", ["holdings", "report"])
+    main()
+    out = capsys.readouterr().out
+
+    assert "年化管理费率合计 0.5%" in out
+    assert "未计入成本" in out, "旁边就是「累计费用」，不加这句会被读成费用又多了"
+
+
+def test_the_name_column_is_sortable(use_db, monkeypatch):
+    """名称进了表格就该能排序——别名表与表头是同源派生的，这条守着那层连接。"""
+    from holdings.cli.commands.list import _SORT_ALIASES
+
+    assert _SORT_ALIASES["名称"] == "name"
