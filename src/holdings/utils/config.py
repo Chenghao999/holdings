@@ -33,24 +33,16 @@ DEFAULT_CONFIG: dict = {
     "default_group": "默认",
 }
 
-# 与 sync 默认值同源，供取值兜底使用；tests/test_config.py 会断言两处一致，
-# 免得改了 DEFAULT_CONFIG 却漏改这里。
-_DEFAULT_SYNC_TIMEOUT = DEFAULT_CONFIG["sync"]["timeout_seconds"]
-_DEFAULT_SYNC_RETRY = DEFAULT_CONFIG["sync"]["retry_count"]
-
-
-def _as_float(value, fallback: float) -> float:
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return fallback
-
-
-def _as_int(value, fallback: int) -> int:
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return fallback
+#: 已知字段的取值约束：(点号路径, 期望类型, 人类可读的说明)。
+#: 放成一张表而不是一串 if：新增配置项时照着加一行，不容易漏。
+_FIELD_RULES: tuple[tuple[str, str, str], ...] = (
+    ("database_path", "str", "字符串"),
+    ("default_group", "str", "字符串"),
+    ("default_market", "str", "字符串"),
+    ("cache_ttl_seconds", "non_negative_int", "非负整数"),
+    ("sync.timeout_seconds", "non_negative_number", "非负数字"),
+    ("sync.retry_count", "non_negative_int", "非负整数"),
+)
 
 
 @dataclass
@@ -85,17 +77,16 @@ class Config:
     def sync(self) -> dict:
         return self._data["sync"]
 
-    # sync 下的两个数值项单独给属性，并且**做取值兜底**：CONFIG_SPEC 注明字段取值
-    # 尚未校验，`timeout_seconds: abc` 这种手写配置会一路走到 float() 才炸成
-    # 裸 traceback。取数据的超时不值得让整个命令崩掉，回落到默认值即可，
-    # 配置本身的问题在别处如实报。
+    # 这两个属性此前各自做取值兜底（`timeout_seconds: abc` 回落到默认值）。
+    # 现在 `load_config()` 会当场校验并抛 ConfigError，兜底就成了不可达代码——
+    # 留着它反而会掩盖「配置被静默忽略」这件事。只留一套机制。
     @property
     def sync_timeout_seconds(self) -> float:
-        return _as_float(self.sync.get("timeout_seconds"), _DEFAULT_SYNC_TIMEOUT)
+        return float(self.sync["timeout_seconds"])
 
     @property
     def sync_retry_count(self) -> int:
-        return _as_int(self.sync.get("retry_count"), _DEFAULT_SYNC_RETRY)
+        return int(self.sync["retry_count"])
 
     def get(self, key: str, default=None):
         return self._data.get(key, default)
@@ -139,8 +130,68 @@ def load_config(path: str | os.PathLike | None = None) -> Config:
             raise ConfigError(f"配置文件格式错误：{cfg_path}（{_brief_yaml_error(exc)}）") from exc
         if not isinstance(loaded, dict):
             raise ConfigError(f"配置文件格式错误：{cfg_path}")
+        _validate(loaded, cfg_path)
         _deep_merge(data, loaded)
     return Config(_data=data, _path=cfg_path)
+
+
+def _validate(raw: dict, path: Path) -> None:
+    """校验**取值**，不合法抛 ConfigError（退出码 3）。
+
+    语法错误由 yaml 拦住了，但取值不合法此前会一路走到某条命令里才炸成裸
+    traceback（退出码退化成 1），用户看到的是 `ValueError: invalid literal for
+    int()`。配置错了就该按配置错误的契约当场报出来，并说清是哪个字段。
+
+    只校验写进来的、且我们认识的字段；未知字段原样保留（用户可能给未来的版本
+    或别的工具留着）。
+    """
+    for dotted, kind, expectation in _FIELD_RULES:
+        present, value = _lookup(raw, dotted)
+        if not present:
+            continue
+        if not _matches(value, kind):
+            raise ConfigError(
+                f"配置文件字段取值非法：{path} 的 {dotted} 应为{expectation}，当前为 {value!r}"
+            )
+    if "data_sources" in raw:
+        _validate_priority(raw["data_sources"], path)
+
+
+def _lookup(raw: dict, dotted: str) -> tuple[bool, object]:
+    """按点号路径取值，返回 (是否存在, 值)。中间层不是字典时视为不存在。"""
+    node: object = raw
+    for part in dotted.split("."):
+        if not isinstance(node, dict) or part not in node:
+            return False, None
+        node = node[part]
+    return True, node
+
+
+def _matches(value: object, kind: str) -> bool:
+    if kind == "str":
+        return isinstance(value, str)
+    if kind == "non_negative_int":
+        return isinstance(value, int) and not isinstance(value, bool) and value >= 0
+    if kind == "non_negative_number":
+        return isinstance(value, (int, float)) and not isinstance(value, bool) and value >= 0
+    raise AssertionError(f"未知的校验类型：{kind}")
+
+
+def _validate_priority(data_sources: object, path: Path) -> None:
+    """`data_sources.priority` 是「市场 → 数据源名列表」。"""
+    if not isinstance(data_sources, dict):
+        raise ConfigError(f"配置文件字段取值非法：{path} 的 data_sources 应为映射")
+    priority = data_sources.get("priority")
+    if priority is None:
+        return
+    if not isinstance(priority, dict):
+        raise ConfigError(f"配置文件字段取值非法：{path} 的 data_sources.priority 应为映射")
+    for market, names in priority.items():
+        if not isinstance(names, list) or not all(isinstance(n, str) for n in names):
+            raise ConfigError(
+                f"配置文件字段取值非法：{path} 的 data_sources.priority.{market} "
+                f"应为字符串列表，当前为 {names!r}"
+            )
 
 
 def _brief_yaml_error(exc: yaml.YAMLError) -> str:

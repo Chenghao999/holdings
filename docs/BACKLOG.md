@@ -40,7 +40,7 @@
 | [B-10](#b-10) | P3 | 三个 fetcher 覆盖率 18%~29%，降级路径无测试 | `tests/test_data.py` |
 | [B-11](#b-11) | ✅ 已完成 | `cli` 越过 `services` 直接碰 `storage` | `cli/commands/`、`services/` |
 | [B-12](#b-12) | ✅ 已完成 | 3 个模块/函数写完从未被调用 | `utils/`、`services/chart_service.py` |
-| [B-14](#b-14) | P3 | `config.yaml` 的字段取值没有校验 | `utils/config.py` |
+| [B-14](#b-14) | ✅ 已完成 | `config.yaml` 的字段取值没有校验 | `utils/config.py` |
 | [B-15](#b-15) | P3 | UI 层（v2.0.0）——前置条件已具备 | 新增 `ui/` 或 `tui/` |
 
 ---
@@ -901,8 +901,27 @@ $ grep -rn "currency.convert" src/ tests/
 
 ## B-14　`config.yaml` 字段取值没有校验
 
-**优先级** P3 · 配置项骗人（做得不彻底的那一半）
+**优先级** ✅ 已完成（2026-09-16）
 **位置** `src/holdings/utils/config.py`
+
+### 完成情况
+
+`load_config()` 现在校验已知字段的取值，不合法抛 `ConfigError`（退出码 3），
+消息指出字段、当前值与期望类型。规则写成一张表（`_FIELD_RULES`），新增配置项时
+照着加一行，不容易漏。覆盖 `database_path` / `default_group` / `default_market`、
+`cache_ttl_seconds`、`sync.timeout_seconds` / `sync.retry_count`、
+`data_sources.priority`。**未知字段原样保留**。
+
+去掉了一套重复机制：`Config` 的 `sync_timeout_seconds` / `sync_retry_count`
+此前各自做取值兜底（`timeout_seconds: abc` 静默回落到默认值），校验接上之后
+那是不可达代码——而且它会掩盖「配置被静默忽略」这件事，正是本条要修的毛病。
+现在属性直接取值，只留一套机制。
+
+**完成判据**
+
+- ✅ `cache_ttl_seconds: abc` → `holdings list` 输出 `错误（3）：…`、退出码 3、无 traceback。
+- ✅ 每个受校验字段都有参数化用例（7 条合法值通过、12 条非法值各指出字段名）。
+- ✅ `CONFIG_SPEC.md` 第 4 条约束的 ⚠️ 去掉，改成如实描述校验范围。
 
 ### 现状
 
