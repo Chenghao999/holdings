@@ -182,3 +182,89 @@ def test_help_and_version_still_exit_0(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     assert run_main(monkeypatch, "--help") == 0
     assert run_main(monkeypatch, "--version") == 0
+
+
+def test_remove_of_a_missing_record_exits_2_with_the_prefix(tmp_path, monkeypatch, capsys):
+    """BACKLOG B-08 的判据：`remove --id 99999` 输出 `错误（2）：…` 且退出码 2。
+
+    此前它输出裸文本「未找到交易 #3」再 exit(2)：退出码是对的，但文案绕过了
+    统一前缀，按 `错误（N）：` 匹配的脚本会漏掉这一条。
+    """
+    monkeypatch.chdir(tmp_path)
+
+    code = run_main(monkeypatch, "remove", "--id", "99999")
+    err = capsys.readouterr().err
+
+    assert code == 2
+    assert "错误（2）：" in err
+    assert "未找到交易 #99999" in err
+
+
+def test_sync_failing_entirely_exits_1_with_the_prefix(tmp_path, monkeypatch, capsys):
+    """全部标的同步失败同样走统一前缀——此前是自己 SystemExit(1)。"""
+    from datetime import date
+
+    from holdings.data.fetcher import DataSourceUnavailableError
+    from holdings.models.enums import AssetType, MarketType, TradeType
+    from holdings.models.transaction import Transaction
+    from holdings.services import sync_service
+    from holdings.storage import transaction_dao
+
+    monkeypatch.chdir(tmp_path)
+    db = tmp_path / "data" / "holdings.db"
+    transaction_dao.add(
+        str(db),
+        Transaction(
+            symbol="600519",
+            market=MarketType.A_SHARE,
+            asset_type=AssetType.STOCK,
+            trade_date=date(2025, 1, 1),
+            trade_type=TradeType.BUY,
+            quantity=100.0,
+            price=10.0,
+        ),
+    )
+
+    def _boom(symbol, market):
+        raise DataSourceUnavailableError("网络不通")
+
+    monkeypatch.setattr(sync_service.fetcher, "fetch_price", _boom)
+
+    code = run_main(monkeypatch, "sync", "--market", "A股")
+    err = capsys.readouterr().err
+
+    assert code == 1
+    assert "错误（1）：" in err
+    assert "全部同步失败" in err
+    assert "holdings[data]" in err, "安装提示里的方括号要原样出现，不能被 Rich 吃掉"
+
+
+def test_command_bodies_do_not_raise_systemexit():
+    """结构性守卫：退出码只由 `main()` 的映射层决定。
+
+    命令体里自己 `SystemExit(N)` 会绕过映射层——退出码或许还对，但文案绕过
+    统一前缀，而且新增分支时没人拦着。这条用例把「不再出现」变成可执行的约定。
+    """
+    import ast
+    import pathlib
+
+    from holdings.cli import commands
+
+    def _mentions_systemexit(path: pathlib.Path) -> bool:
+        """用 AST 判断，不做文本匹配。
+
+        注释里出现 `SystemExit` 是正常的（要解释为什么不再用它），
+        文本匹配会把解释也当成违反。ast 天然不含注释。
+        """
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        return any(
+            isinstance(node, ast.Name) and node.id == "SystemExit" for node in ast.walk(tree)
+        )
+
+    offenders = [
+        path.name
+        for path in sorted(pathlib.Path(commands.__file__).parent.glob("*.py"))
+        if _mentions_systemexit(path)
+    ]
+
+    assert offenders == [], f"这些命令文件里还有 SystemExit：{offenders}"
