@@ -6,21 +6,9 @@ from datetime import date
 
 import click
 
+from holdings.cli.dates import with_today_default
 from holdings.models.enums import AssetType, MarketType, TradeType
 from holdings.models.transaction import Transaction
-
-
-def _parse_trade_date(_ctx: click.Context, _param: click.Parameter, value: str | None) -> date:
-    """把 YYYY-MM-DD 解析成 date；非法值交给 click 报错，避免裸 ValueError。
-
-    定义在命令之前：装饰器在模块导入时求值，回调必须先存在。
-    """
-    if value is None:
-        return date.today()
-    try:
-        return date.fromisoformat(value)
-    except ValueError:
-        raise click.BadParameter(f"不是合法日期（应为 YYYY-MM-DD）：{value}") from None
 
 
 def _infer_asset_type(market: str) -> AssetType:
@@ -48,7 +36,7 @@ def _infer_asset_type(market: str) -> AssetType:
     "--date",
     "trade_date",
     default=None,
-    callback=_parse_trade_date,
+    callback=with_today_default,
     help="交易日期 YYYY-MM-DD，默认今天",
 )
 @click.option("--group", default=None, help="组合分组")

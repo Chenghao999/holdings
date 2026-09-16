@@ -45,12 +45,14 @@ holdings/
 │       │   ├── portfolio_service.py         #    编排 portfolio + storage + data
 │       │   ├── report_service.py            #    快照 → 回撤 / 年化 / 夏普（口径不成立时给 None）
 │       │   ├── snapshot_service.py          #    快照的记录与读取
+│       │   ├── chart_service.py             #    净值曲线：取数与筛日期（plotly 懒加载）
 │       │   ├── trade_service.py             #    写入闸门：落库前的历史持仓校验
 │       │   ├── sync_service.py              #    编排 data + storage
 │       │   └── chart_service.py             #    编排 storage，返回 Figure/JSON
 │       │
 │       └── cli/                             # 【表现层·极薄，仅渲染输出】
 │           ├── main.py                      #    click 入口组 + 异常→退出码映射
+│           ├── dates.py                     #    日期参数的解析与校验，各命令共用
 │           ├── commands/                    #    子命令：仅调用 service + 打印
 │           │   ├── init.py    add.py     check.py    list.py
 │           │   ├── import_cmd.py  sync.py   report.py

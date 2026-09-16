@@ -218,10 +218,27 @@ holdings snapshots
 holdings chart --output networth.html
 ```
 
-基于 `snapshots` 表生成交互式 HTML 并自动打开浏览器。数据不足时生成的曲线为空，
-先积累几条 `snapshot` 再画。
+基于 `snapshots` 表生成交互式 HTML 并自动打开浏览器。
 
-> `--start` 目前是预留参数，**尚未生效**（不会过滤起始日期）。
+| 参数 | 说明 |
+|------|------|
+| `--output` | 输出 HTML 路径，默认 `networth.html` |
+| `--start` | 起始日期 `YYYY-MM-DD`，只画该日（含）之后的点 |
+
+```bash
+# 只看 2025 年 3 月以来的净值
+holdings chart --start 2025-03-01 --output 2025.html
+```
+
+**起始日期之后没有数据时会报错，而不是生成一张空图**——空图与「净值跌没了」
+在图上是分不出来的。提示里会带上现有的数据范围，照着调 `--start` 即可：
+
+```text
+错误（2）：2030-01-01 之后没有快照（现有 4 条，2025-01-01 ~ 2025-04-01）；
+请调整 --start 或先执行 holdings snapshot
+```
+
+还没记过任何快照时同理，提示会直接让你先执行 `holdings snapshot`。
 
 ---
 
