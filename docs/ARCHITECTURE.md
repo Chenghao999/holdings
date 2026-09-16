@@ -133,22 +133,21 @@ models / utils (基础层)
 |---|------|------|
 | 1 | ✅ | `portfolio/` `data/` `storage/` 三个核心层零 `print` / `click.echo` |
 | 2 | ✅ | `data/` 与 `storage/` 之间无相互引用 |
-| 3 | ⚠️ **2 处违反** | 见下方 |
+| 3 | ✅ | 见下方：仅存一处**有理由的豁免** |
 | 4 | ✅ | `services/` 内无裸 SQL、无网络请求 |
 | 5 | ✅ | `models/` `utils/` 只 import `exceptions`，无业务模块依赖 |
 | 6 | ✅ | |
 
-**铁律 3 的违反点**（`cli` 越过 `services` 直接触碰 `storage`）：
+**铁律 3 的唯一豁免**（`cli` 越过 `services` 直接触碰 `storage`）：
 
-| 文件 | 直接引用 | 待办 |
-|------|---------|------|
-| `cli/commands/remove.py` | `storage.transaction_dao` | 删除交易应收进 `trade_service`（[B-11](../docs/BACKLOG.md)） |
-| `cli/commands/init.py` | `storage.db.connect` | **可接受的例外**：`init` 是引导命令，它要建的正是其它 service 赖以工作的数据库 |
+| 文件 | 直接引用 | 为什么是豁免而不是待办 |
+|------|---------|----------------------|
+| `cli/commands/init.py` | `storage.db.connect` | `init` 是引导命令，它要建的正是其它 service 赖以工作的数据库。为它包一层 service 是纯粹的形式主义 |
 
-`snapshot` 一处已在 B-03 收口：新增 `services/snapshot_service.py`，
-`snapshot` / `snapshots` 两条命令都只经它访问 storage。补上 `remove` 之后，
-本表只剩 `init` 这一条有理由的例外。在那之前，本项目的「cli 只经 services」
-是**未完全落实**的规范，不是已达成的事实。
+`snapshot` 一处已在 B-03 收口，`remove` 一处已在 B-11 收口（删除交易改经
+`trade_service`——删除看起来不涉及校验，但绕过它，账本就有了第二条不受管的
+写入路径）。`tests/test_layering.py` 的 `ALLOWED_CLI_CORE_TOUCHES` 只登记
+`init` 一条，且断言的是**精确内容**：新增越界会红，修好一处不删名单行也会红。
 
 ## 四、模块职责 vs 禁止事项对照表
 

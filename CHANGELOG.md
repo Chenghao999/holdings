@@ -77,6 +77,13 @@
 - 映射表从 `main()` 的函数体提到模块级——它本身就是契约，测试现在直接断言它，
   而不是断言「返回值落在 1~5 之间」这种什么也锁不住的写法。
 
+### Changed
+- **`cli` 不再直接触碰 `storage`**（[BACKLOG B-11](docs/BACKLOG.md)）：
+  删除交易改经 `trade_service`（增 `get_transaction` / `remove_transaction`），
+  `init` 按引导命令写成明确的豁免条款。ARCHITECTURE 的执行情况表由
+  「2 处违反」改为「✅，仅存一处有理由的豁免」，`tests/test_layering.py` 的
+  允许清单同步缩到只剩 `init`。
+
 ### Fixed
 
 **`chart --start` 是个空参数**

@@ -38,7 +38,7 @@
 | [B-08](#b-08) | ✅ 已完成 | `remove` / `check` 不走统一前缀；`check --json` 漏报退出码 | `cli/commands/remove.py`、`check.py` |
 | [B-09](#b-09) | P3 | `deps.py` 零测试 | `tests/` |
 | [B-10](#b-10) | P3 | 三个 fetcher 覆盖率 18%~29%，降级路径无测试 | `tests/test_data.py` |
-| [B-11](#b-11) | P3 | `cli` 越过 `services` 直接碰 `storage`（剩 2 处） | `cli/commands/`、`services/` |
+| [B-11](#b-11) | ✅ 已完成 | `cli` 越过 `services` 直接碰 `storage` | `cli/commands/`、`services/` |
 | [B-12](#b-12) | P3 | 3 个模块/函数写完从未被调用 | `utils/`、`services/chart_service.py` |
 | [B-14](#b-14) | P3 | `config.yaml` 的字段取值没有校验 | `utils/config.py` |
 | [B-15](#b-15) | P3 | UI 层（v2.0.0）——前置条件已具备 | 新增 `ui/` 或 `tui/` |
@@ -716,8 +716,30 @@ current_price = cached.price if cached else 0.0
 
 ## B-11　铁律 3 的三处违反
 
-**优先级** P3 · 架构
-**位置** `src/holdings/cli/commands/snapshot.py`、`remove.py`、`init.py`
+**优先级** ✅ 已完成（2026-09-16）
+**位置** `cli/commands/`、`services/`
+
+### 完成情况
+
+- `snapshot` 一处随 [B-03](#b-03) 收口（新增 `services/snapshot_service.py`）。
+- `remove` 一处本次收口：`trade_service` 增 `get_transaction` / `remove_transaction`。
+  删除看似不涉及校验，但它是「改动账本」的第三条路径——绕过 service，账本就有了
+  第二条不受管的写入路径。
+- `init` 按条目建议**写成明确的豁免条款**（引导命令，它要建的正是别的 service
+  赖以工作的数据库），不再挂在「违反」里。
+- ARCHITECTURE 的执行情况表由「⚠️ 2 处违反」改为「✅，仅存一处有理由的豁免」。
+- 守卫用例的允许清单缩到只剩 `init`；它断言的是精确内容，所以「修好一处却没删
+  名单行」也会红——这份清单不会烂在原地。
+
+**完成判据**
+
+- ✅ `grep -rn "holdings.storage" src/holdings/cli/` 只剩 `init.py` 一处。
+- ✅ 既有测试全绿；另补两条 `remove` 的成功路径用例（确认后删除、拒绝确认时不删）——
+  换了调用路径，行为必须不变。
+
+---
+
+*以下为动手前的原始分析，保留备查。*
 
 ### 现状
 

@@ -40,11 +40,9 @@ ALLOWED_IMPORTS: dict[str, set[str]] = {
 #: 用例断言「实际违反集合 == 这份名单」，因此既拦得住新违反，也逼着名单
 #: 随修复一起缩小——修好一处却不删这一行，用例会红。
 ALLOWED_CLI_CORE_TOUCHES: set[tuple[str, str]] = {
-    # 引导命令：它要建的正是其它 service 赖以工作的数据库。ARCHITECTURE 已把
-    # 它记为例外，不是待办。
+    # 唯一的豁免：引导命令，它要建的正是其它 service 赖以工作的数据库。
+    # ARCHITECTURE 的「铁律 3 执行情况」把它记为例外条款，不是待办。
     ("commands/init.py", "storage"),
-    # 真正的待办（B-11）：删除交易应收进已有的 trade_service。
-    ("commands/remove.py", "storage"),
 }
 
 #: cli 的允许集合：基础层 + services，再加上明确登记过的越界。
