@@ -41,6 +41,7 @@
 | [B-11](#b-11) | P3 | `cli` 越过 `services` 直接碰 `storage`（剩 2 处） | `cli/commands/`、`services/` |
 | [B-12](#b-12) | P3 | 3 个模块/函数写完从未被调用 | `utils/`、`services/chart_service.py` |
 | [B-14](#b-14) | P3 | `config.yaml` 的字段取值没有校验 | `utils/config.py` |
+| [B-15](#b-15) | P3 | UI 层（v2.0.0）——前置条件已具备 | 新增 `ui/` 或 `tui/` |
 
 ---
 
@@ -783,6 +784,51 @@ B-05 修的是「配置项改了不起作用」，这一条是它没覆盖的另
 - `cache_ttl_seconds: abc` → `holdings list` 输出 `错误（3）：…`，退出码 3，无 traceback。
 - 每个受校验字段都有一条参数化用例（合法值通过、非法值抛 `ConfigError`）。
 - `CONFIG_SPEC.md` 第 4 条约束的 ⚠️ 去掉，改成如实描述校验范围。
+
+---
+
+<a id="b-15"></a>
+
+## B-15　UI 层（v2.0.0）
+
+**优先级** P3 · 路线图事项，不在体检范围内
+**位置** 待定（Textual TUI 起手，见 [ROADMAP](ROADMAP.md) 的 v2.0.0）
+
+### 现状
+
+`VISION.md` 的长期目标是「用同一套 Service 层，从 CLI 平滑演进到 TUI、Web 乃至
+桌面应用」，`pyproject.toml` 也已声明 `tui` / `web` / `gui` 三组可选依赖——
+但**一行界面代码也没有**。此前它只活在 ROADMAP 里，而 BACKLOG 才是工作项的
+权威清单，所以在这里登记一条。
+
+### 前置条件：已经具备（2026-09-16）
+
+界面能复用 `services/` 不是一句承诺，而是 CI 里的红线。`tests/test_layering.py`
+逐条守着：
+
+- 六个非表现层（`portfolio` / `storage` / `data` / `services` / `models` / `utils`）
+  零 `print` / `echo`、不 import `rich` / `click`；
+- 依赖方向符合架构图，`services` 不反向依赖 `cli`；
+- 在子进程里只 import 核心层，`sys.modules` 里不会出现 click / rich。
+
+也就是说，**现在才开始写 UI 是安全的**：核心逻辑已经是可复用的纯数据接口，
+不会出现「接界面时才发现要先把 print 全挖掉」那种返工。
+
+### 要做什么（尚未开始）
+
+1. **起手做 TUI**（Textual，`pyproject` 的 `tui` extra 已就位）：持仓表 + 报表
+   两屏，数据全部来自 `services`。CLI 继续存在，两者共用同一套 service。
+2. **界面的报错呈现**：`ERROR_HANDLING.md` 的「GUI（未来）」一节已经写明约定
+   （异常统一在 Service 层抛出、界面捕获后转成提示），需要落实一次并补文档。
+3. **终端宽度**：B-07 给 CLI 做了简表 / 详表两档，TUI 的布局要复用同一份
+   `HOLDINGS_COLUMNS` 定义，别再造一份列清单。
+
+### 完成判据
+
+- TUI 能启动、能看持仓与报表，且**不 import `cli/`**——`tests/test_layering.py`
+  的 `test_services_can_be_used_without_touching_the_cli` 已经为这条铺好了路。
+- `pyproject.toml` 的 `tui` extra 装上就能跑，缺依赖时按退出码 6 的语义给提示。
+- `ARCHITECTURE.md` 的目录树与依赖方向图补上这一层。
 
 ---
 

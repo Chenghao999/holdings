@@ -28,8 +28,16 @@
 | 中期 | Textual TUI / Streamlit Web | 终端仪表盘或网页看板 |
 | 远期 | PySide6 桌面 / FastAPI 服务 | 跨平台桌面应用或 RESTful 服务 |
 
+> **演进的前提已经在 CI 里了**：UI 要复用的是 `services/` 的返回值，而这些层
+> 不许打印、不许依赖终端库、`services` 也不许反向依赖 `cli`——
+> 六条铁律由 `tests/test_layering.py` 逐条守着，不是文档里的一句承诺。
+> 待做的工作见 [BACKLOG B-15](BACKLOG.md#b-15)。
+
 ## 成功标准
 
 1. 用户能通过 CLI 完整管理交易、查看持仓与盈亏。
 2. 费用核算准确，能真实反映基金定投等场景的成本。
-3. 核心计算逻辑为纯函数，可直接被 GUI / Web 层复用。
+3. 核心计算逻辑为纯函数，可直接被 GUI / Web 层复用 —— **这一条由
+   `tests/test_layering.py` 在 CI 里守着**：六个非表现层不许有 `print` /
+   `echo`、不许 import `rich` / `click`，依赖方向必须符合架构图，
+   且只 import 核心层不会把终端库拖进来。
