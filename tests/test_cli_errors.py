@@ -268,3 +268,68 @@ def test_command_bodies_do_not_raise_systemexit():
     ]
 
     assert offenders == [], f"这些命令文件里还有 SystemExit：{offenders}"
+
+
+def test_remove_deletes_the_record_after_confirmation(tmp_path, monkeypatch, capsys):
+    """B-11 换了调用路径（改经 trade_service），行为必须不变。"""
+    from datetime import date
+
+    import click
+
+    from holdings.models.enums import AssetType, MarketType, TradeType
+    from holdings.models.transaction import Transaction
+    from holdings.storage import transaction_dao
+
+    monkeypatch.chdir(tmp_path)
+    db = tmp_path / "data" / "holdings.db"
+    tx_id = transaction_dao.add(
+        str(db),
+        Transaction(
+            symbol="600519",
+            market=MarketType.A_SHARE,
+            asset_type=AssetType.STOCK,
+            trade_date=date(2025, 1, 1),
+            trade_type=TradeType.BUY,
+            quantity=100.0,
+            price=10.0,
+        ),
+    )
+    monkeypatch.setattr(click, "confirm", lambda *a, **k: True)
+
+    code = run_main(monkeypatch, "remove", "--id", str(tx_id))
+
+    assert code == 0
+    assert "已删除交易" in capsys.readouterr().out
+    assert transaction_dao.get(str(db), tx_id) is None
+
+
+def test_declining_the_confirmation_aborts_with_130(tmp_path, monkeypatch, capsys):
+    from datetime import date
+
+    import click
+
+    from holdings.models.enums import AssetType, MarketType, TradeType
+    from holdings.models.transaction import Transaction
+    from holdings.storage import transaction_dao
+
+    monkeypatch.chdir(tmp_path)
+    db = tmp_path / "data" / "holdings.db"
+    tx_id = transaction_dao.add(
+        str(db),
+        Transaction(
+            symbol="600519",
+            market=MarketType.A_SHARE,
+            asset_type=AssetType.STOCK,
+            trade_date=date(2025, 1, 1),
+            trade_type=TradeType.BUY,
+            quantity=100.0,
+            price=10.0,
+        ),
+    )
+    monkeypatch.setattr(click, "confirm", lambda *a, **k: False)
+
+    code = run_main(monkeypatch, "remove", "--id", str(tx_id))
+
+    assert code == 0
+    assert "已取消" in capsys.readouterr().out
+    assert transaction_dao.get(str(db), tx_id) is not None, "拒绝确认时不能删"

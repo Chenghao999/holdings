@@ -1,7 +1,9 @@
 """交易写入服务：落库前做领域校验，避免把账算坏。
 
 `calculator` 是纯函数，只在重放时按需校验；真正的写入闸门在这里——
-所有新增交易的路径（`add`、`import`）都必须经过本模块，而不是直接调 DAO。
+所有**改动账本**的路径（`add`、`import`、`remove`）都必须经过本模块，
+而不是直接调 DAO。删除看起来不涉及校验，但它是「`cli` 不直接碰 storage」
+这条铁律的一部分：绕过它，账本就有了第二条不受管的写入路径。
 """
 
 from __future__ import annotations
@@ -41,3 +43,13 @@ def add_transactions(db_path: str, txs: list[Transaction]) -> list[int]:
     history = transaction_dao.get_all(db_path)
     calculator.compute_positions(_in_order(history, pending), strict=True)
     return transaction_dao.add_many(db_path, pending)
+
+
+def get_transaction(db_path: str, tx_id: int) -> Transaction | None:
+    """按 id 取一笔，不存在返回 None。"""
+    return transaction_dao.get(db_path, tx_id)
+
+
+def remove_transaction(db_path: str, tx_id: int) -> bool:
+    """删除一笔交易，返回是否真的删掉了一条。"""
+    return transaction_dao.remove(db_path, tx_id)
