@@ -86,6 +86,10 @@
   而且会掩盖「配置被静默忽略」这件事。
 
 ### Added
+- **数据层各数据源的解析分支补测**（[BACKLOG B-10](docs/BACKLOG.md)）：
+  用 `monkeypatch.setitem(sys.modules, …)` 伪造 `akshare` / `yfinance`，
+  覆盖三个 fetcher 的解析、代码不存在、缺依赖三条路径，以及 A 股代码的
+  `.SS` / `.SZ` 后缀推导。顺带修掉一条真的睡满 1 秒的用例（退避没打桩）。
 - **`deps.py` 的测试**（[BACKLOG B-09](docs/BACKLOG.md)）：`check` 命令直接依赖的
   三个纯函数此前零覆盖。顺带删掉 `check_dependencies` 里那个模块级别名
   `_is_installed`——它在导入时就绑定原函数，让 `monkeypatch.setattr(deps,

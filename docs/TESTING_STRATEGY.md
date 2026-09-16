@@ -31,7 +31,7 @@
 
 | 模块 | Mock 方式 |
 |------|-----------|
-| `data/` 数据源 | 不实际联网。`tests/test_data.py` 已验证导入链、工厂分发与 A 股降级链路（重试次数、退避、降级时机）；三个 fetcher 的 `_from_*` 仍可用同样的打桩手法补测 |
+| `data/` 数据源 | 不实际联网。`tests/test_data.py` 覆盖导入链、工厂分发、降级链路（重试次数、退避、降级时机、优先级顺序）与三个 fetcher 各自的解析分支（含缺依赖与未找到）；手法是 `monkeypatch.setitem(sys.modules, "akshare", 假模块)` |
 | 网络超时 | `tests/test_resilience.py` 用**永不置位的事件**模拟不响应的上游（而不是 `sleep(N)`，整个文件不产生真实等待），断言按预算放弃、异常类型原样透传、守护线程不拖住进程退出 |
 
 > `responses`（HTTP 层打桩库）此前声明在 `dev` extra 里但全项目零引用，
@@ -75,8 +75,7 @@ tests/
 ## 覆盖率目标
 
 - `portfolio/calculator.py`：**≥ 90%**（关键在于费用与卖出边界）— 当前 **99%**。
-- 全项目行覆盖率：当前 **91%**（`python -m pytest --cov=holdings`）。
+- 全项目行覆盖率：当前 **94%**；`data/` 层 **98%**（`python -m pytest --cov=holdings`）。
 - 明确低于目标的区域：`cli/renderers/`（93%，费用表与占比表的空分支未覆盖）、
-  `data/` 三个 fetcher 的 `_from_*`（28%~55%，都是需要联网的解析分支，用
-  monkeypatch 伪造 `akshare` / `yfinance` 模块即可补）、`cli/commands/sync.py`（22%）。
+  `cli/commands/sync.py`（22%）。
   这几处分别对应 [BACKLOG](BACKLOG.md) 的 B-09、B-10 与 B-07。

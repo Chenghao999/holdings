@@ -37,7 +37,7 @@
 | [B-07](#b-07) | ✅ 已完成 | 80 列终端下代码列只剩 `6005…` | `cli/renderers/` |
 | [B-08](#b-08) | ✅ 已完成 | `remove` / `check` 不走统一前缀；`check --json` 漏报退出码 | `cli/commands/remove.py`、`check.py` |
 | [B-09](#b-09) | ✅ 已完成 | `deps.py` 零测试 | `tests/` |
-| [B-10](#b-10) | P3 | 三个 fetcher 覆盖率 18%~29%，降级路径无测试 | `tests/test_data.py` |
+| [B-10](#b-10) | ✅ 已完成 | 三个 fetcher 覆盖率 18%~29%，降级路径无测试 | `tests/test_data.py` |
 | [B-11](#b-11) | ✅ 已完成 | `cli` 越过 `services` 直接碰 `storage` | `cli/commands/`、`services/` |
 | [B-12](#b-12) | ✅ 已完成 | 3 个模块/函数写完从未被调用 | `utils/`、`services/chart_service.py` |
 | [B-14](#b-14) | ✅ 已完成 | `config.yaml` 的字段取值没有校验 | `utils/config.py` |
@@ -703,8 +703,38 @@ current_price = cached.price if cached else 0.0
 
 ## B-10　`data/` 层降级路径测试
 
-**优先级** P3
+**优先级** ✅ 已完成（2026-09-16）
 **位置** `tests/test_data.py`
+
+### 完成情况
+
+降级链路本身在 B-05 已覆盖（重试次数、退避、降级时机、优先级顺序），
+本次补的是**各数据源自己的解析分支**，用 `monkeypatch.setitem(sys.modules, ...)`
+伪造 `akshare` / `yfinance` 模块：
+
+- `_from_akshare`：解析最新价、代码不存在时抛 `SymbolNotFoundError`、
+  未装 akshare 时抛 `DataSourceUnavailableError`（而不是漏一个 `ImportError`）。
+- `_from_yfinance`：**后缀推导**（`6` 开头 → `.SS`，否则 `.SZ`）、空行情报未找到、
+  未装 yfinance 时报「未安装」。后缀推错不会报错，只会查到一个不存在的代码然后
+  「未找到标的」——排查起来毫无线索，所以单列一条参数化用例。
+- 美股与黄金同样三条：解析、未找到、缺依赖。黄金另有一条：国内代码确实走
+  A 股链路而不是国际金价。
+
+**顺带修掉一处真实等待**：`test_a_domestic_gold_symbol_never_gets_the_international_price`
+的退避没打桩，真的睡满 1 秒——正是判据里「整个 tests/ 跑完不加 sleep 时间」
+要拦的那种。已打桩。现在唯一耗时 1 秒的是 B-05 那条刻意验超时的用例
+（配置里写 `timeout_seconds: 1`，等的是真实的预算而不是 sleep），属于预期。
+
+**完成判据**
+
+- ✅ `data/` 层覆盖率 **98%**（要求 ≥ 80%）；三个 fetcher 分别 **100% / 94% / 95%**。
+- ✅ 「akshare 失败一次后成功时不调用 yfinance」「始终失败才降级、最终抛
+  `DataSourceUnavailableError` 而非原始异常」在 B-05 已锁住，本次沿用。
+- ✅ 整个 `tests/` 跑完 3.6 秒，无真实 sleep。
+
+---
+
+*以下为动手前的原始分析，保留备查。*
 
 ### 现状
 
