@@ -43,9 +43,10 @@
         无行情时的「−100%」误导（[B-06](BACKLOG.md#b-06)）、
         窄终端表格截断（[B-07](BACKLOG.md#b-07)）、
         报错格式与退出码统一（[B-08](BACKLOG.md#b-08)）、
-        `snapshot --note` 持久化（[B-03](BACKLOG.md#b-03)）
+        `snapshot --note` 持久化（[B-03](BACKLOG.md#b-03)）、
+        `chart --start` 生效（[B-04](BACKLOG.md#b-04)）
+  - ✅ 已提前做：UI 可复用性的守卫（[B-15](BACKLOG.md#b-15)，原属 v2.0.0 的前置条件）
   - [ ] P1 待做：`asset_meta` 表接入（[B-01](BACKLOG.md#b-01)）
-  - [ ] P2 待做：`chart --start` 生效（[B-04](BACKLOG.md#b-04)）
   - [ ] P3 待做：`utils` / `data` 层测试缺口（[B-09](BACKLOG.md#b-09)、[B-10](BACKLOG.md#b-10)）、
         铁律 3 的剩余违反（[B-11](BACKLOG.md#b-11)）、零引用死代码（[B-12](BACKLOG.md#b-12)）、
         配置字段校验（[B-14](BACKLOG.md#b-14)）

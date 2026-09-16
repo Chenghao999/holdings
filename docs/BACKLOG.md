@@ -31,7 +31,7 @@
 | [B-01](#b-01) | P1 | `asset_meta` 表零 DAO，年化管理费率无处可填 | `storage/`、`cli/` |
 | [B-02](#b-02) | ✅ 已完成 | `metrics.py` 三个纯函数从未被调用 | `services/report_service.py` |
 | [B-03](#b-03) | ✅ 已完成 | `--note` 回显但不入库，静默丢数据 | `models/snapshot.py`、`storage/snapshot_dao.py` |
-| [B-04](#b-04) | P2 | `--start` 是空参数，传了不生效 | `cli/commands/chart.py`、`services/chart_service.py` |
+| [B-04](#b-04) | ✅ 已完成 | `--start` 是空参数，传了不生效 | `cli/commands/chart.py`、`services/chart_service.py` |
 | [B-05](#b-05) | ✅ 已完成 | 4 个配置项改了不起作用；网络调用无超时 | `utils/config.py`、`data/` |
 | [B-06](#b-06) | ✅ 已完成 | 未同步时显示「−100%」，看起来像血亏 | `services/portfolio_service.py`、`cli/renderers/` |
 | [B-07](#b-07) | ✅ 已完成 | 80 列终端下代码列只剩 `6005…` | `cli/renderers/` |
@@ -227,8 +227,43 @@ id | snapshot_date | total_value | cash_balance | equity_value | gold_value | cr
 
 ## B-04　`chart --start` 生效
 
-**优先级** P2 · 参数是摆设
-**位置** `src/holdings/cli/commands/chart.py`、`src/holdings/services/chart_service.py`
+**优先级** ✅ 已完成（2026-09-16）
+**位置** `src/holdings/cli/commands/chart.py`、`services/chart_service.py`、`cli/dates.py`
+
+### 完成情况
+
+按条目倾向的「接线」方案做的：
+
+- `networth_series(db_path, start=None)` 只保留该日（含）**之后**的快照。
+  含当天：不含的话，用户按自己记得的那个日期筛会莫名少一条。
+- `--start` 走与 `--date` 同一套校验回调，非法日期退出码 5。回调收进新增的
+  `cli/dates.py` 共用——此前只有 `add` 里有一份，`chart` 干脆没校验。
+- **筛完一条不剩时抛 `RecordNotFoundError`（退出码 2），不生成空白图**：
+  空图与「净值跌没了」在图上是分不出来的。提示里带上现有的条数与首末日期，
+  用户才知道该把 `--start` 调到哪里；一条快照都没有时直接提示先执行
+  `holdings snapshot`。
+
+**一处结构调整**：取数从 `networth_figure` 里拆成独立的 `networth_series`。
+它不依赖 plotly，于是「这段时间没有数据」在没装画图库时也能先报出来——
+而且 CI 只装 `.[dev]`（不含 plotly），判据要能在 CI 里跑，这一步拆分是前提。
+相应地 `networth_figure` 改为**先取数据、再导入 plotly**：数据为空是用户当场
+能处理的事，比「去装个包」更该先说。既有的那条 plotly 用例因此要先塞一条快照
+才走得到导入那步。
+
+**完成判据**
+
+- ✅ `--start` 只含该日期之后的点 ——
+  `tests/test_chart_cmd.py::test_start_keeps_only_the_snapshots_on_or_after_it`。
+- ✅ 未来日期给出明确提示而非空白图（且不写出 HTML 文件）——
+  `test_a_future_start_is_an_error_not_an_empty_chart` 与
+  `test_future_start_exits_2_without_writing_a_file`。
+- ✅ `--start 2025-13-45` 退出码 5、输出 `错误（5）：…`、无 traceback ——
+  `test_malformed_start_exits_5_without_a_traceback`。
+- ✅ 另有一条用例守着 help 文案里不再出现「暂存参数」。
+
+---
+
+*以下为动手前的原始分析，保留备查。*
 
 ### 现状
 

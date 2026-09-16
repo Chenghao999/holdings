@@ -226,14 +226,20 @@ def test_sync_on_empty_db_is_noop(db_path, monkeypatch):
 
 
 def test_chart_without_plotly_raises_missing_dependency(db_path, monkeypatch):
-    """缺 plotly 时必须是 MissingDependencyError（退出码 1），而不是裸 RuntimeError。
+    """缺 plotly 时必须是 MissingDependencyError（退出码 6），而不是裸 RuntimeError。
 
     裸 RuntimeError 会绕过 main() 的映射层，用户看到的是 traceback。
+
+    库要先有一条快照：`networth_figure` 是**先取数据再导入 plotly**，
+    没有数据时抛的是「还没有任何快照」——数据为空是用户当场能处理的事，
+    比「去装个包」更该先说。
     """
     import sys
 
     from holdings.exceptions import HoldingsError, MissingDependencyError
     from holdings.services import chart_service
+
+    snapshot_dao.add(db_path, _snap(1, 1000.0))
 
     # 把子模块置为 None 是模拟 ImportError 的标准做法
     monkeypatch.setitem(sys.modules, "plotly", None)
