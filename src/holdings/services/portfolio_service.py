@@ -8,7 +8,7 @@ import pandas as pd
 
 from holdings.models.enums import MarketType
 from holdings.portfolio import allocator, calculator
-from holdings.storage import price_cache_dao, transaction_dao
+from holdings.storage import asset_meta_dao, price_cache_dao, transaction_dao
 
 
 @dataclass
@@ -45,6 +45,10 @@ def get_summary(db_path: str, group: str | None = None) -> PortfolioSummary:
     # 含费用汇总（成本是账本事实，与有没有行情无关）
     total_fees = calculator.summarize(positions)["total_fees"]
 
+    # 标的名称。一次取全表而不是逐条 get（N+1），取不到就回落到代码——
+    # 名称是用来认人的，没有名字时代码本身就是最好的名字。
+    names = {m.symbol: (m.name or m.symbol) for m in asset_meta_dao.get_all(db_path)}
+
     holdings_rows = []
     market_values: dict[str, float] = {}
     unpriced_symbols: list[str] = []
@@ -60,6 +64,7 @@ def get_summary(db_path: str, group: str | None = None) -> PortfolioSummary:
         holdings_rows.append(
             {
                 "symbol": h.symbol,
+                "name": names.get(symbol, symbol),
                 "market": _market_of(transactions, symbol),
                 "asset_type": asset_types.get(symbol, "stock"),
                 "quantity": h.quantity,

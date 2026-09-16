@@ -32,6 +32,7 @@ _IDENTIFIER_COLUMNS = {"symbol": 6, "market": 2, "asset_type": 4}
 #: 此前两处各写一份，靠一条「每个展示列都能排序」的用例盯着才没走样。
 HOLDINGS_COLUMNS = {
     "symbol": "代码",
+    "name": "名称",
     "market": "市场",
     "asset_type": "类型",
     "quantity": "数量",
@@ -114,6 +115,7 @@ def render_holdings_table(holdings_df, width: int | None = None) -> Table:
             continue
         table.add_row(
             str(row.get("symbol", "")),
+            str(row.get("name", row.get("symbol", ""))),
             str(row.get("market", "")),
             str(row.get("asset_type", "")),
             f"{row.get('quantity', 0):.4f}",
@@ -218,3 +220,14 @@ def render_unpriced_hint(summary: PortfolioSummary) -> str | None:
         f"（成本合计 {summary.unpriced_cost:,.2f}），未计入上面的汇总；"
         f"请先执行 holdings sync"
     )
+
+
+def render_fee_rate_line(rate: float) -> str | None:
+    """年化管理费率合计。费率为 0 时返回 None——没填过就别印一行废话。
+
+    措辞必须让用户明白它**没被计进成本**：它旁边就是「累计费用」，
+    不加这句很容易被读成「总费用又多了这么多」。
+    """
+    if not rate:
+        return None
+    return f"年化管理费率合计 {rate:g}%（仅供参考，未计入成本）"

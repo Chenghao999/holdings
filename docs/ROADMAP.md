@@ -38,7 +38,8 @@
 - [x] 稳定 CLI 交互，完善错误码与异常处理（入口点映射、参数校验、写入闸门已落地）。
 - [ ] 清掉工程体检的剩余发现 —— **完整清单见 [待办清单（BACKLOG）](BACKLOG.md)**，
       本节只列里程碑层面的大项，不重复维护细节：
-  - ✅ P1 已完成：`metrics.py` 接入 `report`（[B-02](BACKLOG.md#b-02)）
+  - ✅ P1 已完成：`metrics.py` 接入 `report`（[B-02](BACKLOG.md#b-02)）、
+        `asset_meta` 表接入（[B-01](BACKLOG.md#b-01)）
   - ✅ P2 已完成：网络超时与 4 个死配置项（[B-05](BACKLOG.md#b-05)）、
         无行情时的「−100%」误导（[B-06](BACKLOG.md#b-06)）、
         窄终端表格截断（[B-07](BACKLOG.md#b-07)）、
@@ -46,7 +47,7 @@
         `snapshot --note` 持久化（[B-03](BACKLOG.md#b-03)）、
         `chart --start` 生效（[B-04](BACKLOG.md#b-04)）
   - ✅ 已提前做：UI 可复用性的守卫（[B-15](BACKLOG.md#b-15)，原属 v2.0.0 的前置条件）
-  - [ ] P1 待做：`asset_meta` 表接入（[B-01](BACKLOG.md#b-01)）
+  - ✅ P1 已完成：`asset_meta` 表接入（[B-01](BACKLOG.md#b-01)）
   - [ ] P3 待做：`utils` / `data` 层测试缺口（[B-09](BACKLOG.md#b-09)、[B-10](BACKLOG.md#b-10)）、
         铁律 3 的剩余违反（[B-11](BACKLOG.md#b-11)）、零引用死代码（[B-12](BACKLOG.md#b-12)）、
         配置字段校验（[B-14](BACKLOG.md#b-14)）

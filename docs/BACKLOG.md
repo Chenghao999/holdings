@@ -28,7 +28,7 @@
 
 | ID | 优先级 | 一句话 | 位置 |
 |----|--------|--------|------|
-| [B-01](#b-01) | P1 | `asset_meta` 表零 DAO，年化管理费率无处可填 | `storage/`、`cli/` |
+| [B-01](#b-01) | ✅ 已完成 | `asset_meta` 表零 DAO，年化管理费率无处可填 | `storage/`、`cli/` |
 | [B-02](#b-02) | ✅ 已完成 | `metrics.py` 三个纯函数从未被调用 | `services/report_service.py` |
 | [B-03](#b-03) | ✅ 已完成 | `--note` 回显但不入库，静默丢数据 | `models/snapshot.py`、`storage/snapshot_dao.py` |
 | [B-04](#b-04) | ✅ 已完成 | `--start` 是空参数，传了不生效 | `cli/commands/chart.py`、`services/chart_service.py` |
@@ -49,8 +49,51 @@
 
 ## B-01　`asset_meta` 表接入（DAO + 录入 + 展示）
 
-**优先级** P1 · 文档承诺了但功能不存在
-**位置** `src/holdings/storage/`（新建 `asset_meta_dao.py`）、`src/holdings/cli/commands/`、`services/`
+**优先级** ✅ 已完成（2026-09-16）
+**位置** `storage/asset_meta_dao.py`、`cli/commands/meta.py`、`services/asset_meta_service.py`
+
+### 完成情况
+
+三次提交，对应条目列的三样：
+
+1. **DAO**：`models/asset_meta.py` + `storage/asset_meta_dao.py`
+   （`get` / `get_all` / `upsert` / `delete`，与其余三个 DAO 同构）。
+   `upsert` 用 `ON CONFLICT DO UPDATE`——`symbol` 是主键，一条语句表达
+   「有则更新、无则插入」，也省掉两次查询之间的竞态。
+2. **录入入口**：采纳条目倾向的「新命令」方案，`holdings meta`
+   （`--symbol` / `--name` / `--currency` / `--fee-rate` / `--remove`）。
+   没有往 `add` 上加 `--name`——那些参数与「记一笔交易」无关。
+3. **展示**：`holdings list` 增「名称」列（取不到回落代码）；
+   `holdings report` 在记过费率时印一行「年化管理费率合计 x%（仅供参考，未计入成本）」。
+
+**遵守了条目开头那条约束**：`annual_management_fee` 只作参考展示，
+**没有**实现「按持仓天数自动计提管理费」。这条约束放在最容易被顺手违反的地方——
+`AssetMeta` 的 docstring、`SCHEMA.md` 的字段说明、命令的输出与 `USER_GUIDE`，
+四处都写了；并用一条用例锁住。
+
+**几处行为判断**
+
+- `holdings meta --symbol X` 一个字段都不给时是**查看**，不是写一条空记录——
+  顺手 upsert 一条全空的记录会静默清掉已有的名称与费率。
+- 覆盖时**没给的字段保留原值**：只想改名称不该把费率一起抹掉。
+- 删除用 `--remove` 走同一条命令：DAO 的 `delete` 需要一个真实调用方，
+  否则就是 [B-12](#b-12) 说的「写完从未被调用」的死代码。
+
+**完成判据**
+
+- ✅ `asset_meta_dao` 覆盖率 **100%**（要求 ≥ 90%）——除 CRUD 与主键唯一性外，
+  另有一组参数化用例注入会抛 sqlite3 异常的连接，覆盖四个 `except` 分支：
+  这些分支漏出去会绕过 `main()` 的退出码映射（`sqlite3.Error` 不是 `HoldingsError`），
+  用户看到的是裸 traceback 而不是「错误（4）：…」。
+- ✅ `holdings meta --symbol 518880 --name "黄金ETF" --fee-rate 0.5` →
+  `holdings list` 显示「黄金ETF」，且**成本价与盈亏数字与录入前逐项相等** ——
+  `tests/test_meta_cmd.py::test_the_rate_changes_nothing_about_the_numbers`。
+- ✅ `SCHEMA.md` 补上字段表与该约束；`USER_GUIDE.md` 补上第 4 节
+  （后续小节顺延编号）。
+
+---
+
+*以下为动手前的原始分析，保留备查。*
 
 ### 现状
 
