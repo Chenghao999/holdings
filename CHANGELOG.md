@@ -78,6 +78,10 @@
   而不是断言「返回值落在 1~5 之间」这种什么也锁不住的写法。
 
 ### Changed
+- **清掉零引用的死代码**（[BACKLOG B-12](docs/BACKLOG.md)）：`utils/formatter.py`
+  接到渲染层（渲染层各写各的格式化与空值判断，现在只有一处定义）；
+  删除占位的 `utils/currency.py` 与 `chart_service.networth_json()`；
+  顺带删掉 `models/__init__.py` 里零调用的重导出。
 - **`cli` 不再直接触碰 `storage`**（[BACKLOG B-11](docs/BACKLOG.md)）：
   删除交易改经 `trade_service`（增 `get_transaction` / `remove_transaction`），
   `init` 按引导命令写成明确的豁免条款。ARCHITECTURE 的执行情况表由

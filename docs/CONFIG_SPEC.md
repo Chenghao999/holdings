@@ -78,4 +78,4 @@ default_group: 默认
 ## 未来扩展预留
 
 - `data_sources.priority` 为 map 结构，便于后续扩展更多市场（如港股）。
-- 汇率换算相关的货币配置，在 `utils/currency.py` 中预留，MVP 暂不启用。
+- 汇率换算相关的货币配置：暂不预留。原先的占位模块 `utils/currency.py` 零调用，已删除（[B-12](BACKLOG.md#b-12)），需要时再加。

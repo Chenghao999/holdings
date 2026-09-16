@@ -39,7 +39,7 @@
 | [B-09](#b-09) | P3 | `deps.py` 零测试 | `tests/` |
 | [B-10](#b-10) | P3 | 三个 fetcher 覆盖率 18%~29%，降级路径无测试 | `tests/test_data.py` |
 | [B-11](#b-11) | ✅ 已完成 | `cli` 越过 `services` 直接碰 `storage` | `cli/commands/`、`services/` |
-| [B-12](#b-12) | P3 | 3 个模块/函数写完从未被调用 | `utils/`、`services/chart_service.py` |
+| [B-12](#b-12) | ✅ 已完成 | 3 个模块/函数写完从未被调用 | `utils/`、`services/chart_service.py` |
 | [B-14](#b-14) | P3 | `config.yaml` 的字段取值没有校验 | `utils/config.py` |
 | [B-15](#b-15) | P3 | UI 层（v2.0.0）——前置条件已具备 | 新增 `ui/` 或 `tui/` |
 
@@ -656,15 +656,14 @@ current_price = cached.price if cached else 0.0
 | 文件 | 覆盖率 | 说明 |
 |------|--------|------|
 | `utils/deps.py` | 0% | `is_installed` / `check_dependencies` / `missing_required` 三个纯函数，`check` 命令直接依赖 |
-| `utils/formatter.py` | 0% | **零调用，属死代码**，见 B-12 |
-| `utils/currency.py` | 0% | **零调用，属死代码**，见 B-12 |
+| `utils/formatter.py` | ✅ 100% | 已由 [B-12](#b-12) 接上渲染层并补测 |
 
 ### 要做什么
 
 - 补 `deps.py` 的用例：`is_installed("一定不存在的包")` 为 `False`；
   `missing_required()` 在 monkeypatch 掉某个必需包后返回其名；`check_dependencies()` 的返回结构
   与 `PackageStatus` 字段完整。
-- `formatter.py` / `currency.py` **不补测试，去 B-12 处理**——给死代码写测试是双重浪费。
+- `formatter.py` 已接上并补测；`currency.py` 已删除。两者都由 [B-12](#b-12) 处理完毕。
 - `cli/renderers/` 当前 15%~0%，渲染层的测试适合和 B-06 / B-07 一起补：
   固定 `Console(width=..., force_terminal=True)` 后断言输出内容。
 
@@ -778,8 +777,33 @@ current_price = cached.price if cached else 0.0
 
 ## B-12　零引用的死代码
 
-**优先级** P3
-**位置** `src/holdings/utils/formatter.py`、`utils/currency.py`、`services/chart_service.py`
+**优先级** ✅ 已完成（2026-09-16）
+**位置** `utils/`、`services/chart_service.py`、`models/__init__.py`
+
+### 完成情况：三个各有结论
+
+| 对象 | 结论 | 说明 |
+|------|------|------|
+| `utils/formatter.py` | **接上** | 重写为 money / price / number / percent / ratio / quantity + `is_missing`，渲染层删掉私有的 `_money` / `_percent` / `_number` / `_missing` / `_UNKNOWN` 改用它。`—` 的语义与「一个数该怎么显示」现在只有一处定义。原 `format_money(value, currency)` 去掉了货币参数——没有调用点需要它，留个没人用的参数就是同一类腐烂 |
+| `utils/currency.py` | **删除** | 占位实现（同币种返回原值、跨币种抛 `NotImplementedError`）。需要时从 git 历史取 |
+| `chart_service.networth_json()` | **删除** | 真做 web 时需要的 JSON 结构多半跟它不一样 |
+
+**顺手查出的第四个**：`models/__init__.py` 重导出了 5 个类并列入 `__all__`，
+但全项目没有一处 `from holdings.models import X`——同样是零调用的转发代码，
+而且它没有跟着 B-01 新增的 `AssetMeta` 一起维护，本身就是「这份清单没人看」
+的证据。已删除，只留模块说明。
+
+**完成判据**
+
+- ✅ 三个对象各有明确结论（上表），没有第四个零引用模块：
+  `portfolio/` `services/` `cli/renderers/` 的 `__all__` 里每个名字都验过有调用点。
+- ✅ 删除项同步清了 `utils/__init__.py` 的 `__all__` 与 ARCHITECTURE 目录树；
+  VISION 与 CONFIG_SPEC 里「预留 `utils/currency.py`」的说法一并改正。
+- ✅ 接上项补了 `tests/test_formatter.py`（13 条），覆盖率 100%。
+
+---
+
+*以下为动手前的原始分析，保留备查。*
 
 ### 现状
 
