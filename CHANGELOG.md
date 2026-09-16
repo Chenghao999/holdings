@@ -35,6 +35,17 @@
     配置再替他决定。`DEFAULT_CONFIG` 相应移除 `黄金:` 一项（老配置里留着的会被忽略）。
 
 ### Added
+- **`holdings meta`：标的名称与年化管理费率的录入**（[BACKLOG B-01](docs/BACKLOG.md)）。
+  `SCHEMA.md` 定义并详解了 `asset_meta` 表（含 `annual_management_fee`），正文写着
+  「完整支持基金托管费」，但建表语句之外**全项目零引用**——「基金托管费」只能靠
+  `add --fee` 一次性记录，按年计提的管理费没有任何入口。
+  新增 `storage/asset_meta_dao.py`、`models/asset_meta.py`、
+  `services/asset_meta_service.py` 与这条子命令。
+  - **年化管理费率只作参考展示，不参与成本计算**（见 [SCHEMA](docs/SCHEMA.md)）。
+    本工具不会按持仓天数自动计提管理费——那会让成本价随日历漂移，与移动加权
+    平均成本法冲突。命令的输出与文档里都写明了这一点。
+  - `holdings meta --symbol X` 一个字段都不给时是**查看**，不是写一条空记录
+    把已有的名称与费率清掉。
 - **分层铁律有了可执行的守卫**（`tests/test_layering.py`）。VISION 的成功标准
   第 3 条是「核心计算逻辑为纯函数，可直接被 GUI / Web 层复用」，
   ARCHITECTURE 也列了六条铁律并逐条宣称达成——但在此之前**这些声明没有任何

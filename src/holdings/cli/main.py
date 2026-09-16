@@ -10,6 +10,7 @@ from holdings.cli.commands.check import check_cmd
 from holdings.cli.commands.import_cmd import import_cmd
 from holdings.cli.commands.init import init
 from holdings.cli.commands.list import list_cmd
+from holdings.cli.commands.meta import meta_cmd
 from holdings.cli.commands.remove import remove_cmd
 from holdings.cli.commands.report import report_cmd
 from holdings.cli.commands.snapshot import snapshot_cmd
@@ -27,6 +28,7 @@ cli.add_command(init)
 cli.add_command(add)
 cli.add_command(check_cmd, name="check")
 cli.add_command(list_cmd, name="list")
+cli.add_command(meta_cmd, name="meta")
 cli.add_command(import_cmd, name="import")
 cli.add_command(sync_cmd, name="sync")
 cli.add_command(report_cmd, name="report")

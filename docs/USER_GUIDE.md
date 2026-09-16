@@ -113,7 +113,39 @@ Rich 会平均截断每一列，代码列只剩 `6005…`——认不出持的�
 
 ---
 
-### 4. `holdings import` —— CSV 批量导入
+### 4. `holdings meta` —— 维护标的的基础信息
+
+```bash
+# 记下名称与年化管理费率（如基金托管费）
+holdings meta --symbol 518880 --name "黄金ETF" --fee-rate 0.5
+
+# 看这个标的现在记了什么
+holdings meta --symbol 518880
+
+# 删掉
+holdings meta --symbol 518880 --remove
+```
+
+| 参数 | 说明 |
+|------|------|
+| `--symbol` | 标的代码（必填） |
+| `--name` | 名称，`holdings list` 的名称列取自这里 |
+| `--currency` | 币种，默认 `CNY` |
+| `--fee-rate` | 年化管理费率（%），**仅作参考展示** |
+| `--remove` | 删除该标的的基础信息 |
+
+一个字段都不给时是**查看**当前记录，不会写一条空记录把已有内容清掉。
+重复 `--symbol` 是覆盖：没给的字段保留原值。
+
+> ⚠️ **年化管理费率不参与成本计算。** 它只是「你填的费率加起来是多少」，
+> 真实费用仍要靠 `holdings add --fee` 逐笔记录。本工具**不会**按持仓天数
+> 自动计提管理费——那会让成本价随日历漂移，与移动加权平均成本法冲突。
+
+`AssetType` 的 `etf` 目前没有单独的录入入口，黄金 ETF 用 `--market A股` 记即可。
+
+---
+
+### 5. `holdings import` —— CSV 批量导入
 
 从支付宝 / 券商导出的 CSV 批量导入历史交易，支持费用列映射。
 
@@ -132,7 +164,7 @@ holdings import --file trades.csv --group 养老金 --fee-column 手续费
 
 ---
 
-### 5. `holdings sync` —— 同步最新价格
+### 6. `holdings sync` —— 同步最新价格
 
 ```bash
 holdings sync --market 全部     # 也可指定 A股 / 美股 / 黄金
@@ -144,7 +176,7 @@ holdings sync --market 全部     # 也可指定 A股 / 美股 / 黄金
 
 ---
 
-### 6. `holdings report` —— 生成综合报表
+### 7. `holdings report` —— 生成综合报表
 
 ```bash
 holdings report --verbose
@@ -170,7 +202,7 @@ holdings report --verbose
 
 ---
 
-### 7. `holdings snapshot` —— 记录资产快照
+### 8. `holdings snapshot` —— 记录资产快照
 
 ```bash
 holdings snapshot --total 158000 --equity 120000 --gold 20000 --cash 18000
@@ -189,7 +221,7 @@ holdings snapshot --total 158000 --equity 120000 --gold 20000 --cash 18000
 
 ---
 
-### 8. `holdings snapshots` —— 查看已记录的快照
+### 9. `holdings snapshots` —— 查看已记录的快照
 
 ```bash
 holdings snapshots
@@ -212,7 +244,7 @@ holdings snapshots
 
 ---
 
-### 9. `holdings chart` —— 生成净值曲线图
+### 10. `holdings chart` —— 生成净值曲线图
 
 ```bash
 holdings chart --output networth.html
@@ -242,7 +274,7 @@ holdings chart --start 2025-03-01 --output 2025.html
 
 ---
 
-### 10. `holdings remove` —— 删除交易
+### 11. `holdings remove` —— 删除交易
 
 ```bash
 holdings remove --id 3
@@ -253,7 +285,7 @@ holdings remove --id 3
 
 ---
 
-### 11. `holdings check` —— 检查运行环境
+### 12. `holdings check` —— 检查运行环境
 
 ```bash
 holdings check
