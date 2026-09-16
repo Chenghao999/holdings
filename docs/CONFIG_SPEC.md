@@ -71,9 +71,17 @@ default_group: 默认
    当前 CLI 未提供修改配置的命令，`config.yaml` 可由用户手工编辑（或删除后重新 `holdings init`）。
 2. 读取时若文件不存在，返回默认配置，**不自动创建文件**（见上方说明）。
 3. YAML 语法错误、根节点不是字典、文件不可读，均抛出 `ConfigError`（退出码 `3`）。
-4. ⚠️ **字段取值暂未做校验**：`cache_ttl_seconds: -1` 或 `cache_ttl_seconds: abc`
-   不会被 `load_config()` 拒绝，而是在命令读取该字段时才可能报错。
-   这一项待补（见 [ROADMAP](ROADMAP.md)）。
+4. **字段取值会校验**：`load_config()` 当场检查已知字段的取值，不合法抛
+   `ConfigError`（退出码 `3`），消息里指出是哪个字段、当前值是什么、期望什么：
+
+   ```text
+   错误（3）：配置文件字段取值非法：config.yaml 的 cache_ttl_seconds 应为非负整数，当前为 'abc'
+   ```
+
+   受校验的字段：`database_path` / `default_group` / `default_market`（字符串）、
+   `cache_ttl_seconds`（非负整数）、`sync.timeout_seconds`（非负数字）、
+   `sync.retry_count`（非负整数）、`data_sources.priority`（映射，值为字符串列表）。
+   **未知字段原样保留**——用户可能给未来的版本或别的工具留着。
 
 ## 未来扩展预留
 

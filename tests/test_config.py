@@ -115,3 +115,90 @@ def test_two_consecutive_loads_are_independent(tmp_path):
 
     assert first.sync_retry_count == 9
     assert second.sync_retry_count == 1, "b.yaml 没写 retry_count，应拿到默认值 1"
+
+
+# --------------------------------------------------------------- 字段取值校验
+
+
+def _write(tmp_path, body: str):
+    path = tmp_path / "config.yaml"
+    path.write_text(body, encoding="utf-8")
+    return path
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "database_path: data/h.db\n",
+        "default_group: 养老金\n",
+        "default_market: 美股\n",
+        "cache_ttl_seconds: 300\n",
+        "cache_ttl_seconds: 0\n",
+        "sync:\n  timeout_seconds: 0\n  retry_count: 0\n",
+        "data_sources:\n  priority:\n    A股: [akshare, yfinance]\n",
+    ],
+)
+def test_legal_values_are_accepted(tmp_path, body):
+    cfg = load_config(_write(tmp_path, body))
+
+    assert cfg.database_path
+
+
+@pytest.mark.parametrize(
+    ("body", "field"),
+    [
+        ("cache_ttl_seconds: abc\n", "cache_ttl_seconds"),
+        ("cache_ttl_seconds: -1\n", "cache_ttl_seconds"),
+        ("database_path: [a, b]\n", "database_path"),
+        ("default_group: 3\n", "default_group"),
+        ("default_market: [美股]\n", "default_market"),
+        ("sync:\n  timeout_seconds: abc\n", "sync.timeout_seconds"),
+        ("sync:\n  timeout_seconds: -1\n", "sync.timeout_seconds"),
+        ("sync:\n  retry_count: abc\n", "sync.retry_count"),
+        ("sync:\n  retry_count: -1\n", "sync.retry_count"),
+        ("data_sources:\n  priority: [akshare]\n", "data_sources.priority"),
+        ("data_sources:\n  priority:\n    A股: akshare\n", "A股"),
+        ("data_sources:\n  priority:\n    A股: [1, 2]\n", "A股"),
+    ],
+)
+def test_illegal_values_raise_config_error(tmp_path, body, field):
+    """取值不合法要当场按配置错误的契约报出来，并说清是哪个字段。
+
+    此前它会一路走到某条命令里才炸成 `ValueError: invalid literal for int()`，
+    退出码退化成 1，用户看到的是一段 traceback。
+    """
+    with pytest.raises(ConfigError) as exc:
+        load_config(_write(tmp_path, body))
+
+    assert field in str(exc.value)
+
+
+def test_unknown_fields_are_kept(tmp_path):
+    """只校验我们认识的字段。未知字段原样保留——用户可能给别的工具留着。"""
+    cfg = load_config(_write(tmp_path, "some_future_option: 42\n"))
+
+    assert cfg.get("some_future_option") == 42
+
+
+def test_the_error_exits_3_without_a_traceback(tmp_path, monkeypatch, capsys):
+    """端到端：这是 B-14 的判据。"""
+    import sys
+
+    from holdings.cli.main import main
+
+    monkeypatch.chdir(tmp_path)
+    _write(tmp_path, "cache_ttl_seconds: abc\n")
+    monkeypatch.setattr(sys, "argv", ["holdings", "list"])
+
+    try:
+        main()
+    except SystemExit as exc:
+        code = int(exc.code or 0)
+    else:
+        code = 0
+
+    err = capsys.readouterr().err
+    assert code == 3
+    assert "错误（3）：" in err
+    assert "cache_ttl_seconds" in err
+    assert "Traceback" not in err

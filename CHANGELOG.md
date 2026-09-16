@@ -77,6 +77,14 @@
 - 映射表从 `main()` 的函数体提到模块级——它本身就是契约，测试现在直接断言它，
   而不是断言「返回值落在 1~5 之间」这种什么也锁不住的写法。
 
+### Fixed
+- **`config.yaml` 的字段取值没有校验**（[BACKLOG B-14](docs/BACKLOG.md)）：
+  `cache_ttl_seconds: abc` 这类取值不合法此前会一路走到某条命令里才炸成
+  `ValueError: invalid literal for int()`——退化成裸 traceback、退出码 1，
+  绕过了「配置错误 = 3」的契约。现在 `load_config()` 当场校验并说清是哪个字段。
+  同时去掉 `Config` 上那两个取值兜底属性：校验接上后它们是不可达代码，
+  而且会掩盖「配置被静默忽略」这件事。
+
 ### Added
 - **`deps.py` 的测试**（[BACKLOG B-09](docs/BACKLOG.md)）：`check` 命令直接依赖的
   三个纯函数此前零覆盖。顺带删掉 `check_dependencies` 里那个模块级别名
