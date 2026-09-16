@@ -14,7 +14,8 @@
 | `ConfigError` | 配置文件缺失、YAML 语法错误或字段非法 | 配置错误，请检查 config.yaml |
 | `DatabaseError` | 数据库读写失败 | 数据库操作失败 |
 | `TradeValidationError` | 交易数据不合法（买入数量非正、卖出超过当时持有量、费用或单价为负） | 该笔交易不合法，已拒绝写入 |
-| `MissingDependencyError` | 可选依赖未安装（如画图缺 plotly） | 缺少依赖，请按提示安装对应 extra |
+| `MissingDependencyError` | 依赖未安装（画图缺 plotly、`check` 发现必需包缺失） | 缺少依赖，请按提示安装 |
+| `RecordNotFoundError` | 要操作的记录不存在（如 `remove --id` 给的交易号） | 未找到该记录 |
 
 以上异常**均继承 `HoldingsError`**，实现位于 `holdings/exceptions.py`；
 `storage` / `data` / `utils` 各自重新导出对应异常，历史导入路径（如
@@ -25,12 +26,18 @@
 | 退出码 | 含义 |
 |--------|------|
 | `0` | 成功 |
-| `1` | 网络错误 / 数据源不可用 / 缺少可选依赖 |
+| `1` | 网络错误 / 数据源不可用（**可重试**） |
 | `2` | 数据不存在（标的 / 交易记录未找到） |
 | `3` | 配置错误 |
 | `4` | 数据库错误 |
 | `5` | 参数校验失败 / 用户输入非法 |
+| `6` | 缺少依赖（**重试没有用，要装包**） |
 | `130` | 用户中止（`Ctrl-C` 或拒绝确认） |
+
+> **为什么把「缺少依赖」从 1 里拆出来**：它和「网络不通」是两种完全不同的
+> 处置——前者重试多少次都一样，后者才值得重试。CI 里靠退出码分流时，并到
+> 同一个码会让「网络抖了一下」和「环境没装好」看起来是同一种故障，
+> 而它们的修法一个是重跑、一个是改 Dockerfile。
 
 ## 错误反馈格式
 
@@ -42,8 +49,9 @@
 示例：
 
 ```text
-错误（1）：数据源不可用，请检查网络或稍后重试
-错误（2）：未找到该标的（symbol=000000, market=A股）
+错误（1）：A股数据源不可用：600519
+错误（2）：未找到交易 #99999
+错误（6）：缺少必需依赖：yfinance、akshare；请运行 pip install -e .
 ```
 
 ### GUI（未来）
@@ -61,6 +69,9 @@
      `portfolio.calculator.check_trade` 中定义，由 `services.trade_service` 在**落库前**
      调用，`add` 与 `import` 两条写入路径都必须经过它。
 4. 任何异常不得使程序静默失败；CLI 必须输出明确提示并返回非零退出码。
-5. `pyproject.toml` 的 console script **必须指向 `holdings.cli.main:main`**。
+5. **命令体里不出现 `SystemExit`**：异常一律抛到 `main()`，由 `cli.main.exit_code_for`
+   统一映射。命令里自己 `SystemExit(N)` 会绕过映射层，退出码与文案迟早各走各的。
+   唯一的例外是 `main()` 自身——它正是那个映射层。
+6. `pyproject.toml` 的 console script **必须指向 `holdings.cli.main:main`**。
    指向裸 click group `cli` 会绕开下面的异常映射层，本文档定义的退出码与
    `错误（N）：` 前缀将全部失效，用户只会看到裸 traceback 与恒定的退出码 1。
