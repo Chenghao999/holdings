@@ -2,10 +2,19 @@
 
 from __future__ import annotations
 
-import math
 from typing import TYPE_CHECKING
 
 from rich.table import Table
+
+from holdings.utils.formatter import (
+    UNKNOWN,
+    format_money,
+    format_number,
+    format_percent,
+    format_price,
+    format_quantity,
+    format_ratio,
+)
 
 if TYPE_CHECKING:
     from holdings.services.portfolio_service import PortfolioSummary
@@ -45,23 +54,6 @@ HOLDINGS_COLUMNS = {
 }
 
 
-def _percent(value: float | None) -> str:
-    return _UNKNOWN if value is None else f"{value * 100:.2f}%"
-
-
-def _number(value: float | None) -> str:
-    return _UNKNOWN if value is None else f"{value:.2f}"
-
-
-def _missing(value) -> bool:
-    """pandas 把 None 存成 NaN，所以「没有值」有两种长相，都要认。"""
-    return value is None or (isinstance(value, float) and math.isnan(value))
-
-
-def _money(value) -> str:
-    return _UNKNOWN if _missing(value) else f"{value:,.2f}"
-
-
 def render_performance_line(perf: PerformanceSummary) -> str:
     """把绩效指标渲染成一行文本；出现 `—` 时另起一行说明原因。
 
@@ -75,9 +67,9 @@ def render_performance_line(perf: PerformanceSummary) -> str:
         )
     line = (
         f"绩效（{perf.snapshot_count} 条快照，{perf.first_date} ~ {perf.last_date}）："
-        f"最大回撤 {_percent(perf.max_drawdown)} | "
-        f"年化收益 {_percent(perf.annualized_return)} | "
-        f"夏普 {_number(perf.sharpe)}"
+        f"最大回撤 {format_ratio(perf.max_drawdown)} | "
+        f"年化收益 {format_ratio(perf.annualized_return)} | "
+        f"夏普 {format_number(perf.sharpe)}"
     )
     if perf.notes:
         line += "\n  " + "；".join(perf.notes)
@@ -118,15 +110,15 @@ def render_holdings_table(holdings_df, width: int | None = None) -> Table:
             str(row.get("name", row.get("symbol", ""))),
             str(row.get("market", "")),
             str(row.get("asset_type", "")),
-            f"{row.get('quantity', 0):.4f}",
-            f"{row.get('avg_cost', 0):.4f}",
+            format_quantity(row.get("quantity")),
+            format_price(row.get("avg_cost")),
             # 没有行情的标的：现价、市值、盈亏、盈亏率一律显示 `—`。
             # 按 0 显示会让盈亏率变成「−100.00%」，那是没同步过，不是血亏。
-            _UNKNOWN if _missing(row.get("current_price")) else f"{row['current_price']:.4f}",
-            _money(row.get("market_value")),
-            f"{row.get('total_fees', 0):,.4f}",
-            _money(row.get("profit")),
-            _UNKNOWN if _missing(row.get("profit_rate")) else f"{row['profit_rate']:.2f}%",
+            format_price(row.get("current_price")),
+            format_money(row.get("market_value")),
+            format_money(row.get("total_fees")),
+            format_money(row.get("profit")),
+            format_percent(row.get("profit_rate")),
         )
     return table
 
@@ -135,9 +127,9 @@ def _compact_cells(row) -> list[str]:
     """简表的四个单元格，与 `COMPACT_COLUMNS` 一一对应。"""
     return [
         str(row.get("symbol", "")),
-        f"{row.get('quantity', 0):.4f}",
-        _UNKNOWN if _missing(row.get("current_price")) else f"{row['current_price']:.4f}",
-        _UNKNOWN if _missing(row.get("profit_rate")) else f"{row['profit_rate']:.2f}%",
+        format_quantity(row.get("quantity")),
+        format_price(row.get("current_price")),
+        format_percent(row.get("profit_rate")),
     ]
 
 
@@ -150,7 +142,7 @@ def render_fee_table(fee_breakdown: dict) -> Table:
         table.add_row("无", "0.00")
         return table
     for symbol, amount in fee_breakdown.items():
-        table.add_row(symbol, f"{amount:,.4f}")
+        table.add_row(symbol, format_money(amount))
     return table
 
 
@@ -163,7 +155,7 @@ def render_allocation_table(allocation: dict) -> Table:
         table.add_row("无", "0.00%")
         return table
     for atype, ratio in allocation.items():
-        table.add_row(atype, f"{ratio * 100:.2f}%")
+        table.add_row(atype, format_ratio(ratio))
     return table
 
 
@@ -185,10 +177,10 @@ def render_snapshots_table(snapshots) -> Table:
     for s in snapshots:
         table.add_row(
             s.snapshot_date.isoformat(),
-            f"{s.total_value:,.2f}",
-            f"{s.equity_value:,.2f}",
-            f"{s.gold_value:,.2f}",
-            f"{s.cash_balance:,.2f}",
+            format_money(s.total_value),
+            format_money(s.equity_value),
+            format_money(s.gold_value),
+            format_money(s.cash_balance),
             s.note or "",
         )
     return table
@@ -201,13 +193,13 @@ def render_summary_line(summary: PortfolioSummary) -> str:
     看起来像空仓，而实际是持有着、只是不知道现在值多少。
     """
     profit = (
-        _UNKNOWN
+        UNKNOWN
         if summary.total_profit is None
-        else f"{summary.total_profit:,.2f} ({summary.profit_rate:.2f}%)"
+        else f"{format_money(summary.total_profit)} ({format_percent(summary.profit_rate)})"
     )
     priced = not summary.unpriced_symbols or bool(summary.allocation)
-    value = f"{summary.total_value:,.2f}" if priced else _UNKNOWN
-    cost = f"{summary.total_cost:,.2f}" if priced else _UNKNOWN
+    value = format_money(summary.total_value) if priced else UNKNOWN
+    cost = format_money(summary.total_cost) if priced else UNKNOWN
     return f"总市值 {value} | 总成本 {cost} | 总盈亏 {profit} | 累计费用 {summary.total_fees:,.2f}"
 
 
