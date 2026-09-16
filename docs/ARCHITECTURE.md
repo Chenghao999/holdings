@@ -20,7 +20,6 @@ holdings/
 │       ├── utils/                           # 【基础层·无内部依赖】
 │       │   ├── config.py                    #    只做 YAML 读写 + 默认值，不引用业务模块
 │       │   ├── deps.py                      #    依赖包是否已安装的检测，纯函数
-│       │   ├── currency.py                  #    汇率换算（预留），独立纯函数
 │       │   └── formatter.py                 #    金额/百分比格式化，独立纯函数
 │       │
 │       ├── portfolio/                       # 【业务计算层·纯函数，零 IO】

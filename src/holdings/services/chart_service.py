@@ -58,16 +58,3 @@ def networth_figure(db_path: str, start: date | None = None) -> Any:
     fig.add_trace(go.Scatter(x=dates, y=values, mode="lines+markers", name="总资产"))
     fig.update_layout(title="资产净值曲线", xaxis_title="日期", yaxis_title="净值")
     return fig
-
-
-def networth_json(db_path: str) -> str:
-    """返回净值数据的 JSON 字符串，供 GUI 渲染。"""
-    import json
-
-    from holdings.storage import snapshot_dao
-
-    snaps = snapshot_dao.get_all(db_path)
-    return json.dumps(
-        [{"date": s.snapshot_date.isoformat(), "value": s.total_value} for s in snaps],
-        ensure_ascii=False,
-    )
