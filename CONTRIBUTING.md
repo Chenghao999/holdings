@@ -17,8 +17,8 @@ cd holdings
 python3 -m venv .venv
 .venv/bin/python -m pip install -e ".[dev]"
 
-# 3. 初始化开发环境（创建测试数据库与配置）
-.venv/bin/holdings init --dev
+# 3. 初始化环境（创建数据库与 config.yaml）
+.venv/bin/holdings init
 
 # 4. 运行测试
 .venv/bin/python -m pytest tests/

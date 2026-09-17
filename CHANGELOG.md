@@ -10,6 +10,13 @@
   `pip install 'holdings[gui]'` 会装好 200MB 的 PySide6，然后没有界面可用。
   装了却用不上的依赖比没有更费解——与 B-12 同类，只是发生在配置里而非代码里。
   等 Web / 桌面端真有代码时再加回来（形态决策见 B-22）。
+- **`holdings init --dev` 已移除**（[BACKLOG B-17](docs/BACKLOG.md)）：该参数的全部
+  实现是一句「开发模式已启用（暂不创建额外数据）」，不产生任何可观察的差异。
+  `init` 本就按 `config.yaml` 的 `database_path` 建库，没有开发库 / 生产库之分，
+  补语义是硬造，故删除。与 B-04 的 `chart --start` 同类：参数存在但无效比没有更糟，
+  用户会以为开发环境被配置好了。
+  **BREAKING CHANGE**：`holdings init --dev` 现在以退出码 5 拒绝
+  （`错误（5）：No such option '--dev'`）。该参数此前无任何效果。
 
 ### Added
 - **`report` 新增绩效行**（[BACKLOG B-02](docs/BACKLOG.md)）：从 `snapshots` 表算最大回撤、

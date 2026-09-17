@@ -59,7 +59,7 @@
 | [B-14](#b-14) | ✅ 已完成 | `config.yaml` 的字段取值没有校验 | `utils/config.py` |
 | [B-15](#b-15) | ✅ 已完成 | UI 层（v2.0.0） | `tui/` |
 | [B-16](#b-16) | ✅ 已完成 | `web` / `gui` 两个 extra 零引用 | `pyproject.toml` |
-| [B-17](#b-17) | P2 | `init --dev` 是个空壳 | `cli/commands/init.py` |
+| [B-17](#b-17) | ✅ 已完成 | `init --dev` 是个空壳 | `cli/commands/init.py` |
 | [B-18](#b-18) | P1 | 收尾并发布 v1.0.0 | `pyproject.toml`、`docs/` |
 | [B-19](#b-19) | P2 | 多币种标的被当成同一种货币相加 | `services/portfolio_service.py` |
 | [B-20](#b-20) | P3 | Web 界面（v2.0.0） | 新增 `web/` |
@@ -1164,8 +1164,49 @@ PySide6，然后没有 GUI 可用。
 
 ## B-17　`init --dev` 是个空壳
 
-**优先级** P2 · 参数是摆设
-**位置** `src/holdings/cli/commands/init.py`
+**优先级** ✅ 已完成（2026-09-17）
+**位置** `src/holdings/cli/commands/init.py`、`tests/test_init_cmd.py`
+
+### 完成情况
+
+选**删除**而不是补语义。补语义需要先回答「开发库与生产库差在哪」，而 `init`
+本就按 `config.yaml` 的 `database_path` 建库，两者没有分别——补出来的语义是硬造的。
+`CONTRIBUTING.md` 的入门第 3 步也因此从 `init --dev` 改回 `init`（那一步此前
+其实什么都没多做到）。
+
+顺带删掉同在该命令上、**全仓库唯一一处** `@click.pass_context`：`ctx` 从未被读，
+是同一类摆设（只是不在命令行上）。
+
+`init` 此前**零用例**，本次补上 `tests/test_init_cmd.py` 三条：建出库与配置、
+不覆盖已有配置、`--dev` 已被拒绝。
+
+**完成判据**
+
+- ✅ 参数不复存在，且拒绝方式符合既有契约：
+
+  ```console
+  $ holdings init --help
+  Usage: holdings init [OPTIONS]
+
+    初始化项目：创建数据库与默认配置文件。
+
+  Options:
+    --help  Show this message and exit.
+
+  $ holdings init --dev
+  错误（5）：No such option '--dev'.
+  $ echo $?
+  5
+  ```
+
+  退出码 5 而非 click 默认的 2 是既有的有意设计：2 归「标的 / 记录未找到」，
+  用法错误统一归 5（`cli/main.py` 用 `standalone_mode=False` 接管）。
+- ✅ `USER_GUIDE.md` 的示例与 `--help` 同步，`CONTRIBUTING.md` 的入门步骤同步。
+- ✅ 用例锁住：`tests/test_init_cmd.py::test_removed_dev_flag_is_rejected`。
+
+---
+
+*以下为动手前的原始分析，保留备查。*
 
 ### 现状
 

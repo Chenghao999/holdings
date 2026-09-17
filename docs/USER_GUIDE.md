@@ -27,7 +27,6 @@ holdings init
 
 ```bash
 holdings init
-holdings init --dev       # 开发/测试环境（可选）
 ```
 
 ---
