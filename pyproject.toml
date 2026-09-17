@@ -22,12 +22,13 @@ dependencies = [
 
 [project.optional-dependencies]
 data = ["akshare", "yfinance>=0.2.0"]
-# 单独一档：chart 只需要 plotly，此前它只挂在 gui 里，
-# 于是只装 [data] 的用户跑 holdings chart 会缺依赖，还被要求连 PySide6 一起装。
+# 单独一档：chart 只需要 plotly。只装 [data] 的用户跑 holdings chart 不该缺依赖，
+# 画一张净值曲线也不该顺带拖进整套数据源。
 chart = ["plotly>=5.0.0"]
 tui = ["textual>=0.50.0"]
-web = ["streamlit>=1.30.0", "fastapi>=0.100.0"]
-gui = ["PySide6>=6.6.0", "plotly>=5.0.0"]
+# 这里曾声明 web / gui 两组（streamlit、fastapi、PySide6），但源码里零引用，
+# `pip install 'holdings[gui]'` 会装好 200MB 的 PySide6 却无界面可用。
+# 已按 B-16 删除，等 Web / 桌面端真有代码时再加回来（形态见 B-22）。
 # textual 进 dev 是为了让 TUI 能被真正测到（headless 跑一遍界面），
 # 而不是只测「缺依赖时报错」那一条路径。
 dev = ["pytest", "pytest-cov", "ruff>=0.16.7,<0.17", "textual>=0.50.0"]

@@ -26,7 +26,7 @@ python3 -m venv .venv
 
 > 可选数据源：默认不装 `akshare` / `yfinance`（体积大、非必需）。
 > 需要真实行情时执行 `.venv/bin/python -m pip install -e ".[data]"`。
-> `tui` / `web` / `gui` 三组同理，按需安装。
+> `chart` / `tui` 两组同理，按需安装。
 
 ## 常用开发命令
 
