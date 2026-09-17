@@ -58,7 +58,7 @@
 | [B-12](#b-12) | ✅ 已完成 | 3 个模块/函数写完从未被调用 | `utils/`、`services/chart_service.py` |
 | [B-14](#b-14) | ✅ 已完成 | `config.yaml` 的字段取值没有校验 | `utils/config.py` |
 | [B-15](#b-15) | ✅ 已完成 | UI 层（v2.0.0） | `tui/` |
-| [B-16](#b-16) | P2 | `web` / `gui` 两个 extra 零引用 | `pyproject.toml` |
+| [B-16](#b-16) | ✅ 已完成 | `web` / `gui` 两个 extra 零引用 | `pyproject.toml` |
 | [B-17](#b-17) | P2 | `init --dev` 是个空壳 | `cli/commands/init.py` |
 | [B-18](#b-18) | P1 | 收尾并发布 v1.0.0 | `pyproject.toml`、`docs/` |
 | [B-19](#b-19) | P2 | 多币种标的被当成同一种货币相加 | `services/portfolio_service.py` |
@@ -1090,8 +1090,49 @@ B-05 修的是「配置项改了不起作用」，这一条是它没覆盖的另
 
 ## B-16　`web` / `gui` 两个可选依赖组零引用
 
-**优先级** P2 · 配置承诺了但功能不存在
-**位置** `pyproject.toml`
+**优先级** ✅ 已完成（2026-09-17）
+**位置** `pyproject.toml`、`CONTRIBUTING.md`
+
+### 完成情况
+
+按条目的倾向**删除**两个 extra，而不是标注「预留」：
+
+- `pyproject.toml` 去掉 `web` / `gui` 两行，留一条注释记下它们为何消失、
+  何时该加回来（形态决策见 [B-22](#b-22)）。
+- `CONTRIBUTING.md` 的「`tui` / `web` / `gui` 三组同理」同步改为 `chart` / `tui`。
+- `chart` 上方那条注释原本靠「此前挂在 `gui` 里」解释自己为何单列，
+  `gui` 没了之后那句话指向一个不存在的组，一并改写成当下的理由。
+
+**完成判据**
+
+- ✅ `pyproject.toml` 里不再有声明了却零引用的 extra。剩余四组的源码引用：
+
+  ```console
+  $ grep -rn "streamlit\|fastapi\|PySide6" src/ tests/
+  （无输出——两个已删的组确实零引用）
+  $ grep -rn --include='*.py' "akshare\|yfinance" src/ | wc -l   # data 组
+  34
+  $ grep -rln --include='*.py' plotly src/ | wc -l              # chart 组
+  4
+  $ grep -rln --include='*.py' textual src/ | wc -l             # tui 组
+  2
+  ```
+
+  `dev` 组的 `ruff` / `pytest-cov` 零 import 是正常的——它们是命令行工具，
+  不是被 import 的库；判据针对的是「装了却用不上的依赖」。
+- ✅ 元数据里只剩四组，已删的两组不再出现：
+
+  ```console
+  $ python -c "import tomllib;print(list(tomllib.load(open('pyproject.toml','rb'))['project']['optional-dependencies']))"
+  ['data', 'chart', 'tui', 'dev']
+  ```
+
+  改动只动了 `optional-dependencies`，核心依赖未变；`pip install --dry-run --no-deps -e .`
+  仍能正常解析元数据。
+
+---
+
+*以下为动手前的原始分析，保留备查。*
 
 ### 现状
 

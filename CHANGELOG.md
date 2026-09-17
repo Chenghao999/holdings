@@ -4,6 +4,13 @@
 
 ## [Unreleased]
 
+### Removed
+- **删掉 `web` / `gui` 两组零引用的可选依赖**（[BACKLOG B-16](docs/BACKLOG.md)）：
+  `streamlit` / `fastapi` / `PySide6` 在 `src/` 里零引用，而
+  `pip install 'holdings[gui]'` 会装好 200MB 的 PySide6，然后没有界面可用。
+  装了却用不上的依赖比没有更费解——与 B-12 同类，只是发生在配置里而非代码里。
+  等 Web / 桌面端真有代码时再加回来（形态决策见 B-22）。
+
 ### Added
 - **`report` 新增绩效行**（[BACKLOG B-02](docs/BACKLOG.md)）：从 `snapshots` 表算最大回撤、
   年化收益与夏普，接进 `holdings report` 的输出。新增 `services/report_service.py`
