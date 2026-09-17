@@ -1192,7 +1192,7 @@ if dev:
 `PriceResult` 带 `currency`，`price_cache` 也存了币种，但汇总**完全不看它**：
 
 ```python
-market_value = position.quantity * current_price   # 不管 price 是 USD 还是 CNY
+market_value = position.quantity * current_price  # 不管 price 是 USD 还是 CNY
 total_value = sum(market_values.values())
 ```
 
