@@ -6,9 +6,7 @@ import click
 
 
 @click.command()
-@click.option("--dev", is_flag=True, help="初始化开发/测试环境")
-@click.pass_context
-def init(ctx: click.Context, dev: bool) -> None:
+def init() -> None:
     """初始化项目：创建数据库与默认配置文件。"""
     from holdings.storage.db import connect
     from holdings.utils.config import load_config
@@ -26,6 +24,3 @@ def init(ctx: click.Context, dev: bool) -> None:
     missing = missing_required()
     if missing:
         click.echo(f"警告：缺少必需依赖 {', '.join(missing)}，请运行 `pip install -e .`", err=True)
-
-    if dev:
-        click.echo("开发模式已启用（暂不创建额外数据）")
