@@ -86,7 +86,10 @@ tests/
 ## 覆盖率目标
 
 - `portfolio/calculator.py`：**≥ 90%**（关键在于费用与卖出边界）— 当前 **99%**。
-- 全项目行覆盖率：当前 **94%**；`data/` 层 **98%**（`python -m pytest --cov=holdings`）。
-- 明确低于目标的区域：`cli/renderers/`（93%，费用表与占比表的空分支未覆盖）、
-  `cli/commands/sync.py`（22%）。
-  这几处分别对应 [BACKLOG](BACKLOG.md) 的 B-09、B-10 与 B-07。
+- 全项目行覆盖率：当前 **95%**（360 个用例）；`data/` 层 **98%**
+  （`python -m pytest --cov=holdings`）。
+- 明确低于目标的区域：`cli/renderers/chart_renderer.py`（67%，未装 plotly 的分支）、
+  `cli/renderers/table_renderer.py` 与 `cli/commands/init.py`（均 93%，前者是费用表与
+  占比表的空分支，后者是缺必需依赖时的警告分支）。
+  [BACKLOG](BACKLOG.md) 的 B-07 / B-09 / B-10 修掉的那几处已不在列
+  （`cli/commands/sync.py` 由 22% 升至 95%）。

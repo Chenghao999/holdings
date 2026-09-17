@@ -48,12 +48,15 @@
         `chart --start` 生效（[B-04](BACKLOG.md#b-04)）
   - ✅ 已提前做：UI 可复用性的守卫（[B-15](BACKLOG.md#b-15)，原属 v2.0.0 的前置条件）
   - ✅ P1 已完成：`asset_meta` 表接入（[B-01](BACKLOG.md#b-01)）
-  - [ ] P3 待做：`utils` / `data` 层测试缺口（[B-09](BACKLOG.md#b-09)、[B-10](BACKLOG.md#b-10)）、
+  - ✅ P3 已完成：`utils` / `data` 层测试缺口（[B-09](BACKLOG.md#b-09)、[B-10](BACKLOG.md#b-10)）、
         铁律 3 的剩余违反（[B-11](BACKLOG.md#b-11)）、零引用死代码（[B-12](BACKLOG.md#b-12)）、
         配置字段校验（[B-14](BACKLOG.md#b-14)）
 - [ ] 用 `terminalizer` / `asciinema` 录制演示，放进 README（[B-18](BACKLOG.md#b-18)）。
 - [ ] 收尾发布：版本号到 `1.0.0`、CHANGELOG 收口、打 tag（[B-18](BACKLOG.md#b-18)）。
-- [ ] 清掉发布前扫出的两处「说了没做」：[B-16](BACKLOG.md#b-16)、[B-17](BACKLOG.md#b-17)。
+- [x] 清掉发布前扫出的两处「说了没做」：[B-16](BACKLOG.md#b-16)（删两个零引用 extra）、
+      [B-17](BACKLOG.md#b-17)（删空壳参数 `init --dev`）。
+- [ ] 处理多币种混加（[B-19](BACKLOG.md#b-19)）——发布前需清掉，否则 tag 上带着
+      一个已知会给出错数的口径问题。
 
 ### 2027 Q4 —— v2.0.0（界面与多币种）
 
