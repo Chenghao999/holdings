@@ -87,7 +87,7 @@ tests/
 ## 覆盖率目标
 
 - `portfolio/calculator.py`：**≥ 90%**（关键在于费用与卖出边界）— 当前 **99%**。
-- 全项目行覆盖率：当前 **95%**（378 个用例）；`data/` 层 **98%**
+- 全项目行覆盖率：当前 **95%**（380 个用例）；`data/` 层 **98%**
   （`python -m pytest --cov=holdings`）。
 - 明确低于目标的区域：`cli/renderers/chart_renderer.py`（67%，未装 plotly 的分支）、
   `cli/renderers/table_renderer.py` 与 `cli/commands/init.py`（均 93%，前者是费用表与

@@ -119,6 +119,10 @@
   只装 `holdings[data]` 的用户跑 `holdings chart` 会缺依赖，安装提示还要求连
   PySide6 一起装——画一张净值曲线不该需要 GUI 框架。
 - 从 `dev` extra 移除 `responses`：全项目零引用（见 [TESTING_STRATEGY](docs/TESTING_STRATEGY.md)）。
+- **版本号改为单一来源**：`pyproject.toml` 的 `version` 是唯一的那个数，
+  `holdings.__version__` 从打包元数据读出（`importlib.metadata`），不再手写一份——
+  发布时两处改一处漏一处，此前不会有任何东西会响。查不到元数据时（源码树里直接
+  import）回落为 `0.0.0+unknown`，不让 `import holdings` 本身失败。
 
 ### Removed
 
