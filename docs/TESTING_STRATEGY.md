@@ -69,6 +69,7 @@ tests/
 ├── test_report_cmd.py     # 绩效行：算不出来时必须显示 —，不是 0
 ├── test_snapshot_cmd.py   # 快照备注的写入、读取与列在不在
 ├── test_unpriced.py       # 没有行情时显示 —，不显示 −100%
+├── test_multi_currency.py # 外币计价的标的不与人民币混加
 ├── test_narrow_terminal.py # 窄终端下代码列完整可见
 ├── test_chart_cmd.py      # --start 真的筛日期；空区间报错而非空白图
 ├── test_meta_cmd.py       # meta 录入/查看/删除；费率不影响成本与盈亏
@@ -86,7 +87,7 @@ tests/
 ## 覆盖率目标
 
 - `portfolio/calculator.py`：**≥ 90%**（关键在于费用与卖出边界）— 当前 **99%**。
-- 全项目行覆盖率：当前 **95%**（360 个用例）；`data/` 层 **98%**
+- 全项目行覆盖率：当前 **95%**（378 个用例）；`data/` 层 **98%**
   （`python -m pytest --cov=holdings`）。
 - 明确低于目标的区域：`cli/renderers/chart_renderer.py`（67%，未装 plotly 的分支）、
   `cli/renderers/table_renderer.py` 与 `cli/commands/init.py`（均 93%，前者是费用表与

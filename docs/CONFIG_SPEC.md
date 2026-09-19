@@ -87,3 +87,7 @@ default_group: 默认
 
 - `data_sources.priority` 为 map 结构，便于后续扩展更多市场（如港股）。
 - 汇率换算相关的货币配置：暂不预留。原先的占位模块 `utils/currency.py` 零调用，已删除（[B-12](BACKLOG.md#b-12)），需要时再加。
+- **基准货币不是配置项**：本工具按人民币口径汇总，常量写在
+  `services/portfolio_service.py` 的 `BASE_CURRENCY`（[B-19](BACKLOG.md#b-19)）。
+  只有唯一取值的配置项就是下一个「改了不起作用」的死配置——真做汇率换算时
+  再连同汇率来源一起设计。
