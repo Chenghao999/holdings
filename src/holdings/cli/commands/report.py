@@ -15,6 +15,7 @@ def report_cmd(verbose: bool) -> None:
         render_allocation_table,
         render_fee_rate_line,
         render_fee_table,
+        render_foreign_hint,
         render_holdings_table,
         render_performance_line,
         render_summary_line,
@@ -32,9 +33,9 @@ def report_cmd(verbose: bool) -> None:
     console = Console()
     console.print(render_holdings_table(summary.holdings_df, width=console.width))
     console.print(render_summary_line(summary))
-    hint = render_unpriced_hint(summary)
-    if hint:
-        console.print(f"[yellow]{hint}[/yellow]")
+    for hint in (render_unpriced_hint(summary), render_foreign_hint(summary)):
+        if hint:
+            console.print(f"[yellow]{hint}[/yellow]")
     # 年化管理费率只是「你填过的费率加起来是多少」，与上面的累计费用不是一回事。
     symbols = [] if summary.holdings_df.empty else summary.holdings_df["symbol"].tolist()
     fee_line = render_fee_rate_line(asset_meta_service.fee_rate_total(cfg.database_path, symbols))

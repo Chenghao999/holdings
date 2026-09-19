@@ -10,6 +10,7 @@ import pytest
 
 from holdings.utils.formatter import (
     UNKNOWN,
+    currency_label,
     format_money,
     format_number,
     format_percent,
@@ -57,6 +58,19 @@ def test_missing_values_render_as_a_dash(value):
         format_quantity,
     ):
         assert func(value) == UNKNOWN
+
+
+@pytest.mark.parametrize(
+    ("code", "expected"),
+    [("CNY", "人民币"), ("USD", "美元"), ("HKD", "港币")],
+)
+def test_currency_labels(code, expected):
+    assert currency_label(code) == expected
+
+
+def test_an_unknown_currency_falls_back_to_its_code():
+    """表里没有的币种原样显示代码——编一个名字比显示 `SGD` 更糟。"""
+    assert currency_label("SGD") == "SGD"
 
 
 def test_zero_is_not_missing():

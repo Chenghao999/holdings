@@ -6,9 +6,10 @@ from typing import TYPE_CHECKING
 
 from rich.table import Table
 
-from holdings.services.portfolio_service import HOLDINGS_COLUMNS
+from holdings.services.portfolio_service import BASE_CURRENCY, HOLDINGS_COLUMNS
 from holdings.utils.formatter import (
     UNKNOWN,
+    currency_label,
     format_money,
     format_number,
     format_percent,
@@ -97,9 +98,11 @@ def render_holdings_table(holdings_df, width: int | None = None) -> Table:
             str(row.get("asset_type", "")),
             format_quantity(row.get("quantity")),
             format_price(row.get("avg_cost")),
-            # 没有行情的标的：现价、市值、盈亏、盈亏率一律显示 `—`。
-            # 按 0 显示会让盈亏率变成「−100.00%」，那是没同步过，不是血亏。
-            format_price(row.get("current_price")),
+            _price_cell(row),
+            # 市值 / 盈亏 / 盈亏率：算不出来时 service 给的是 NaN 而不是 0，
+            # `format_money` 把它显示成 `—`。按 0 显示会让盈亏率变成「−100.00%」，
+            # 那是没同步过，不是血亏；外币计价的标的走同一条路——数字是真的，
+            # 但不是人民币口径，放不进这一列。
             format_money(row.get("market_value")),
             format_money(row.get("total_fees")),
             format_money(row.get("profit")),
@@ -113,9 +116,24 @@ def _compact_cells(row) -> list[str]:
     return [
         str(row.get("symbol", "")),
         format_quantity(row.get("quantity")),
-        format_price(row.get("current_price")),
+        _price_cell(row),
         format_percent(row.get("profit_rate")),
     ]
+
+
+def _price_cell(row) -> str:
+    """现价，外币的带上币种。
+
+    同一列里混着两种货币而不加标注，等于把「不混加」这件事做了一半：
+    用户看到的仍是一个没有单位的数。非基准货币才标——每行都挂一个 `CNY`
+    只会把这一列撑宽，而人民币是本工具的默认口径。
+    """
+    price = format_price(row.get("current_price"))
+    currency = row.get("currency")
+    # `isinstance` 而不是判空：DataFrame 里的缺失值可能是 `None`，也可能是 NaN。
+    if not isinstance(currency, str) or currency == BASE_CURRENCY:
+        return price
+    return f"{price} {currency}"
 
 
 def render_fee_table(fee_breakdown: dict) -> Table:
@@ -172,20 +190,22 @@ def render_snapshots_table(snapshots) -> Table:
 
 
 def render_summary_line(summary: PortfolioSummary) -> str:
-    """持仓汇总行。口径是**有行情的标的**，没算进去的由提示行说明。
+    """持仓汇总行。口径是**能按基准货币计价的标的**，没算进去的由提示行说明。
 
-    一处也没有行情时不再印 `0.00`：那会让「总市值 0 / 总成本 0 / 总盈亏 0」
-    看起来像空仓，而实际是持有着、只是不知道现在值多少。
+    一个标的都计不进来时不再印 `0.00`：那会让「总市值 0 / 总成本 0 / 总盈亏 0」
+    看起来像空仓，而实际是持有着、只是没法按人民币说清楚。service 在那种情况下
+    给的就是 `None`，`format_money` 把它显示成 `—`，渲染层不必自己判断。
     """
     profit = (
         UNKNOWN
         if summary.total_profit is None
         else f"{format_money(summary.total_profit)} ({format_percent(summary.profit_rate)})"
     )
-    priced = not summary.unpriced_symbols or bool(summary.allocation)
-    value = format_money(summary.total_value) if priced else UNKNOWN
-    cost = format_money(summary.total_cost) if priced else UNKNOWN
-    return f"总市值 {value} | 总成本 {cost} | 总盈亏 {profit} | 累计费用 {summary.total_fees:,.2f}"
+    return (
+        f"总市值 {format_money(summary.total_value)} | "
+        f"总成本 {format_money(summary.total_cost)} | "
+        f"总盈亏 {profit} | 累计费用 {summary.total_fees:,.2f}"
+    )
 
 
 def render_unpriced_hint(summary: PortfolioSummary) -> str | None:
@@ -196,6 +216,25 @@ def render_unpriced_hint(summary: PortfolioSummary) -> str | None:
         f"{len(summary.unpriced_symbols)} 个标的无行情"
         f"（成本合计 {summary.unpriced_cost:,.2f}），未计入上面的汇总；"
         f"请先执行 holdings sync"
+    )
+
+
+def render_foreign_hint(summary: PortfolioSummary) -> str | None:
+    """非基准货币计价的标的提示。没有返回 None。
+
+    措辞要说明的是「没加进去」而不是「加不了」：本工具不做汇率换算，用户要知道
+    上面的总额里少算了什么，才不会把总和当成全部身家。
+    """
+    if not summary.foreign_holdings:
+        return None
+    # 先按币种代码排序再换成显示名：按显示名排的结果依赖中文的码位，看着像顺序，
+    # 其实是巧合。
+    codes = sorted(set(summary.foreign_holdings.values()))
+    currencies = "、".join(currency_label(code) for code in codes)
+    return (
+        f"{len(summary.foreign_holdings)} 个标的以{currencies}计价"
+        f"（成本合计 {summary.foreign_cost:,.2f}），未计入上面的汇总；"
+        f"本工具按人民币口径汇总，不做汇率换算"
     )
 
 

@@ -10,6 +10,12 @@ from holdings.models.enums import MarketType
 from holdings.portfolio import allocator, calculator
 from holdings.storage import asset_meta_dao, price_cache_dao, transaction_dao
 
+#: 基准货币。汇总只按人民币相加——持有美股 + A 股时把美元和人民币当成同一种
+#: 货币加起来，得到的数看着完全正常，却是错的。汇率换算留到 v2.0.0，本轮做的
+#: 是「不混加、如实说明」：非基准货币的标的不进汇总，由提示行报出来。
+#: 与 `AssetMeta.currency` / `price_cache.currency` 的默认值一致。
+BASE_CURRENCY = "CNY"
+
 #: 持仓表的列与显示名，顺序即显示顺序。
 #:
 #: 放在这里而不是某个界面里：它是「服务产出什么」与「界面怎么显示」之间的契约。
@@ -35,13 +41,18 @@ HOLDINGS_COLUMNS = {
 class PortfolioSummary:
     """持仓汇总结果，纯数据，供 CLI / GUI 渲染。
 
-    **汇总的口径是「有行情的标的」。** 没有行情的标的市值算不出来，让它以 0
-    参与汇总，就是 `list` 里那个「血亏 100%」的来源。没被计入的部分用
-    `unpriced_symbols` / `unpriced_cost` 如实报出来，由渲染层提示用户去 sync。
+    **汇总的口径是「能按基准货币计价的标的」**，即同时满足两个条件：有行情，
+    且行情是按 `BASE_CURRENCY` 报的。剩下的两类都进不了汇总——没有行情的标的
+    市值算不出来，让它以 0 参与汇总就是 `list` 里那个「血亏 100%」的来源；
+    外币计价的标的市值是真的，但它和人民币的成本加不到一起。两类各自由
+    `unpriced_symbols` / `foreign_holdings` 如实报出来，渲染层据此提示用户。
+
+    `total_value` / `total_cost` 在**一个标的都计不进来**时是 `None`，不是 0：
+    「总市值 0」看着像空仓，而事实是持有着、只是没法按人民币说清楚。
     """
 
-    total_value: float
-    total_cost: float
+    total_value: float | None
+    total_cost: float | None
     total_profit: float | None
     profit_rate: float | None
     total_fees: float
@@ -52,6 +63,11 @@ class PortfolioSummary:
     unpriced_symbols: list[str] = field(default_factory=list)
     #: 这些标的的成本合计，供提示行说明「没算进去的是多少」。
     unpriced_cost: float = 0.0
+    #: 非基准货币计价的标的：代码 → 币种。它们的市值与人民币不可比，
+    #: 因此不进汇总，行内也不显示市值与盈亏。
+    foreign_holdings: dict[str, str] = field(default_factory=dict)
+    #: 这些标的的成本合计（按用户录入时的货币计，未换算）。
+    foreign_cost: float = 0.0
 
 
 def get_summary(db_path: str, group: str | None = None) -> PortfolioSummary:
@@ -62,7 +78,9 @@ def get_summary(db_path: str, group: str | None = None) -> PortfolioSummary:
     # 资产类型映射（用于配置占比）
     asset_types = {t.symbol: t.asset_type.value for t in transactions}
 
-    # 含费用汇总（成本是账本事实，与有没有行情无关）
+    # 含费用汇总（成本是账本事实，与有没有行情无关）。这一项**不按币种拆分**：
+    # 交易流水里没有币种字段，无从判断一笔费用记的是哪种货币，拿行情缓存的币种
+    # 去反推账本的口径只是另一层猜测。
     total_fees = calculator.summarize(positions)["total_fees"]
 
     # 标的名称。一次取全表而不是逐条 get（N+1），取不到就回落到代码——
@@ -72,15 +90,21 @@ def get_summary(db_path: str, group: str | None = None) -> PortfolioSummary:
     holdings_rows = []
     market_values: dict[str, float] = {}
     unpriced_symbols: list[str] = []
+    foreign_holdings: dict[str, str] = {}
     priced_cost = 0.0
     unpriced_cost = 0.0
+    foreign_cost = 0.0
     for symbol, pos in positions.items():
         if pos.quantity <= 0:
             continue
         cached = price_cache_dao.get(db_path, symbol)
-        # 没有缓存价就是「不知道」，不是 0——见 calculator.Holding 的说明。
-        current_price = cached.price if cached else None
-        h = calculator.holding_for(pos, current_price)
+        currency = cached.currency if cached else None
+        # 进得了汇总的前提是有行情、且行情按基准货币报。汇率换算留到 v2.0.0，
+        # 这里只保证不给一个把两种货币加起来的数。
+        countable = cached is not None and currency == BASE_CURRENCY
+        # 传给 holding_for 的是「算不算得出来」：算不出来时它给 None（而不是 0），
+        # 市值 / 盈亏 / 盈亏率一并变成「不知道」，渲染层显示 `—`。
+        h = calculator.holding_for(pos, cached.price if countable else None)
         holdings_rows.append(
             {
                 "symbol": h.symbol,
@@ -89,32 +113,44 @@ def get_summary(db_path: str, group: str | None = None) -> PortfolioSummary:
                 "asset_type": asset_types.get(symbol, "stock"),
                 "quantity": h.quantity,
                 "avg_cost": round(h.avg_cost, 4),
-                "current_price": h.current_price,
+                # 现价与币种照实带上：价格取到了就是取到了，有没有进汇总
+                # 是另一回事。外币的现价由渲染层标注币种，否则同一列里
+                # 混着两种货币而不说明，等于没排除混加。
+                "current_price": cached.price if cached else None,
+                "currency": currency,
                 "market_value": h.market_value,
                 "total_fees": round(h.total_fees, 4),
                 "profit": h.profit,
                 "profit_rate": h.profit_rate,
             }
         )
-        if current_price is None:
+        if cached is None:
             unpriced_symbols.append(symbol)
             unpriced_cost += pos.total_cost
+        elif not countable:
+            foreign_holdings[symbol] = currency
+            foreign_cost += pos.total_cost
         else:
             priced_cost += pos.total_cost
             market_values[symbol] = h.market_value
 
     holdings_df = pd.DataFrame(holdings_rows)
-    total_value = sum(market_values.values())
 
-    if unpriced_symbols and not market_values:
-        # 一个标的有行情都没有：盈亏不是 0，是未知。印 0.00 只会是第二个
+    excluded = bool(unpriced_symbols or foreign_holdings)
+    if excluded and not market_values:
+        # 一个标的都计不进来：总额不是 0，是未知。印 0.00 只会是第二个
         # 「看着像结论」的假数字。
+        total_value: float | None = None
+        total_cost: float | None = None
         total_profit: float | None = None
         profit_rate: float | None = None
     else:
-        # pandas 的 sum 跳过 NaN，正好等于「有行情那些标的的盈亏合计」。
+        total_value = sum(market_values.values())
+        total_cost = priced_cost
+        # pandas 的 sum 跳过 NaN，正好等于「计得进来的那些标的的盈亏合计」：
+        # 没行情与外币计价的标的在 df 里就是 NaN。
         total_profit = float(holdings_df["profit"].sum()) if not holdings_df.empty else 0.0
-        # 分母只算有行情的成本：分子里的盈亏同样只含有行情的标的，
+        # 分母只算计得进来的成本：分子里的盈亏同样只含有行情的标的，
         # 两边口径不一致会算出一个既不是「全体」也不是「部分」的数。
         profit_rate = (total_profit / priced_cost * 100) if priced_cost else 0.0
 
@@ -122,7 +158,7 @@ def get_summary(db_path: str, group: str | None = None) -> PortfolioSummary:
 
     return PortfolioSummary(
         total_value=total_value,
-        total_cost=priced_cost,
+        total_cost=total_cost,
         total_profit=total_profit,
         profit_rate=profit_rate,
         total_fees=total_fees,
@@ -131,6 +167,8 @@ def get_summary(db_path: str, group: str | None = None) -> PortfolioSummary:
         fee_breakdown=calculator.fee_breakdown(transactions),
         unpriced_symbols=unpriced_symbols,
         unpriced_cost=unpriced_cost,
+        foreign_holdings=foreign_holdings,
+        foreign_cost=foreign_cost,
     )
 
 
