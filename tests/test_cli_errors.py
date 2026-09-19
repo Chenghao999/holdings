@@ -10,10 +10,13 @@
 
 from __future__ import annotations
 
+import importlib
 import sys
+from importlib import metadata
 
 import pytest
 
+import holdings
 from holdings.cli.main import exit_code_for, main
 from holdings.exceptions import (
     ConfigError,
@@ -182,6 +185,39 @@ def test_help_and_version_still_exit_0(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     assert run_main(monkeypatch, "--help") == 0
     assert run_main(monkeypatch, "--version") == 0
+
+
+def test_version_is_the_packaged_one(tmp_path, monkeypatch, capsys):
+    """`--version` 与 `holdings.__version__` 说的必须是同一个版本号。
+
+    版本号此前在 `pyproject.toml` 与 `holdings/__init__.py` 各手写一份，发布时
+    要记得改两处——漏一处不会有任何东西会响。现改为单一来源（打包元数据），
+    这条用例锁住它：谁再写回一个字面值，两边就对不上。
+    """
+    monkeypatch.chdir(tmp_path)
+
+    assert run_main(monkeypatch, "--version") == 0
+    packaged = metadata.version("holdings")
+    assert packaged in capsys.readouterr().out
+    assert holdings.__version__ == packaged
+
+
+def test_the_version_falls_back_when_the_package_is_not_installed(monkeypatch):
+    """查不到元数据时 `import holdings` 本身不能失败。
+
+    源码树里直接 import 就是这种情形（`pytest` 的 `pythonpath = ["src"]`），
+    而 import 抛异常会让每条命令都退化成裸 traceback——正是 B-08 修掉的那类问题。
+    """
+
+    def _missing(name: str) -> str:
+        raise metadata.PackageNotFoundError(name)
+
+    monkeypatch.setattr(metadata, "version", _missing)
+    try:
+        assert importlib.reload(holdings).__version__ == "0.0.0+unknown"
+    finally:
+        monkeypatch.undo()
+        importlib.reload(holdings)
 
 
 def test_remove_of_a_missing_record_exits_2_with_the_prefix(tmp_path, monkeypatch, capsys):

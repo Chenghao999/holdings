@@ -1,43 +1,12 @@
 # 变更日志（CHANGELOG）
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/) 格式，并使用 [Semantic Versioning](https://semver.org/) 进行版本管理。
+已经发生的改动记在这里；后续计划见 [ROADMAP](docs/ROADMAP.md) 与[待办清单](docs/BACKLOG.md)。
 
-## [Unreleased]
-
-### Fixed
-- **多币种标的被当成同一种货币相加**（[BACKLOG B-19](docs/BACKLOG.md)）：汇总此前
-  完全不看 `price_cache.currency`，持有 AAPL（美元报价）与 600519（人民币报价）时，
-  总市值是把美元和人民币加出来的数——而它看起来完全正常。现改为**只按人民币口径
-  汇总**：非基准货币的标的不进总额（市值 / 成本 / 盈亏三项都不加），由提示行报出
-  数量、币种与成本合计；行内账本事实（数量 / 成本价 / 累计费用）照常显示，行情推出来
-  的三个数显示 `—`，现价照常显示但带上币种（`200.0000 USD`）。**汇率换算仍不做**
-  （v2.0.0），本轮只是不再给一个口径不成立的数。
-  - **持有国际金价（`GC=F`）的用户会看到总额变化**：它按美元/盎司报价，
-    此前被当成人民币加进了总市值，现在与其它外币标的同等处理。国内黄金 ETF
-    （如 `518880`）走 A 股链路、报价本就是人民币，不受影响。
-  - 顺带统一了「算不出来」的口径：`PortfolioSummary.total_value` / `total_cost`
-    在**一个标的都计不进来**时改为 `None`（此前是 `0.0`，由渲染层另外判断一次才
-    显示成 `—`）。两处口径迟早会对不上，现在三个数与 `total_profit` 一致。
-  - `total_fees` 仍是账本事实，不按币种拆分——交易流水里没有币种字段，
-    拿行情缓存的币种去反推账本口径只是另一层猜测。
-  - 基准货币 `BASE_CURRENCY = "CNY"` 写在服务层，**不是配置项**：
-    汇率才是 v2.0.0 的事，一个只有唯一取值的配置项就是下一个死配置（B-05 那批）。
-
-### Removed
-- **删掉 `web` / `gui` 两组零引用的可选依赖**（[BACKLOG B-16](docs/BACKLOG.md)）：
-  `streamlit` / `fastapi` / `PySide6` 在 `src/` 里零引用，而
-  `pip install 'holdings[gui]'` 会装好 200MB 的 PySide6，然后没有界面可用。
-  装了却用不上的依赖比没有更费解——与 B-12 同类，只是发生在配置里而非代码里。
-  等 Web / 桌面端真有代码时再加回来（形态决策见 B-22）。
-- **`holdings init --dev` 已移除**（[BACKLOG B-17](docs/BACKLOG.md)）：该参数的全部
-  实现是一句「开发模式已启用（暂不创建额外数据）」，不产生任何可观察的差异。
-  `init` 本就按 `config.yaml` 的 `database_path` 建库，没有开发库 / 生产库之分，
-  补语义是硬造，故删除。与 B-04 的 `chart --start` 同类：参数存在但无效比没有更糟，
-  用户会以为开发环境被配置好了。
-  **BREAKING CHANGE**：`holdings init --dev` 现在以退出码 5 拒绝
-  （`错误（5）：No such option '--dev'`）。该参数此前无任何效果。
+## [1.0.0] - 2026-09-19
 
 ### Added
+
 - **`report` 新增绩效行**（[BACKLOG B-02](docs/BACKLOG.md)）：从 `snapshots` 表算最大回撤、
   年化收益与夏普，接进 `holdings report` 的输出。新增 `services/report_service.py`
   负责口径判定，`portfolio/metrics.py` 的 `periods_per_year` / `return_series` 负责折算。
@@ -50,7 +19,6 @@
   - 年化收益用首末快照的**真实天数**折算，并设 30 天最小跨度：
     相隔一天的两次快照能外推出天文数字的年化收益，那是数学上成立、决策上无用的数。
 
-### Added
 - **`holdings snapshots`：列出已记录的快照**（[BACKLOG B-03](docs/BACKLOG.md)）。
   与 `holdings snapshot`（单数）成对：那个写，这个看。没有它之前，`--note`
   写进去也读不出来——数据落库了却没人看得见，与丢数据只差一步。
@@ -67,7 +35,6 @@
     的行情——数字差三个数量级且看不出来。代码已经说明了用户要哪一个，不需要
     配置再替他决定。`DEFAULT_CONFIG` 相应移除 `黄金:` 一项（老配置里留着的会被忽略）。
 
-### Added
 - **`holdings meta`：标的名称与年化管理费率的录入**（[BACKLOG B-01](docs/BACKLOG.md)）。
   `SCHEMA.md` 定义并详解了 `asset_meta` 表（含 `annual_management_fee`），正文写着
   「完整支持基金托管费」，但建表语句之外**全项目零引用**——「基金托管费」只能靠
@@ -87,6 +54,34 @@
   现在由 AST 扫描逐条守住：六个非表现层零 `print` / `echo`、不 import
   `rich` / `click`、依赖方向符合架构图、`services` 不反向依赖 `cli`，
   以及「只 import 核心层不会把 click / rich 拖进来」（子进程里验 `sys.modules`）。
+
+- **`holdings tui`：Textual 终端界面**（[BACKLOG B-15](docs/BACKLOG.md)）。
+  持仓 + 报表两屏，`q` 退出、`r` 刷新。数据全部来自 `services/`——界面里没有
+  一行 SQL、一个网络请求，因为核心层「不许输出、不许依赖终端库、依赖方向合规」
+  已经有 `tests/test_layering.py` 守着。Textual 是可选依赖（`holdings[tui]`），
+  缺了抛 `MissingDependencyError`（退出码 6）并给出安装命令。
+  顺带把 `HOLDINGS_COLUMNS` 从渲染层搬到服务层：表头是两个界面共用的契约。
+- **数据层各数据源的解析分支补测**（[BACKLOG B-10](docs/BACKLOG.md)）：
+  用 `monkeypatch.setitem(sys.modules, …)` 伪造 `akshare` / `yfinance`，
+  覆盖三个 fetcher 的解析、代码不存在、缺依赖三条路径，以及 A 股代码的
+  `.SS` / `.SZ` 后缀推导。顺带修掉一条真的睡满 1 秒的用例（退避没打桩）。
+- **`deps.py` 的测试**（[BACKLOG B-09](docs/BACKLOG.md)）：`check` 命令直接依赖的
+  三个纯函数此前零覆盖。顺带删掉 `check_dependencies` 里那个模块级别名
+  `_is_installed`——它在导入时就绑定原函数，让 `monkeypatch.setattr(deps,
+  "is_installed", …)` 静默失效。
+
+- `holdings/exceptions.py`：统一的异常基类与退出码契约。
+- `MissingDependencyError`：可选依赖缺失（如画图缺 plotly），退出码 1，
+  与「数据源不可用」区分开——重试没有意义，必须给出安装命令。
+- `services/trade_service.py`：交易写入闸门（`add_transaction` / `add_transactions`）。
+- `storage/transaction_dao.add_many()`：单事务批量写入，支持整批回滚。
+- `chart` 可选依赖组（见「Changed」）。
+- 测试从 56 个增至 112 个，新增 `test_validation.py`、`test_trade_service.py`、
+  `test_import_cmd.py`、`test_config.py`、`test_list_cmd.py`、`test_cli_errors.py`；
+  此前零覆盖的 `utils/` 与 `cli/` 错误路径开始有测试，退出码契约与排序契约被逐条锁住。
+- 随着 B-02 接线，测试增至 **159 个**，新增 `test_metrics.py`（31 个用例，覆盖空序列 /
+  单点 / 全涨 / 全跌 / 已知回撤 / 采样口径）与 `test_report_cmd.py`；
+  全项目行覆盖率 **67% → 76%**，`metrics.py` **0% → 100%**。
 
 ### Changed
 
@@ -110,31 +105,6 @@
 - 映射表从 `main()` 的函数体提到模块级——它本身就是契约，测试现在直接断言它，
   而不是断言「返回值落在 1~5 之间」这种什么也锁不住的写法。
 
-### Fixed
-- **`config.yaml` 的字段取值没有校验**（[BACKLOG B-14](docs/BACKLOG.md)）：
-  `cache_ttl_seconds: abc` 这类取值不合法此前会一路走到某条命令里才炸成
-  `ValueError: invalid literal for int()`——退化成裸 traceback、退出码 1，
-  绕过了「配置错误 = 3」的契约。现在 `load_config()` 当场校验并说清是哪个字段。
-  同时去掉 `Config` 上那两个取值兜底属性：校验接上后它们是不可达代码，
-  而且会掩盖「配置被静默忽略」这件事。
-
-### Added
-- **`holdings tui`：Textual 终端界面**（[BACKLOG B-15](docs/BACKLOG.md)）。
-  持仓 + 报表两屏，`q` 退出、`r` 刷新。数据全部来自 `services/`——界面里没有
-  一行 SQL、一个网络请求，因为核心层「不许输出、不许依赖终端库、依赖方向合规」
-  已经有 `tests/test_layering.py` 守着。Textual 是可选依赖（`holdings[tui]`），
-  缺了抛 `MissingDependencyError`（退出码 6）并给出安装命令。
-  顺带把 `HOLDINGS_COLUMNS` 从渲染层搬到服务层：表头是两个界面共用的契约。
-- **数据层各数据源的解析分支补测**（[BACKLOG B-10](docs/BACKLOG.md)）：
-  用 `monkeypatch.setitem(sys.modules, …)` 伪造 `akshare` / `yfinance`，
-  覆盖三个 fetcher 的解析、代码不存在、缺依赖三条路径，以及 A 股代码的
-  `.SS` / `.SZ` 后缀推导。顺带修掉一条真的睡满 1 秒的用例（退避没打桩）。
-- **`deps.py` 的测试**（[BACKLOG B-09](docs/BACKLOG.md)）：`check` 命令直接依赖的
-  三个纯函数此前零覆盖。顺带删掉 `check_dependencies` 里那个模块级别名
-  `_is_installed`——它在导入时就绑定原函数，让 `monkeypatch.setattr(deps,
-  "is_installed", …)` 静默失效。
-
-### Changed
 - **清掉零引用的死代码**（[BACKLOG B-12](docs/BACKLOG.md)）：`utils/formatter.py`
   接到渲染层（渲染层各写各的格式化与空值判断，现在只有一处定义）；
   删除占位的 `utils/currency.py` 与 `chart_service.networth_json()`；
@@ -145,7 +115,56 @@
   「2 处违反」改为「✅，仅存一处有理由的豁免」，`tests/test_layering.py` 的
   允许清单同步缩到只剩 `init`。
 
+- 新增 `chart` 可选依赖组（`plotly`）。此前 plotly 只挂在 `gui` extra 里，
+  只装 `holdings[data]` 的用户跑 `holdings chart` 会缺依赖，安装提示还要求连
+  PySide6 一起装——画一张净值曲线不该需要 GUI 框架。
+- 从 `dev` extra 移除 `responses`：全项目零引用（见 [TESTING_STRATEGY](docs/TESTING_STRATEGY.md)）。
+- **版本号改为单一来源**：`pyproject.toml` 的 `version` 是唯一的那个数，
+  `holdings.__version__` 从打包元数据读出（`importlib.metadata`），不再手写一份——
+  发布时两处改一处漏一处，此前不会有任何东西会响。查不到元数据时（源码树里直接
+  import）回落为 `0.0.0+unknown`，不让 `import holdings` 本身失败。
+
+### Removed
+
+- **删掉 `web` / `gui` 两组零引用的可选依赖**（[BACKLOG B-16](docs/BACKLOG.md)）：
+  `streamlit` / `fastapi` / `PySide6` 在 `src/` 里零引用，而
+  `pip install 'holdings[gui]'` 会装好 200MB 的 PySide6，然后没有界面可用。
+  装了却用不上的依赖比没有更费解——与 B-12 同类，只是发生在配置里而非代码里。
+  等 Web / 桌面端真有代码时再加回来（形态决策见 B-22）。
+- **`holdings init --dev` 已移除**（[BACKLOG B-17](docs/BACKLOG.md)）：该参数的全部
+  实现是一句「开发模式已启用（暂不创建额外数据）」，不产生任何可观察的差异。
+  `init` 本就按 `config.yaml` 的 `database_path` 建库，没有开发库 / 生产库之分，
+  补语义是硬造，故删除。与 B-04 的 `chart --start` 同类：参数存在但无效比没有更糟，
+  用户会以为开发环境被配置好了。
+  **BREAKING CHANGE**：`holdings init --dev` 现在以退出码 5 拒绝
+  （`错误（5）：No such option '--dev'`）。该参数此前无任何效果。
+
 ### Fixed
+
+- **多币种标的被当成同一种货币相加**（[BACKLOG B-19](docs/BACKLOG.md)）：汇总此前
+  完全不看 `price_cache.currency`，持有 AAPL（美元报价）与 600519（人民币报价）时，
+  总市值是把美元和人民币加出来的数——而它看起来完全正常。现改为**只按人民币口径
+  汇总**：非基准货币的标的不进总额（市值 / 成本 / 盈亏三项都不加），由提示行报出
+  数量、币种与成本合计；行内账本事实（数量 / 成本价 / 累计费用）照常显示，行情推出来
+  的三个数显示 `—`，现价照常显示但带上币种（`200.0000 USD`）。**汇率换算仍不做**
+  （v2.0.0），本轮只是不再给一个口径不成立的数。
+  - **持有国际金价（`GC=F`）的用户会看到总额变化**：它按美元/盎司报价，
+    此前被当成人民币加进了总市值，现在与其它外币标的同等处理。国内黄金 ETF
+    （如 `518880`）走 A 股链路、报价本就是人民币，不受影响。
+  - 顺带统一了「算不出来」的口径：`PortfolioSummary.total_value` / `total_cost`
+    在**一个标的都计不进来**时改为 `None`（此前是 `0.0`，由渲染层另外判断一次才
+    显示成 `—`）。两处口径迟早会对不上，现在三个数与 `total_profit` 一致。
+  - `total_fees` 仍是账本事实，不按币种拆分——交易流水里没有币种字段，
+    拿行情缓存的币种去反推账本口径只是另一层猜测。
+  - 基准货币 `BASE_CURRENCY = "CNY"` 写在服务层，**不是配置项**：
+    汇率才是 v2.0.0 的事，一个只有唯一取值的配置项就是下一个死配置（B-05 那批）。
+
+- **`config.yaml` 的字段取值没有校验**（[BACKLOG B-14](docs/BACKLOG.md)）：
+  `cache_ttl_seconds: abc` 这类取值不合法此前会一路走到某条命令里才炸成
+  `ValueError: invalid literal for int()`——退化成裸 traceback、退出码 1，
+  绕过了「配置错误 = 3」的契约。现在 `load_config()` 当场校验并说清是哪个字段。
+  同时去掉 `Config` 上那两个取值兜底属性：校验接上后它们是不可达代码，
+  而且会掩盖「配置被静默忽略」这件事。
 
 **`chart --start` 是个空参数**
 - `--start` 的 help 自己就写着「暂存参数」，`networth_figure()` 也没有对应形参——
@@ -256,13 +275,8 @@
   「未安装 plotly」。现改为 `MissingDependencyError`（退出码 1），并给出可执行的
   `pip install 'holdings[chart]'`。
 
-### Changed
-- 新增 `chart` 可选依赖组（`plotly`）。此前 plotly 只挂在 `gui` extra 里，
-  只装 `holdings[data]` 的用户跑 `holdings chart` 会缺依赖，安装提示还要求连
-  PySide6 一起装——画一张净值曲线不该需要 GUI 框架。
-- 从 `dev` extra 移除 `responses`：全项目零引用（见 [TESTING_STRATEGY](docs/TESTING_STRATEGY.md)）。
-
 ### Docs
+
 - 全量核对文档与代码，修掉一批「文档承诺、代码没有」的陈述：
   - 「三级降级 + 超时重试」名不副实：只有 A 股有 akshare→yfinance 的降级与 1 次重试，
     美股是 yfinance 单一数据源，且**全项目没有任何网络超时设置**。
@@ -291,25 +305,6 @@
   （如 `annual_management_fee` 不得改为自动计提、`sharpe_ratio` 的 `sqrt(252)`
   与不规律快照间隔冲突）。`ROADMAP.md` 的 v1.0.0 勾选项改为指向该文件的条目编号，
   不再重复维护一份会走样的平行清单。
-
-### Added
-- `holdings/exceptions.py`：统一的异常基类与退出码契约。
-- `MissingDependencyError`：可选依赖缺失（如画图缺 plotly），退出码 1，
-  与「数据源不可用」区分开——重试没有意义，必须给出安装命令。
-- `services/trade_service.py`：交易写入闸门（`add_transaction` / `add_transactions`）。
-- `storage/transaction_dao.add_many()`：单事务批量写入，支持整批回滚。
-- `chart` 可选依赖组（见「Changed」）。
-- 测试从 56 个增至 112 个，新增 `test_validation.py`、`test_trade_service.py`、
-  `test_import_cmd.py`、`test_config.py`、`test_list_cmd.py`、`test_cli_errors.py`；
-  此前零覆盖的 `utils/` 与 `cli/` 错误路径开始有测试，退出码契约与排序契约被逐条锁住。
-- 随着 B-02 接线，测试增至 **159 个**，新增 `test_metrics.py`（31 个用例，覆盖空序列 /
-  单点 / 全涨 / 全跌 / 已知回撤 / 采样口径）与 `test_report_cmd.py`；
-  全项目行覆盖率 **67% → 76%**，`metrics.py` **0% → 100%**。
-
-### Planned
-- 逐项清掉 [`docs/BACKLOG.md`](docs/BACKLOG.md) 的 B-01~B-12。
-- **v1.0.0（2027 Q2）**：补齐单元测试覆盖率，稳定 CLI 交互与错误码；录制演示 GIF。
-- **v2.0.0（2027 Q4）**：基于 Textual 的 TUI 仪表盘预览版。
 
 ## [0.1.0] - 2026-09-15
 
