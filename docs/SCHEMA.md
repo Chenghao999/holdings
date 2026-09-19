@@ -143,6 +143,11 @@ CREATE INDEX idx_cache_time ON price_cache(update_time);
 - 同一 `symbol` 在 `price_cache` 中若 `update_time` 距今 **不足 5 分钟**，直接返回缓存，不发起网络请求。
 - 缓存时间可通过配置项 `cache_ttl_seconds` 调整（见 [CONFIG_SPEC.md](CONFIG_SPEC.md)）。
 - `source` 字段记录数据来源，便于排查降级链路。
+- **`currency` 决定这个标的进不进汇总**：非 `CNY` 的标的不与人民币相加，
+  汇总里排除、行内由行情推出来的数字显示 `—`，现价带上币种。基准货币是
+  `services/portfolio_service.BASE_CURRENCY`（[B-19](BACKLOG.md#b-19)）。
+  注意 `asset_meta.currency` **不参与**这个判断——它是用户对标的的备注，
+  而这里是行情本身带来的事实（`US_STOCK` 的报价就是美元）。
 
 ## 索引策略
 
