@@ -121,6 +121,40 @@ def test_unpriced_symbols_are_flagged(db_path):
 
 
 @requires_textual
+def test_foreign_symbols_are_flagged(db_path):
+    """美元标的也要说清「没算进去」——与 CLI 同口径（B-19）。"""
+    from textual.widgets import Static
+
+    from holdings.tui.app import HoldingsApp
+
+    _seed(db_path)
+    add_many(
+        db_path,
+        [
+            Transaction(
+                symbol="AAPL",
+                market=MarketType.US_STOCK,
+                asset_type=AssetType.STOCK,
+                trade_date=date(2025, 1, 1),
+                trade_type=TradeType.BUY,
+                quantity=10.0,
+                price=100.0,
+            )
+        ],
+    )
+    price_cache_dao.upsert(db_path, "AAPL", 200.0, "USD", "test")
+
+    async def _run() -> None:
+        app = HoldingsApp(db_path)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            summary = str(app.query_one("#summary", Static).render())
+            assert "1 个标的以美元计价" in summary
+
+    asyncio.run(_run())
+
+
+@requires_textual
 def test_the_report_tab_shows_the_performance(db_path):
     from textual.widgets import Static
 

@@ -15,10 +15,11 @@ from textual.app import App, ComposeResult
 from textual.containers import VerticalScroll
 from textual.widgets import DataTable, Footer, Header, Static, TabbedContent, TabPane
 
-from holdings.services.portfolio_service import HOLDINGS_COLUMNS, get_summary
+from holdings.services.portfolio_service import BASE_CURRENCY, HOLDINGS_COLUMNS, get_summary
 from holdings.services.report_service import get_performance
 from holdings.utils.formatter import (
     UNKNOWN,
+    currency_label,
     format_money,
     format_number,
     format_percent,
@@ -75,7 +76,15 @@ def _cell(column: str, row) -> str:
     value = row.get(column)
     if column in {"quantity"}:
         return format_quantity(value)
-    if column in {"avg_cost", "current_price"}:
+    if column == "current_price":
+        # 外币的现价带上币种，与 CLI 的表格一致（`_price_cell`）；每行都挂一个
+        # `CNY` 只会把这一列撑宽，所以只在非人民币时才标。
+        currency = row.get("currency")
+        price = format_price(value)
+        if not isinstance(currency, str) or currency == BASE_CURRENCY:
+            return price
+        return f"{price} {currency}"
+    if column == "avg_cost":
         return format_price(value)
     if column in {"market_value", "total_fees", "profit"}:
         return format_money(value)
@@ -85,17 +94,15 @@ def _cell(column: str, row) -> str:
 
 
 def _summary_text(summary) -> str:
-    """汇总行。口径与 CLI 一致：只覆盖有行情的标的。"""
-    priced = summary.total_profit is not None
-    value = format_money(summary.total_value) if priced else UNKNOWN
-    cost = format_money(summary.total_cost) if priced else UNKNOWN
+    """汇总行。口径与 CLI 一致：只覆盖能按人民币计价的标的。"""
     profit = (
         UNKNOWN
-        if not priced
+        if summary.total_profit is None
         else f"{format_money(summary.total_profit)} ({format_percent(summary.profit_rate)})"
     )
     lines = [
-        f"总市值 {value} | 总成本 {cost} | 总盈亏 {profit} | "
+        f"总市值 {format_money(summary.total_value)} | "
+        f"总成本 {format_money(summary.total_cost)} | 总盈亏 {profit} | "
         f"累计费用 {format_money(summary.total_fees)}"
     ]
     if summary.unpriced_symbols:
@@ -103,6 +110,14 @@ def _summary_text(summary) -> str:
             f"[yellow]{len(summary.unpriced_symbols)} 个标的无行情"
             f"（成本合计 {format_money(summary.unpriced_cost)}），未计入上面的汇总；"
             f"请先执行 holdings sync[/yellow]"
+        )
+    if summary.foreign_holdings:
+        codes = sorted(set(summary.foreign_holdings.values()))
+        currencies = "、".join(currency_label(code) for code in codes)
+        lines.append(
+            f"[yellow]{len(summary.foreign_holdings)} 个标的以{currencies}计价"
+            f"（成本合计 {format_money(summary.foreign_cost)}），未计入上面的汇总；"
+            f"本工具按人民币口径汇总，不做汇率换算[/yellow]"
         )
     return "\n".join(lines)
 

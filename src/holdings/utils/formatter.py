@@ -54,6 +54,16 @@ def format_ratio(value) -> str:
     return UNKNOWN if is_missing(value) else f"{value * 100:.2f}%"
 
 
+#: 币种代码 → 显示名。只管「怎么称呼」：汇率换算是 v2.0.0 的事，
+#: 这张表回答不了、也不该假装能回答「一美元值多少人民币」。
+CURRENCY_LABELS = {"CNY": "人民币", "USD": "美元", "HKD": "港币"}
+
+
+def currency_label(code: str) -> str:
+    """币种的显示名。表里没有的原样返回代码——编一个名字比显示 `SGD` 更糟。"""
+    return CURRENCY_LABELS.get(code, code)
+
+
 def format_quantity(value) -> str:
     """数量，去掉多余的零：`1000.0` → `1000`，`0.5` → `0.5`。"""
     if is_missing(value):

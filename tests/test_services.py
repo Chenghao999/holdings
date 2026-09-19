@@ -70,11 +70,13 @@ def test_summary_without_cached_price_reports_unknown_not_zero(db_path, make_tx)
     assert pd.isna(row["market_value"])
     assert pd.isna(row["profit"])
     assert pd.isna(row["profit_rate"])
-    # 汇总里一个能定价的标的都没有：不是 0，是未知
-    assert summary.total_value == 0.0
+    # 汇总里一个能定价的标的都没有：不是 0，是未知。B-19 把这个口径统一到了
+    # 三个数上——此前 total_value / total_cost 仍是 0.0，由渲染层另外判断一次
+    # 才显示成 `—`，两处口径迟早会对不上。
+    assert summary.total_value is None
+    assert summary.total_cost is None
     assert summary.total_profit is None
     assert summary.profit_rate is None
-    assert summary.total_cost == 0.0
     # 但「谁没行情、它值多少成本」要如实报出来
     assert summary.unpriced_symbols == ["600519"]
     assert summary.unpriced_cost == pytest.approx(1000.0)
