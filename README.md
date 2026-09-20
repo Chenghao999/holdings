@@ -21,6 +21,18 @@
 
 ---
 
+## 演示
+
+![holdings 演示](docs/demo/holdings.gif)
+
+> 录制脚本是 [`docs/demo/demo.sh`](docs/demo/demo.sh)，样例库由
+> [`docs/demo/setup.sh`](docs/demo/setup.sh) 生成。**其中的行情是预置的样例数字**
+> （等价于「已经 `sync` 过」的状态），不是真实拉取——真实 `sync` 走公网数据源，
+> 以分钟计、会因限流失败，录进演示只能是两分钟的报错刷屏。
+> 复现方式见 [`docs/demo/`](docs/demo/)。
+
+---
+
 ## 快速开始
 
 > 具体安装与使用步骤见 [docs/USER_GUIDE.md](docs/USER_GUIDE.md)。

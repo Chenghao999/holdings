@@ -51,6 +51,9 @@ config.yaml
 # 图表 HTML 导出
 *.html
 
+# 演示录制的原始文件（GIF 由它渲染而来，源码是 docs/demo/demo.sh）
+docs/demo/*.cast
+
 # 操作系统 / 编辑器
 .DS_Store
 Thumbs.db

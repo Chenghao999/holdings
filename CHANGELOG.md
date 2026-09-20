@@ -277,6 +277,12 @@
 
 ### Docs
 
+- **README 新增演示动图**（`docs/demo/holdings.gif`），录制脚本与样例库在
+  [`docs/demo/`](docs/demo/)。用 `asciinema` + `agg` 录制——原计划的 `vhs`
+  依赖 headless Chrome，本机起不来（连它自带的示例 tape 都出不了文件，
+  且失败时退出码为 0、不报错）。演示里的**行情是预置的样例数字**，
+  等价于「已经 `sync` 过」的状态：真实 `sync` 实测耗时两分钟、满屏报错，
+  且黄金 ETF 稳定失败，录不进演示。`docs/demo/setup.sh` 的注释写明了这一点。
 - 全量核对文档与代码，修掉一批「文档承诺、代码没有」的陈述：
   - 「三级降级 + 超时重试」名不副实：只有 A 股有 akshare→yfinance 的降级与 1 次重试，
     美股是 yfinance 单一数据源，且**全项目没有任何网络超时设置**。
