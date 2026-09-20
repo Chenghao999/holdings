@@ -8,10 +8,11 @@
 |------|---------|---------|-----------|
 | v0.1.0 | 2026 Q4 | ✅ 已发布（2026-09-15） | 基础 CRUD + 手动输入价格 |
 | v0.2.0 | 2027 Q1 | ✅ 提前完成 | 集成 akshare 自动同步 + 报表 |
-| v1.0.0 | 2027 Q2 | 🚧 进行中 | 稳定 CLI + 完整测试覆盖 |
-| v2.0.0 | 2027 Q4 | ⏳ 未开始 | Textual GUI 预览版 |
+| v1.0.0 | 2027 Q2 | ✅ 已发布（2026-09-20） | 稳定 CLI + 完整测试覆盖 |
+| v2.0.0 | 2027 Q4 | 🚧 进行中（TUI 与多币种已提前交付） | 界面与多币种 |
 
-> v0.1.0 与 v0.2.0 的全部内容已随 `0.1.0` 一并交付（见 [CHANGELOG](../CHANGELOG.md)）；v1.0.0 的 `snapshot` / `chart` 亦已提前实现，剩余工作是测试覆盖与交互打磨。
+> v0.1.0 与 v0.2.0 的全部内容已随 `0.1.0` 一并交付，v1.0.0 的内容随 `1.0.0` 交付
+> （见 [CHANGELOG](../CHANGELOG.md)）。三个里程碑都早于计划时间完成。
 
 ## 阶段性任务拆解
 
@@ -31,7 +32,7 @@
 - [x] 实现 `portfolio/calculator.py` 加权成本算法（含费用归集）。
 - [x] 实现 `holdings report`：表格 + 配比表 + 费用汇总。
 
-### 2027 Q2 —— v1.0.0（稳定 CLI）🚧
+### 2027 Q2 —— v1.0.0（稳定 CLI）✅
 
 - [x] 实现 `holdings snapshot` 与 `holdings chart` 净值曲线。
 - [x] 补齐单元测试，核心计算模块覆盖率达标（`calculator.py` 99%，目标 ≥ 90%）。
@@ -51,8 +52,10 @@
   - ✅ P3 已完成：`utils` / `data` 层测试缺口（[B-09](BACKLOG.md#b-09)、[B-10](BACKLOG.md#b-10)）、
         铁律 3 的剩余违反（[B-11](BACKLOG.md#b-11)）、零引用死代码（[B-12](BACKLOG.md#b-12)）、
         配置字段校验（[B-14](BACKLOG.md#b-14)）
-- [ ] 用 `terminalizer` / `asciinema` 录制演示，放进 README（[B-18](BACKLOG.md#b-18)）。
-- [ ] 收尾发布：版本号到 `1.0.0`、CHANGELOG 收口、打 tag（[B-18](BACKLOG.md#b-18)）。
+- [x] 录制演示并放进 README（[B-18](BACKLOG.md#b-18)）——工具从 `vhs` 换成
+      `asciinema` + `agg`（vhs 依赖 headless Chrome，本机起不来，详见 BACKLOG）。
+      录制脚本与样例库在 [`docs/demo/`](demo/)。
+- [x] 收尾发布：版本号到 `1.0.0`、CHANGELOG 收口、打 tag `v1.0.0`（[B-18](BACKLOG.md#b-18)）。
 - [x] 清掉发布前扫出的两处「说了没做」：[B-16](BACKLOG.md#b-16)（删两个零引用 extra）、
       [B-17](BACKLOG.md#b-17)（删空壳参数 `init --dev`）。
 - [x] 处理多币种混加（[B-19](BACKLOG.md#b-19)）——汇总改为只按人民币口径相加，
@@ -74,6 +77,8 @@
 
 - [x] v0.1.0 已发布（2026-09-15）。
 - [x] v0.2.0 内容已随 v0.1.0 提前交付。
-- [ ] v1.0.0 进行中：功能已齐，体检发现的 17 项与[B-19](BACKLOG.md#b-19)（多币种混加）
-      均已交付，**剩余收尾发布**（版本号 / CHANGELOG 收口 / 演示录制 / 打 tag，
-      [B-18](BACKLOG.md#b-18)）。
+- [x] v1.0.0 已发布（2026-09-20）：体检发现的 17 项与 [B-19](BACKLOG.md#b-19)（多币种混加）
+      均已交付，收尾发布（版本号 / CHANGELOG 收口 / 演示录制 / 打 tag）见
+      [B-18](BACKLOG.md#b-18)。
+- [ ] v2.0.0 未开始：剩余 [B-20](BACKLOG.md#b-20)（Web）、[B-21](BACKLOG.md#b-21)（多账户）、
+      [B-22](BACKLOG.md#b-22)（桌面端形态待定）、[B-23](BACKLOG.md#b-23)（基准对比 / 分红拆股 / 导出）。
