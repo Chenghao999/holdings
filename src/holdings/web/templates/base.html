@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{% block title %}holdings{% endblock %}</title>
+    <style>
+      :root {
+        --bg: #f5f6f8;
+        --panel: #ffffff;
+        --ink: #1b1f24;
+        --muted: #6b7280;
+        --line: #e2e5ea;
+        --gain: #c0392b;
+        --loss: #1c8a4e;
+        --accent: #2f6feb;
+        --hint-bg: #fff7e6;
+        --hint-line: #e6c98a;
+        --hint-ink: #7a5a12;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #15171b;
+          --panel: #1d2025;
+          --ink: #e7e9ec;
+          --muted: #99a0aa;
+          --line: #2d3138;
+          --gain: #ff7a6b;
+          --loss: #4ec38c;
+          --accent: #6ea8fe;
+          --hint-bg: #2a2413;
+          --hint-line: #5c4c1d;
+          --hint-ink: #e2c477;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font:
+          15px/1.55 -apple-system,
+          "PingFang SC",
+          "Microsoft YaHei",
+          "Segoe UI",
+          sans-serif;
+      }
+      .top {
+        display: flex;
+        align-items: center;
+        gap: 24px;
+        flex-wrap: wrap;
+        padding: 14px 24px;
+        background: var(--panel);
+        border-bottom: 1px solid var(--line);
+      }
+      .brand {
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        color: var(--ink);
+        text-decoration: none;
+      }
+      nav {
+        display: flex;
+        gap: 18px;
+      }
+      nav a {
+        color: var(--muted);
+        text-decoration: none;
+        padding-bottom: 2px;
+      }
+      nav a:hover {
+        color: var(--ink);
+      }
+      nav a.on {
+        color: var(--accent);
+        border-bottom: 2px solid var(--accent);
+      }
+      main {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 24px;
+      }
+      footer {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 8px 24px 32px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      h2 {
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--muted);
+        margin: 28px 0 10px;
+      }
+      .cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+        gap: 12px;
+      }
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 14px 16px;
+      }
+      .card-label {
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .card-value {
+        font-size: 22px;
+        font-variant-numeric: tabular-nums;
+        margin-top: 4px;
+      }
+      .card-sub {
+        font-size: 13px;
+        font-variant-numeric: tabular-nums;
+      }
+      .gain {
+        color: var(--gain);
+      }
+      .loss {
+        color: var(--loss);
+      }
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        overflow-x: auto;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-variant-numeric: tabular-nums;
+      }
+      th,
+      td {
+        padding: 9px 14px;
+        text-align: left;
+        white-space: nowrap;
+        border-bottom: 1px solid var(--line);
+      }
+      th {
+        color: var(--muted);
+        font-weight: 500;
+        font-size: 13px;
+      }
+      tbody tr:last-child td {
+        border-bottom: none;
+      }
+      tbody tr:hover td {
+        background: color-mix(in srgb, var(--accent) 6%, transparent);
+      }
+      th.num,
+      td.num {
+        text-align: right;
+      }
+      .empty {
+        color: var(--muted);
+        padding: 16px;
+        margin: 0;
+      }
+      .meta {
+        color: var(--muted);
+        font-size: 13px;
+        margin: 10px 0 0;
+      }
+      /* 图表的画布固定留白：plotly 的默认版式就是白底黑字，跟着页面切成深色
+         只会让图变成深底上的白底白字。让这张卡片一直白着，比跟着主题走可靠。 */
+      .chart {
+        background: #fff;
+      }
+      .hint {
+        background: var(--hint-bg);
+        border: 1px solid var(--hint-line);
+        color: var(--hint-ink);
+        border-radius: 8px;
+        padding: 10px 14px;
+        margin: 12px 0 0;
+      }
+      .notes {
+        color: var(--muted);
+        font-size: 13px;
+        margin: 10px 0 0;
+        padding-left: 20px;
+      }
+      form {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-bottom: 16px;
+      }
+      input[type="date"] {
+        font: inherit;
+        color: var(--ink);
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 7px 10px;
+      }
+      button {
+        font: inherit;
+        color: #fff;
+        background: var(--accent);
+        border: none;
+        border-radius: 8px;
+        padding: 8px 16px;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <header class="top">
+      <a class="brand" href="/">holdings</a>
+      <nav>
+        <a href="/" class="{{ 'on' if request.url.path == '/' }}">持仓</a>
+        <a href="/report" class="{{ 'on' if request.url.path == '/report' }}">报表</a>
+        <a href="/chart" class="{{ 'on' if request.url.path == '/chart' }}">净值曲线</a>
+      </nav>
+    </header>
+    <main>{% block content %}{% endblock %}</main>
+    <footer>只读看板 · 数据全部来自本地持仓库，页面不做任何写入</footer>
+  </body>
+</html>

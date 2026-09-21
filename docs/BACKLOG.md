@@ -1403,7 +1403,12 @@ total_value = sum(market_values.values())
   `uvicorn` 不进 `dev`：起真服务器的用例只会多出端口冲突这一种偶发失败。
 - **模板是代码不是文档**：`[tool.setuptools.package-data]` 把
   `web/templates/*.html` 打进包里。漏了这条，源码目录里跑永远正常，
-  `pip install` 装出来的包一请求就报「模板不存在」。
+  `pip install` 装出来的包一请求就报「模板不存在」（已用 `pip wheel` 验证）。
+  同一件事的另一半是 **`.gitignore` 的 `*.html`**——那条规则本意是忽略
+  `holdings chart` 的导出，却把模板一并挡在版本库外：本地 380 个用例全绿
+  （文件在磁盘上），CI 上每一次请求都是 `TemplateNotFound`。已改成锚定的
+  `/networth.html`，理由与上面 `/data/` 那条相同，并加了
+  `tests/test_packaging.py` 按**结果**守住——同一个坑这个仓库踩过两次了。
 
 **顺手把「三个界面显示同一张表」从口号变成结构**
 

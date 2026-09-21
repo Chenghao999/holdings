@@ -42,7 +42,7 @@
 | 类型 | 说明 |
 |------|------|
 | 单元测试 | `portfolio/` 计算逻辑，`storage/` DAO 逻辑（临时文件 SQLite） |
-| 结构测试 | `test_layering.py`：用 AST 扫源码，守分层铁律与「UI 可复用」——这类约束用运行时断言测不出来 |
+| 结构测试 | `test_layering.py`：用 AST 扫源码，守分层铁律与「UI 可复用」；`test_packaging.py`：用 `git check-ignore` / `git ls-files` 守「该提交的文件真的提交了」——这两类约束用运行时断言测不出来 |
 | 集成测试 | CLI 命令端到端（`import` → 落库、`add` → 校验、退出码契约） |
 | Mock 测试 | `data/` 数据获取层（伪造 `akshare` / `yfinance` 模块，不触网） |
 | 界面测试 | `test_tui.py` 用 Textual 的 `app.run_test()` headless 跑真实渲染；`test_web.py` 用 FastAPI 的 `TestClient` 直接打请求（不起真服务器——那只多出端口冲突这一种偶发失败）。`textual` / `fastapi` / `jinja2` / `httpx` 都在 `dev` extra 里 |
@@ -77,6 +77,7 @@ tests/
 ├── test_formatter.py      # 数值显示：— 的语义、ratio 与 percent 不可互换
 ├── test_deps.py           # 依赖检测：缺包判定与 check 命令的依据
 ├── test_layering.py       # 分层铁律：核心层零输出、零终端依赖、依赖方向
+├── test_packaging.py      # 源码树与分发包完整性：源码没被 .gitignore 吞掉、模板已入库
 ├── test_tui.py            # TUI：headless 跑真实界面；缺 textual 时的退出码
 └── test_web.py            # Web 看板：三页的取值与提示语；缺依赖时的退出码、默认只绑本机
 ```

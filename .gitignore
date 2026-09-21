@@ -48,8 +48,11 @@ htmlcov/
 /_smoke/data/
 config.yaml
 
-# 图表 HTML 导出
-*.html
+# 图表 HTML 导出（`holdings chart` 的默认产物落在仓库根）
+# 同上面 `/data/` 的道理：写成 `*.html` 会连源码包里的 .html 一起排除——
+# web 层的 Jinja 模板就是 .html，曾因此漏提交整个 templates/，
+# 本地测试全绿（文件在磁盘上）而 CI 一请求就 TemplateNotFound。
+/networth.html
 
 # 演示录制的原始文件（GIF 由它渲染而来，源码是 docs/demo/demo.sh）
 docs/demo/*.cast
