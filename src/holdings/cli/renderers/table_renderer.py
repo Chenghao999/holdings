@@ -9,7 +9,6 @@ from rich.table import Table
 from holdings.services.portfolio_service import BASE_CURRENCY, HOLDINGS_COLUMNS
 from holdings.utils.formatter import (
     UNKNOWN,
-    currency_label,
     format_money,
     format_number,
     format_percent,
@@ -205,36 +204,6 @@ def render_summary_line(summary: PortfolioSummary) -> str:
         f"总市值 {format_money(summary.total_value)} | "
         f"总成本 {format_money(summary.total_cost)} | "
         f"总盈亏 {profit} | 累计费用 {summary.total_fees:,.2f}"
-    )
-
-
-def render_unpriced_hint(summary: PortfolioSummary) -> str | None:
-    """没有行情的标的提示。没有返回 None，调用方据此决定印不印。"""
-    if not summary.unpriced_symbols:
-        return None
-    return (
-        f"{len(summary.unpriced_symbols)} 个标的无行情"
-        f"（成本合计 {summary.unpriced_cost:,.2f}），未计入上面的汇总；"
-        f"请先执行 holdings sync"
-    )
-
-
-def render_foreign_hint(summary: PortfolioSummary) -> str | None:
-    """非基准货币计价的标的提示。没有返回 None。
-
-    措辞要说明的是「没加进去」而不是「加不了」：本工具不做汇率换算，用户要知道
-    上面的总额里少算了什么，才不会把总和当成全部身家。
-    """
-    if not summary.foreign_holdings:
-        return None
-    # 先按币种代码排序再换成显示名：按显示名排的结果依赖中文的码位，看着像顺序，
-    # 其实是巧合。
-    codes = sorted(set(summary.foreign_holdings.values()))
-    currencies = "、".join(currency_label(code) for code in codes)
-    return (
-        f"{len(summary.foreign_holdings)} 个标的以{currencies}计价"
-        f"（成本合计 {summary.foreign_cost:,.2f}），未计入上面的汇总；"
-        f"本工具按人民币口径汇总，不做汇率换算"
     )
 
 

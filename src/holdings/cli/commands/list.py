@@ -32,12 +32,10 @@ def list_cmd(sort_key: str | None, group: str | None) -> None:
     from rich.console import Console
 
     from holdings.cli.renderers.table_renderer import (
-        render_foreign_hint,
         render_holdings_table,
         render_summary_line,
-        render_unpriced_hint,
     )
-    from holdings.services.portfolio_service import get_summary
+    from holdings.services.portfolio_service import foreign_hint, get_summary, unpriced_hint
     from holdings.utils.config import load_config
 
     cfg = load_config()
@@ -56,6 +54,7 @@ def list_cmd(sort_key: str | None, group: str | None) -> None:
     console.print(render_summary_line(summary))
     # 两类没进汇总的标的各说各的：原因不同，用户要做的事也不同
     # （无行情去 sync，外币计价则只能等 v2.0.0 的汇率换算）。
-    for hint in (render_unpriced_hint(summary), render_foreign_hint(summary)):
+    # 句子本身由服务层给（与 Web 看板同一份），这里只负责上色。
+    for hint in (unpriced_hint(summary), foreign_hint(summary)):
         if hint:
             console.print(f"[yellow]{hint}[/yellow]")

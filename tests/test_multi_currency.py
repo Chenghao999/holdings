@@ -19,14 +19,11 @@ import pandas as pd
 import pytest
 from rich.console import Console
 
-from holdings.cli.renderers.table_renderer import (
-    render_foreign_hint,
-    render_holdings_table,
-    render_summary_line,
-)
+from holdings.cli.renderers.table_renderer import render_holdings_table, render_summary_line
 from holdings.models.enums import AssetType, MarketType, TradeType
 from holdings.models.transaction import Transaction
 from holdings.services import portfolio_service
+from holdings.services.portfolio_service import foreign_hint
 from holdings.storage import price_cache_dao
 from holdings.storage.transaction_dao import add_many
 
@@ -102,7 +99,7 @@ def test_all_cny_is_the_baseline(db_path):
     assert summary.total_value == pytest.approx(1200 + 2500)
     assert summary.total_cost == pytest.approx(1000 + 2000)
     assert summary.foreign_holdings == {}
-    assert render_foreign_hint(summary) is None
+    assert foreign_hint(summary) is None
 
 
 def test_a_foreign_holding_stays_out_of_every_total(mixed):
@@ -188,7 +185,7 @@ def test_the_summary_line_shows_dashes_when_nothing_is_countable(db_path):
 
 
 def test_the_hint_names_the_currency_the_count_and_the_cost(mixed):
-    hint = render_foreign_hint(portfolio_service.get_summary(mixed))
+    hint = foreign_hint(portfolio_service.get_summary(mixed))
 
     assert "1 个标的以美元计价" in hint
     assert "1,000.00" in hint
@@ -209,7 +206,7 @@ def test_the_hint_lists_several_currencies(db_path):
     price_cache_dao.upsert(db_path, "00700", 400.0, "HKD", "test")
     price_cache_dao.upsert(db_path, "600519", 12.0, "CNY", "test")
 
-    hint = render_foreign_hint(portfolio_service.get_summary(db_path))
+    hint = foreign_hint(portfolio_service.get_summary(db_path))
 
     assert "2 个标的以港币、美元计价" in hint, "按币种代码排序，不按中文码位"
 
@@ -218,7 +215,7 @@ def test_no_hint_when_nothing_is_foreign(db_path):
     add_many(db_path, [_buy("600519", 100, 10.0)])
     price_cache_dao.upsert(db_path, "600519", 12.0, "CNY", "test")
 
-    assert render_foreign_hint(portfolio_service.get_summary(db_path)) is None
+    assert foreign_hint(portfolio_service.get_summary(db_path)) is None
 
 
 def test_the_foreign_price_carries_its_currency(mixed):

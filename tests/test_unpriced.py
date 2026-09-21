@@ -13,10 +13,11 @@ import pandas as pd
 import pytest
 
 from holdings.cli.main import main
-from holdings.cli.renderers.table_renderer import render_summary_line, render_unpriced_hint
+from holdings.cli.renderers.table_renderer import render_summary_line
 from holdings.models.enums import AssetType, MarketType, TradeType
 from holdings.models.transaction import Transaction
 from holdings.services import portfolio_service
+from holdings.services.portfolio_service import unpriced_hint
 from holdings.storage import price_cache_dao
 from holdings.storage.transaction_dao import add_many
 
@@ -129,7 +130,7 @@ def test_summary_line_shows_dashes_when_nothing_can_be_priced(db_path):
 
 
 def test_hint_names_the_count_and_the_cost(mixed):
-    hint = render_unpriced_hint(portfolio_service.get_summary(mixed))
+    hint = unpriced_hint(portfolio_service.get_summary(mixed))
 
     assert "1 个标的无行情" in hint
     assert "200.00" in hint
@@ -140,7 +141,7 @@ def test_no_hint_when_everything_is_priced(db_path):
     add_many(db_path, [_buy("AAA", 10, 10.0)])
     price_cache_dao.upsert(db_path, "AAA", 12.0, "CNY", "test")
 
-    assert render_unpriced_hint(portfolio_service.get_summary(db_path)) is None
+    assert unpriced_hint(portfolio_service.get_summary(db_path)) is None
 
 
 # ------------------------------------------------------------------ 命令层

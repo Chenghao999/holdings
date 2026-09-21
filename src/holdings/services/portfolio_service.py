@@ -9,6 +9,13 @@ import pandas as pd
 from holdings.models.enums import MarketType
 from holdings.portfolio import allocator, calculator
 from holdings.storage import asset_meta_dao, price_cache_dao, transaction_dao
+from holdings.utils.formatter import (
+    currency_label,
+    format_money,
+    format_percent,
+    format_price,
+    format_quantity,
+)
 
 #: 基准货币。汇总只按人民币相加——持有美股 + A 股时把美元和人民币当成同一种
 #: 货币加起来，得到的数看着完全正常，却是错的。汇率换算留到 v2.0.0，本轮做的
@@ -35,6 +42,46 @@ HOLDINGS_COLUMNS = {
     "profit": "盈亏",
     "profit_rate": "盈亏率",
 }
+
+
+def holdings_cell(column: str, row) -> str:
+    """把持仓表里的一格格式化成显示文本。`row` 是 DataFrame 的一行。
+
+    与 `HOLDINGS_COLUMNS` 放在同一处、理由也相同：列名只是契约的一半，
+    「这一列按金额还是按单价显示」是另一半。TUI 与 Web 各写一份的话，
+    服务层改了列的含义，两边会以不同的速度走样——而它们显示的是同一张表。
+    文字标签放在服务层确实不算常见，但**同一格数字在两个界面里印得不一样**
+    是更实际的故障。
+
+    算不出来的值在 df 里是 `NaN`，各 `format_*` 一律显示成 `—`，
+    这里不再判断一次——口径归 `utils/formatter.py` 一处管。
+    """
+    if column == "quantity":
+        return format_quantity(row.get(column))
+    if column == "avg_cost":
+        return format_price(row.get(column))
+    if column == "current_price":
+        return _price_cell(row)
+    if column in {"market_value", "total_fees", "profit"}:
+        return format_money(row.get(column))
+    if column == "profit_rate":
+        return format_percent(row.get(column))
+    return str(row.get(column, ""))
+
+
+def _price_cell(row) -> str:
+    """现价，外币的带上币种。
+
+    同一列里混着两种货币而不加标注，等于把「不混加」这件事做了一半：
+    用户看到的仍是一个没有单位的数。非基准货币才标——每行都挂一个 `CNY`
+    只会把这一列撑宽，而人民币是本工具的默认口径。
+    """
+    price = format_price(row.get("current_price"))
+    currency = row.get("currency")
+    # `isinstance` 而不是判空：DataFrame 里的缺失值可能是 `None`，也可能是 NaN。
+    if not isinstance(currency, str) or currency == BASE_CURRENCY:
+        return price
+    return f"{price} {currency}"
 
 
 @dataclass
@@ -169,6 +216,43 @@ def get_summary(db_path: str, group: str | None = None) -> PortfolioSummary:
         unpriced_cost=unpriced_cost,
         foreign_holdings=foreign_holdings,
         foreign_cost=foreign_cost,
+    )
+
+
+def unpriced_hint(summary: PortfolioSummary) -> str | None:
+    """没有行情的标的提示。没有返回 None，调用方据此决定印不印。
+
+    这两条提示（还有 `foreign_hint`）放在服务层，而不是某个界面里：它们是
+    **口径的一部分**——「上面的总额里少算了什么」必须和那个总额一起读。
+    三个界面各写一遍的话，改口径时最容易漏掉其中一句，用户就会把一个自己
+    不知道是部分的数当成全部。界面只负责给它上色（CLI 裹 `[yellow]`、
+    Web 裹一个 class）。
+    """
+    if not summary.unpriced_symbols:
+        return None
+    return (
+        f"{len(summary.unpriced_symbols)} 个标的无行情"
+        f"（成本合计 {format_money(summary.unpriced_cost)}），未计入上面的汇总；"
+        f"请先执行 holdings sync"
+    )
+
+
+def foreign_hint(summary: PortfolioSummary) -> str | None:
+    """非基准货币计价的标的提示。没有返回 None。
+
+    措辞要说明的是「没加进去」而不是「加不了」：本工具不做汇率换算，用户要知道
+    上面的总额里少算了什么，才不会把总和当成全部身家。
+    """
+    if not summary.foreign_holdings:
+        return None
+    # 先按币种代码排序再换成显示名：按显示名排的结果依赖中文的码位，看着像顺序，
+    # 其实是巧合。
+    codes = sorted(set(summary.foreign_holdings.values()))
+    currencies = "、".join(currency_label(code) for code in codes)
+    return (
+        f"{len(summary.foreign_holdings)} 个标的以{currencies}计价"
+        f"（成本合计 {format_money(summary.foreign_cost)}），未计入上面的汇总；"
+        f"本工具按人民币口径汇总，不做汇率换算"
     )
 
 

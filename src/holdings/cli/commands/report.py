@@ -15,14 +15,12 @@ def report_cmd(verbose: bool) -> None:
         render_allocation_table,
         render_fee_rate_line,
         render_fee_table,
-        render_foreign_hint,
         render_holdings_table,
         render_performance_line,
         render_summary_line,
-        render_unpriced_hint,
     )
     from holdings.services import asset_meta_service
-    from holdings.services.portfolio_service import get_summary
+    from holdings.services.portfolio_service import foreign_hint, get_summary, unpriced_hint
     from holdings.services.report_service import get_performance
     from holdings.utils.config import load_config
 
@@ -33,7 +31,8 @@ def report_cmd(verbose: bool) -> None:
     console = Console()
     console.print(render_holdings_table(summary.holdings_df, width=console.width))
     console.print(render_summary_line(summary))
-    for hint in (render_unpriced_hint(summary), render_foreign_hint(summary)):
+    # 句子由服务层给（与 Web 看板同一份），这里只负责上色。
+    for hint in (unpriced_hint(summary), foreign_hint(summary)):
         if hint:
             console.print(f"[yellow]{hint}[/yellow]")
     # 年化管理费率只是「你填过的费率加起来是多少」，与上面的累计费用不是一回事。
