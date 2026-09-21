@@ -15,7 +15,7 @@
 | `portfolio/allocator.py` | 资产配置占比计算 | ✅ 100% |
 | `portfolio/metrics.py` | 年化收益、最大回撤、夏普比率、采样口径判断 | ✅ 100% |
 | `storage/` DAO | 增删改查、事务回滚、约束冲突 | ✅ 80%~100% |
-| `services/` 编排层 | 汇总、绩效指标、同步缓存、写入闸门 | ✅ 98%~100% |
+| `services/` 编排层 | 汇总、绩效指标、同步缓存、写入闸门、表格契约（`holdings_cell` / 两条提示语） | ✅ 98%~100% |
 
 ### 优先级最高：加权平均成本
 
@@ -45,7 +45,7 @@
 | 结构测试 | `test_layering.py`：用 AST 扫源码，守分层铁律与「UI 可复用」——这类约束用运行时断言测不出来 |
 | 集成测试 | CLI 命令端到端（`import` → 落库、`add` → 校验、退出码契约） |
 | Mock 测试 | `data/` 数据获取层（伪造 `akshare` / `yfinance` 模块，不触网） |
-| 界面测试 | `test_tui.py` 用 Textual 的 `app.run_test()` headless 跑真实渲染；`textual` 在 `dev` extra 里 |
+| 界面测试 | `test_tui.py` 用 Textual 的 `app.run_test()` headless 跑真实渲染；`test_web.py` 用 FastAPI 的 `TestClient` 直接打请求（不起真服务器——那只多出端口冲突这一种偶发失败）。`textual` / `fastapi` / `jinja2` / `httpx` 都在 `dev` extra 里 |
 
 ## 测试目录约定
 
@@ -77,7 +77,8 @@ tests/
 ├── test_formatter.py      # 数值显示：— 的语义、ratio 与 percent 不可互换
 ├── test_deps.py           # 依赖检测：缺包判定与 check 命令的依据
 ├── test_layering.py       # 分层铁律：核心层零输出、零终端依赖、依赖方向
-└── test_tui.py            # TUI：headless 跑真实界面；缺 textual 时的退出码
+├── test_tui.py            # TUI：headless 跑真实界面；缺 textual 时的退出码
+└── test_web.py            # Web 看板：三页的取值与提示语；缺依赖时的退出码、默认只绑本机
 ```
 
 > **`test_cli_errors.py` 必须走 `main()`**：`CliRunner` 会绕过 `main()` 里的
@@ -87,8 +88,10 @@ tests/
 ## 覆盖率目标
 
 - `portfolio/calculator.py`：**≥ 90%**（关键在于费用与卖出边界）— 当前 **99%**。
-- 全项目行覆盖率：当前 **95%**（380 个用例）；`data/` 层 **98%**
+- 全项目行覆盖率：当前 **96%**（398 个用例）；`data/` 层 **98%**
   （`python -m pytest --cov=holdings`）。
+- 新增层不拉后腿：`web/app.py` **100%**——看板的每个分支（三个页面、缺 plotly、
+  日期筛空、日期不合法）都有用例走到。
 - 明确低于目标的区域：`cli/renderers/chart_renderer.py`（67%，未装 plotly 的分支）、
   `cli/renderers/table_renderer.py` 与 `cli/commands/init.py`（均 93%，前者是费用表与
   占比表的空分支，后者是缺必需依赖时的警告分支）。

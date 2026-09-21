@@ -17,6 +17,7 @@ from holdings.cli.commands.snapshot import snapshot_cmd
 from holdings.cli.commands.snapshots import snapshots_cmd
 from holdings.cli.commands.sync import sync_cmd
 from holdings.cli.commands.tui import tui_cmd
+from holdings.cli.commands.web import web_cmd
 
 
 @click.group()
@@ -37,6 +38,7 @@ cli.add_command(snapshot_cmd, name="snapshot")
 cli.add_command(snapshots_cmd, name="snapshots")
 cli.add_command(chart_cmd, name="chart")
 cli.add_command(tui_cmd, name="tui")
+cli.add_command(web_cmd, name="web")
 cli.add_command(remove_cmd, name="remove")
 
 
