@@ -28,10 +28,25 @@ chart = ["plotly>=5.0.0"]
 tui = ["textual>=0.50.0"]
 # 这里曾声明 web / gui 两组（streamlit、fastapi、PySide6），但源码里零引用，
 # `pip install 'holdings[gui]'` 会装好 200MB 的 PySide6 却无界面可用。
-# 已按 B-16 删除，等 Web / 桌面端真有代码时再加回来（形态见 B-22）。
+# 已按 B-16 删除，现在 web 这一组随 B-20 的看板一起加回来；gui 仍无代码，
+# 形态见 B-22，等真动手时再加。
+web = ["fastapi>=0.110", "uvicorn>=0.27", "jinja2>=3.1"]
 # textual 进 dev 是为了让 TUI 能被真正测到（headless 跑一遍界面），
-# 而不是只测「缺依赖时报错」那一条路径。
-dev = ["pytest", "pytest-cov", "ruff>=0.16.7,<0.17", "textual>=0.50.0"]
+# 而不是只测「缺依赖时报错」那一条路径。web 这一组同理：fastapi + jinja2
+# 让看板能被 TestClient 真的跑一遍，httpx 是 TestClient 自己的依赖
+# （跑起来会有 starlette 的 StarletteDeprecationWarning：它已在推 httpx2，
+# 但仍支持 httpx；等它真删了再换，现在换等于把 dev 环境押在一个新名字上）。
+# uvicorn 不进 dev——起真服务器的用例只会带来偶发的端口冲突，
+# `holdings web` 那条命令用假模块测调用即可。
+dev = [
+    "pytest",
+    "pytest-cov",
+    "ruff>=0.16.7,<0.17",
+    "textual>=0.50.0",
+    "fastapi>=0.110",
+    "jinja2>=3.1",
+    "httpx>=0.27",
+]
 
 [project.scripts]
 # 必须指向 main 而不是裸 click group cli：异常→退出码的映射写在 main() 里，
@@ -41,6 +56,12 @@ holdings = "holdings.cli.main:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+# 模板是 web 层的代码，不是文档：漏掉这一条，`pip install 'holdings[web]'`
+# 装出来的包能 import、一请求就报「模板不存在」。这个错误只在装分发包时才出现，
+# 源码目录里跑（pythonpath=src）永远复现不了。
+holdings = ["web/templates/*.html"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

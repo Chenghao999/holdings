@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}持仓 · holdings{% endblock %}
+
+{% block content %}
+<section class="cards">
+  {% for card in cards %}
+  <div class="card">
+    <div class="card-label">{{ card.label }}</div>
+    <div class="card-value {{ card.tone }}">{{ card.value }}</div>
+    {% if card.sub %}<div class="card-sub {{ card.tone }}">{{ card.sub }}</div>{% endif %}
+  </div>
+  {% endfor %}
+</section>
+
+{# 两类没进汇总的标的各说各的：原因不同，用户要做的处置也不同。 #}
+{% for hint in hints %}
+<p class="hint">{{ hint }}</p>
+{% endfor %}
+
+<h2>持仓明细</h2>
+<section class="panel">
+  {% if rows %}
+  <table>
+    <thead>
+      <tr>
+        {% for column in columns %}
+        <th class="{{ 'num' if column.numeric }}">{{ column.label }}</th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      <tr>
+        {% for cell in row %}
+        <td class="{{ 'num' if columns[loop.index0].numeric }}">{{ cell }}</td>
+        {% endfor %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">还没有持仓，先执行 holdings add 或 holdings import</p>
+  {% endif %}
+</section>
+{% endblock %}

@@ -15,16 +15,19 @@ from textual.app import App, ComposeResult
 from textual.containers import VerticalScroll
 from textual.widgets import DataTable, Footer, Header, Static, TabbedContent, TabPane
 
-from holdings.services.portfolio_service import BASE_CURRENCY, HOLDINGS_COLUMNS, get_summary
+from holdings.services.portfolio_service import (
+    HOLDINGS_COLUMNS,
+    foreign_hint,
+    get_summary,
+    holdings_cell,
+    unpriced_hint,
+)
 from holdings.services.report_service import get_performance
 from holdings.utils.formatter import (
     UNKNOWN,
-    currency_label,
     format_money,
     format_number,
     format_percent,
-    format_price,
-    format_quantity,
     format_ratio,
 )
 
@@ -67,30 +70,10 @@ class HoldingsApp(App):
         table = self.query_one("#holdings", DataTable)
         table.clear()
         for _, row in summary.holdings_df.iterrows():
-            table.add_row(*(_cell(column, row) for column in _TABLE_COLUMNS))
+            # 每格的显示文本由服务层给（`holdings_cell`），与 Web 看板同一份实现。
+            table.add_row(*(holdings_cell(column, row) for column in _TABLE_COLUMNS))
         self.query_one("#summary", Static).update(_summary_text(summary))
         self.query_one("#report", Static).update(_report_text(self.db_path))
-
-
-def _cell(column: str, row) -> str:
-    value = row.get(column)
-    if column in {"quantity"}:
-        return format_quantity(value)
-    if column == "current_price":
-        # 外币的现价带上币种，与 CLI 的表格一致（`_price_cell`）；每行都挂一个
-        # `CNY` 只会把这一列撑宽，所以只在非人民币时才标。
-        currency = row.get("currency")
-        price = format_price(value)
-        if not isinstance(currency, str) or currency == BASE_CURRENCY:
-            return price
-        return f"{price} {currency}"
-    if column == "avg_cost":
-        return format_price(value)
-    if column in {"market_value", "total_fees", "profit"}:
-        return format_money(value)
-    if column == "profit_rate":
-        return format_percent(value)
-    return str(value if value is not None else "")
 
 
 def _summary_text(summary) -> str:
@@ -105,20 +88,9 @@ def _summary_text(summary) -> str:
         f"总成本 {format_money(summary.total_cost)} | 总盈亏 {profit} | "
         f"累计费用 {format_money(summary.total_fees)}"
     ]
-    if summary.unpriced_symbols:
-        lines.append(
-            f"[yellow]{len(summary.unpriced_symbols)} 个标的无行情"
-            f"（成本合计 {format_money(summary.unpriced_cost)}），未计入上面的汇总；"
-            f"请先执行 holdings sync[/yellow]"
-        )
-    if summary.foreign_holdings:
-        codes = sorted(set(summary.foreign_holdings.values()))
-        currencies = "、".join(currency_label(code) for code in codes)
-        lines.append(
-            f"[yellow]{len(summary.foreign_holdings)} 个标的以{currencies}计价"
-            f"（成本合计 {format_money(summary.foreign_cost)}），未计入上面的汇总；"
-            f"本工具按人民币口径汇总，不做汇率换算[/yellow]"
-        )
+    # 句子由服务层给（三个界面同一份），这里只负责套上 rich 的黄色标记。
+    hints = (unpriced_hint(summary), foreign_hint(summary))
+    lines.extend(f"[yellow]{hint}[/yellow]" for hint in hints if hint)
     return "\n".join(lines)
 
 

@@ -3,6 +3,28 @@
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/) 格式，并使用 [Semantic Versioning](https://semver.org/) 进行版本管理。
 已经发生的改动记在这里；后续计划见 [ROADMAP](docs/ROADMAP.md) 与[待办清单](docs/BACKLOG.md)。
 
+## [Unreleased]
+
+### Added
+
+- **Web 只读看板**（[BACKLOG B-20](docs/BACKLOG.md)）：新增 `src/holdings/web/`
+  （与 `cli/`、`tui/` 平级的表现层）与 `holdings web` 命令，持仓 / 报表 /
+  净值曲线三页，默认 `http://127.0.0.1:8420`。
+  - **只读是刻意划的界**：写操作要等写入闸门（[B-11](docs/BACKLOG.md)）能把
+    「哪一条不合法、为什么」一起搬进页面才做，一个绕开闸门的 Web 表单
+    正是「多了个入口就少了一道校验」。
+  - **依赖随代码加回来**：`web = ["fastapi", "uvicorn", "jinja2"]` ——
+    [B-16](docs/BACKLOG.md) 删掉的那个零引用 extra，到这里才有资格存在。
+    `fastapi` / `jinja2` 同时进 `dev`，看板用 `TestClient` 真的跑一遍。
+  - 缺 `fastapi` / `uvicorn` 时报 `错误（6）：…` 并给出
+    `pip install 'holdings[web]'`；默认只绑 `127.0.0.1`。
+- **三个界面共用一份表格契约**（[BACKLOG B-20](docs/BACKLOG.md)，顺带的结构调整）：
+  单元格文本（`portfolio_service.holdings_cell`）与两条提示语
+  （`unpriced_hint` / `foreign_hint`）从渲染层上移到服务层。
+  第三个界面出现时，重复就摆到了明面上——CLI、TUI、Web 显示的是同一张表、
+  读的是同一个总额，「这一列留几位小数」和「上面的总额里少算了什么」
+  都没有理由各写一遍。
+
 ## [1.0.0] - 2026-09-19
 
 ### Added

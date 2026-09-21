@@ -1,0 +1,1353 @@
+<title>holdings 工程体检</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  :root {
+    color-scheme: light;
+    --paper:      #F6F8F4;
+    --surface:    #FFFFFF;
+    --surface-2:  #EEF2EC;
+    --ink:        #131A16;
+    --ink-soft:   #38443C;
+    --muted:      #5E6D64;
+    --rule:       #D9E0D7;
+    --rule-soft:  #E7ECE4;
+    --accent:     #0E5A4A;
+    --critical:   #A32B21;
+    --critical-bg:#FBEDEB;
+    --warn:       #8A5A0B;
+    --warn-bg:    #FBF3E3;
+    --ok:         #1C6E45;
+    --ok-bg:      #EAF4EE;
+    --fixed:      #2B5EA8;
+    --fixed-bg:   #EDF2FB;
+
+    --f-display: "Archivo", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    --f-body: "IBM Plex Sans", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+    --f-mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+
+    --measure: 74ch;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --paper:      #0F1512;
+      --surface:    #161E19;
+      --surface-2:  #1C2620;
+      --ink:        #E7EDE7;
+      --ink-soft:   #B9C6BC;
+      --muted:      #8B9C91;
+      --rule:       #26332B;
+      --rule-soft:  #1F2A23;
+      --accent:     #56C3A2;
+      --critical:   #E28375;
+      --critical-bg:#2A1A17;
+      --warn:       #D9A550;
+      --warn-bg:    #2A2216;
+      --ok:         #62C58C;
+      --ok-bg:      #16261C;
+      --fixed:      #7FACEA;
+      --fixed-bg:   #16202E;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --paper:      #0F1512;
+    --surface:    #161E19;
+    --surface-2:  #1C2620;
+    --ink:        #E7EDE7;
+    --ink-soft:   #B9C6BC;
+    --muted:      #8B9C91;
+    --rule:       #26332B;
+    --rule-soft:  #1F2A23;
+    --accent:     #56C3A2;
+    --critical:   #E28375;
+    --critical-bg:#2A1A17;
+    --warn:       #D9A550;
+    --warn-bg:    #2A2216;
+    --ok:         #62C58C;
+    --ok-bg:      #16261C;
+    --fixed:      #7FACEA;
+    --fixed-bg:   #16202E;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--f-body);
+    font-size: 16px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding-block: 0 96px;
+    padding-inline: 24px;
+  }
+
+  h1, h2, h3 {
+    font-family: var(--f-display);
+    text-wrap: balance;
+    margin: 0;
+    letter-spacing: -0.015em;
+  }
+
+  code, .mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+
+  code {
+    font-size: 0.855em;
+    background: var(--surface-2);
+    border: 1px solid var(--rule-soft);
+    border-radius: 3px;
+    padding: 0.1em 0.36em;
+    color: var(--ink-soft);
+    word-break: break-word;
+  }
+
+  a { color: var(--accent); }
+  a:focus-visible, summary:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+    border-radius: 2px;
+  }
+
+  /* ---------- header ---------- */
+
+  .masthead {
+    padding-block: 72px 40px;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .eyebrow {
+    font-family: var(--f-mono);
+    font-size: 11.5px;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 18px;
+  }
+
+  .masthead h1 {
+    font-size: clamp(38px, 6.4vw, 60px);
+    font-weight: 700;
+    line-height: 1.03;
+  }
+
+  .masthead .lede {
+    margin: 22px 0 0;
+    max-width: var(--measure);
+    font-size: 18px;
+    color: var(--ink-soft);
+  }
+
+  .facts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0;
+    margin-top: 40px;
+    border: 1px solid var(--rule);
+    border-radius: 5px;
+    overflow: hidden;
+    background: var(--surface);
+  }
+
+  .fact {
+    flex: 1 1 150px;
+    padding: 16px 20px;
+    border-right: 1px solid var(--rule-soft);
+  }
+  .fact:last-child { border-right: 0; }
+
+  .fact dt {
+    font-family: var(--f-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 7px;
+  }
+
+  .fact dd {
+    margin: 0;
+    font-family: var(--f-display);
+    font-size: 25px;
+    font-weight: 600;
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+    display: flex;
+    align-items: baseline;
+    gap: 7px;
+  }
+
+  .fact dd small {
+    font-family: var(--f-body);
+    font-size: 12.5px;
+    font-weight: 400;
+    color: var(--muted);
+    letter-spacing: 0;
+  }
+
+  /* ---------- sections ---------- */
+
+  section { padding-top: 68px; }
+
+  .sec-head {
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+    flex-wrap: wrap;
+    padding-bottom: 12px;
+    border-bottom: 2px solid var(--ink);
+    margin-bottom: 30px;
+  }
+
+  .sec-head h2 { font-size: 27px; font-weight: 600; }
+
+  .sec-head .count {
+    font-family: var(--f-mono);
+    font-size: 12px;
+    color: var(--muted);
+    letter-spacing: 0.06em;
+    margin-left: auto;
+  }
+
+  .sec-note {
+    max-width: var(--measure);
+    color: var(--muted);
+    font-size: 15px;
+    margin: -14px 0 30px;
+  }
+
+  /* ---------- finding rows ---------- */
+
+  .rows { display: flex; flex-direction: column; gap: 10px; }
+
+  .row {
+    display: grid;
+    grid-template-columns: 4px 1fr;
+    gap: 0;
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 5px;
+    overflow: hidden;
+  }
+
+  .stripe { background: var(--muted); }
+  .row[data-sev="p0"] .stripe { background: var(--critical); }
+  .row[data-sev="p1"] .stripe { background: var(--warn); }
+  .row[data-sev="p2"] .stripe { background: var(--warn); opacity: 0.6; }
+  .row[data-sev="p3"] .stripe { background: var(--muted); opacity: 0.5; }
+  .row[data-sev="done"] .stripe { background: var(--fixed); }
+
+  .row-body { padding: 18px 20px 19px; }
+
+  .row-top {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 9px;
+  }
+
+  .row-top h3 {
+    font-size: 16.5px;
+    font-weight: 600;
+    line-height: 1.4;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .pill {
+    font-family: var(--f-mono);
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 3px;
+    white-space: nowrap;
+    flex: 0 0 auto;
+  }
+
+  .pill.p0 { background: var(--critical-bg); color: var(--critical); }
+  .pill.p1 { background: var(--warn-bg); color: var(--warn); }
+  .pill.p2 { background: var(--warn-bg); color: var(--warn); }
+  .pill.p3 { background: var(--surface-2); color: var(--muted); }
+  .pill.done { background: var(--fixed-bg); color: var(--fixed); }
+
+  /* 页首横幅：说明本页是基线快照，正文条目已部分过时 */
+
+  .banner {
+    margin-top: 30px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    background: var(--fixed-bg);
+    border-left: 3px solid var(--fixed);
+    border-radius: 0 5px 5px 0;
+    padding: 16px 20px;
+  }
+
+  .banner p { margin: 0; max-width: var(--measure); }
+
+  .banner-top {
+    font-size: 14.5px;
+    line-height: 1.7;
+    color: var(--ink-soft);
+  }
+
+  .banner-top .pill { margin-right: 8px; vertical-align: 1px; }
+
+  .banner-note {
+    font-size: 13.5px;
+    line-height: 1.65;
+    color: var(--muted);
+  }
+
+  .banner code {
+    font-family: var(--f-mono);
+    font-size: 0.88em;
+    background: var(--surface-2);
+    border-radius: 3px;
+    padding: 1px 5px;
+  }
+
+  .row-body p {
+    margin: 0 0 10px;
+    font-size: 15px;
+    color: var(--ink-soft);
+    max-width: var(--measure);
+  }
+  .row-body p:last-child { margin-bottom: 0; }
+
+  /* compact rows for the long tail */
+
+  .row.compact .row-body { padding: 14px 20px 15px; }
+  .row.compact .row-top { margin-bottom: 6px; }
+  .row.compact .row-top h3 { font-size: 15.5px; }
+  .row.compact .row-body p { font-size: 14.5px; margin-bottom: 0; }
+
+  .ev {
+    font-family: var(--f-mono);
+    font-size: 12.5px;
+    line-height: 1.85;
+    color: var(--muted);
+    background: var(--surface-2);
+    border-radius: 4px;
+    padding: 10px 13px;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .ev b { color: var(--ink-soft); font-weight: 500; }
+
+  /* ---------- tables ---------- */
+
+  .tbl-scroll {
+    overflow-x: auto;
+    border: 1px solid var(--rule);
+    border-radius: 5px;
+    background: var(--surface);
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14.5px;
+    min-width: 620px;
+  }
+
+  th {
+    text-align: left;
+    font-family: var(--f-mono);
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 13px 16px;
+    border-bottom: 1px solid var(--rule);
+    white-space: nowrap;
+  }
+
+  td {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--rule-soft);
+    vertical-align: top;
+    color: var(--ink-soft);
+  }
+
+  tbody tr:last-child td { border-bottom: 0; }
+
+  td.name { color: var(--ink); font-weight: 500; }
+  td.num { font-family: var(--f-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  .tag {
+    font-family: var(--f-mono);
+    font-size: 11px;
+    font-weight: 500;
+    padding: 2px 7px;
+    border-radius: 3px;
+    white-space: nowrap;
+    display: inline-block;
+  }
+  .tag.ok   { background: var(--ok-bg); color: var(--ok); }
+  .tag.bad  { background: var(--critical-bg); color: var(--critical); }
+  .tag.mid  { background: var(--warn-bg); color: var(--warn); }
+  .tag.none { background: var(--surface-2); color: var(--muted); }
+
+  .bar {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    min-width: 130px;
+  }
+  .bar-track {
+    flex: 1 1 auto;
+    height: 5px;
+    border-radius: 3px;
+    background: var(--rule);
+    overflow: hidden;
+    min-width: 44px;
+  }
+  .bar-fill { height: 100%; border-radius: 3px; background: var(--accent); }
+  .bar-fill.none { background: var(--critical); }
+  .bar-num {
+    font-family: var(--f-mono);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    color: var(--muted);
+    flex: 0 0 auto;
+  }
+
+  /* ---------- next steps ---------- */
+
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(268px, 1fr));
+    gap: 14px;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 5px;
+    padding: 22px 22px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 11px;
+  }
+
+  .card .idx {
+    font-family: var(--f-mono);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    color: var(--accent);
+  }
+
+  .card h3 { font-size: 17.5px; font-weight: 600; line-height: 1.35; }
+
+  .card p { margin: 0; font-size: 14.5px; color: var(--ink-soft); }
+
+  .card ul {
+    margin: 0;
+    padding-left: 17px;
+    font-size: 14px;
+    color: var(--muted);
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .card .cost {
+    margin-top: auto;
+    padding-top: 13px;
+    border-top: 1px solid var(--rule-soft);
+    font-family: var(--f-mono);
+    font-size: 11.5px;
+    color: var(--muted);
+    letter-spacing: 0.03em;
+  }
+
+  footer {
+    margin-top: 76px;
+    padding-top: 24px;
+    border-top: 1px solid var(--rule);
+    font-size: 13.5px;
+    color: var(--muted);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 22px;
+  }
+
+  @media (max-width: 640px) {
+    .wrap { padding-inline: 18px; }
+    .masthead { padding-block: 48px 32px; }
+    .fact { flex: 1 1 100%; border-right: 0; border-bottom: 1px solid var(--rule-soft); }
+    .fact:last-child { border-bottom: 0; }
+    section { padding-top: 52px; }
+    .sec-head h2 { font-size: 22px; }
+    .row-body { padding: 16px 15px 17px; }
+    .row.compact .row-body { padding: 13px 15px 14px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="eyebrow">工程体检 · 2026-09-15 · 基线 8a94106</p>
+    <h1>holdings 工程体检</h1>
+    <p class="lede">
+      一个能跑起来的 CLI，和一套比它走得更远的文档。<code>holdings</code> 的三层架构是干净的——
+      计算层纯函数、存储层有事务、CI 三版本全绿。问题高度集中在两处：
+      <strong>文档承诺的行为有相当一部分代码从未实现</strong>，以及
+      <strong>用户输入从不校验，坏数据会被静默写进账本</strong>。
+      下面按「会不会被用户撞上」排序，共 31 项。
+    </p>
+
+    <dl class="facts">
+      <div class="fact">
+        <dt>CI</dt>
+        <dd style="color: var(--ok)">通过 <small>3.10 / 3.12 / 3.13</small></dd>
+      </div>
+      <div class="fact">
+        <dt>单元测试</dt>
+        <dd>104 <small>审计时 56</small></dd>
+      </div>
+      <div class="fact">
+        <dt>已修复</dt>
+        <dd style="color: var(--fixed)">22 <small>项</small></dd>
+      </div>
+      <div class="fact">
+        <dt>待处理</dt>
+        <dd style="color: var(--critical)">9 <small>项发现</small></dd>
+      </div>
+    </dl>
+
+    <div class="banner">
+      <p class="banner-top">
+        <span class="pill done">已更新</span>
+        <strong>本页是基线 <code>8a94106</code> 的快照。其后三个提交修掉了 22 项中的绝大部分</strong>：
+        <code>da9c0fe</code> 修入口点失效、卖出越界写坏账本、参数不校验、CSV 半批落库与缺列报错、
+        <code>sync</code> 全失败返回 0、畸形 YAML 报错类型、负数量买入、异常基类缺失、
+        <code>--fee-column</code> 静默计 0、连接泄漏，并补上 <code>utils</code>/<code>cli</code> 层首批测试；
+        <code>fe251e8</code> 修 <code>--sort</code> 静默失效与 <code>chart</code> 的裸 traceback / 打包错位；
+        <code>1a3405e</code> 修正一批「文档承诺、代码没有」的陈述。
+      </p>
+      <p class="banner-note">
+        正文中这些条目的「现状」描述已过时，保留原位是为了留下审计记录；每条的修复提交见行内标签。
+        <strong>剩余 9 项的完整待办清单已随代码入库：<code>docs/BACKLOG.md</code></strong>
+        （本页被 <code>.gitignore</code> 排除，不入库，故不再作为唯一的工作清单）。
+        下方每条待处理条目的标签上已标出对应的 BACKLOG 编号（<code>→ B-01</code> 等），
+        可直接跳去查「要做什么」与「完成判据」。
+      </p>
+    </div>
+  </header>
+
+  <!-- ======================= 已修复 ======================= -->
+  <section>
+    <div class="sec-head">
+      <h2>本次已修复</h2>
+      <span class="count">4 项 · 已推送</span>
+    </div>
+    <p class="sec-note">
+      这四项都是「不修就跑不起来」级别的缺陷，且全部由本次推送过程暴露——
+      其中前两项此前从未被发现，因为受影响的代码从未真正进入过版本库。
+    </p>
+
+    <div class="rows">
+
+      <div class="row" data-sev="done">
+        <div class="stripe"></div>
+        <div class="row-body">
+          <div class="row-top">
+            <h3>整个 <code>data</code> 源码包被 <code>.gitignore</code> 静默排除</h3>
+            <span class="pill done">已修复 bcbf13f</span>
+          </div>
+          <p>
+            <code>.gitignore</code> 里的 <code>data/</code> 是无锚定模式，会匹配任意层级名为 <code>data</code> 的目录，
+            于是源码包 <code>src/holdings/data/</code> 连同 fetcher、a_stock、us_stock、gold 五个文件一起被排除在外。
+            本地因为磁盘上仍有这些文件而一切正常，<strong>但任何人 clone 下来，所有依赖数据层的命令都会 ImportError</strong>。
+          </p>
+          <p class="ev"><b>修复</b> 运行时目录改为锚定路径 <b>/data/</b>、<b>/snapshots/</b>、<b>/_smoke/data/</b>；移出误纳入索引的 48KB 冒烟数据库</p>
+        </div>
+      </div>
+
+      <div class="row" data-sev="done">
+        <div class="stripe"></div>
+        <div class="row-body">
+          <div class="row-top">
+            <h3>循环导入导致 <code>holdings sync</code> 完全无法运行</h3>
+            <span class="pill done">已修复 f477ebc</span>
+          </div>
+          <p>
+            <code>data/fetcher.py</code> 在模块顶层导入三个子模块，而三个子模块又反过来从它导入异常类与
+            <code>PriceResult</code>。结果是 <code>import holdings.data.fetcher</code> 直接失败——
+            v0.2.0 的旗舰功能 <code>holdings sync</code> 一跑就 ImportError 崩溃。
+            因为整个 <code>data</code> 包从没进过版本库，这个缺陷此前无人察觉。
+          </p>
+          <p class="ev"><b>修复</b> get_fetcher() 内延迟导入子模块，公共导入路径保持不变；新增 tests/test_data.py 锁住该回归</p>
+        </div>
+      </div>
+
+      <div class="row" data-sev="done">
+        <div class="stripe"></div>
+        <div class="row-body">
+          <div class="row-top">
+            <h3>价格缓存 TTL 因时区混用从未生效</h3>
+            <span class="pill done">已修复 f477ebc</span>
+          </div>
+          <p>
+            <code>price_cache_dao.is_fresh</code> 拿 SQLite <code>CURRENT_TIMESTAMP</code> 写入的
+            <strong>UTC</strong> 时间去减 Python 的 <strong>本地</strong> <code>datetime.now()</code>。
+            东八区下，刚写入的缓存立刻被算成「8 小时前」，<code>28800 &lt; 300</code> 恒为 False——
+            <strong>文档承诺的 5 分钟缓存从未生效过</strong>，每次 sync 都在重新请求网络。
+          </p>
+          <p class="ev"><b>修复</b> 统一按 UTC 比较；新增 4 个 is_fresh 测试，含脏时间戳不抛异常的用例</p>
+        </div>
+      </div>
+
+      <div class="row" data-sev="done">
+        <div class="stripe"></div>
+        <div class="row-body">
+          <div class="row-top">
+            <h3>CI 的 lint 步骤从未通过过</h3>
+            <span class="pill done">已修复 8a94106</span>
+          </div>
+          <p>
+            <code>pyproject.toml</code> 只声明了 <code>line-length</code>、没有 <code>select</code>，
+            所以 lint 结果完全取决于 pip 装到哪个 ruff 版本。当前 ruff 的默认规则集下，
+            <strong>39 个文件不符合 format、13 个 check 错误</strong>——CI 首次推送就红。
+            更隐蔽的是：ruff 默认尊重 <code>.gitignore</code>，所以被排除的那 5 个数据层文件连 lint 都没扫过。
+          </p>
+          <p class="ev"><b>修复</b> pyproject 显式固定 select/ignore（含 DTZ011、RUF001-003 的豁免理由）；全仓格式化；锁定 ruff&gt;=0.16.7,&lt;0.17</p>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ======================= P0 ======================= -->
+  <section>
+    <div class="sec-head">
+      <h2>必修</h2>
+      <span class="count">P0 · 2 项 · 均经实测复现</span>
+    </div>
+    <p class="sec-note">
+      一项让整套错误处理失效，另一项会往账本里写坏数据。两者改动量都极小、影响面都极大。
+    </p>
+
+    <div class="rows">
+
+      <div class="row" data-sev="done">
+        <div class="stripe"></div>
+        <div class="row-body">
+          <div class="row-top">
+            <h3>卖出超过持仓量：数量转负、总成本转负，持仓还被静默隐藏</h3>
+            <span class="pill done">P0 · 已修复 da9c0fe</span>
+          </div>
+          <p>
+            本次审计最严重的一项，因为它<strong>不报错、不提示，直接把账算错</strong>。
+            <code>calculator.py</code> 的 <code>_sell</code> 不校验卖出数量是否超过持有数量：
+            <code>pos.quantity</code> 直接变成负数，紧接着
+            <code>pos.total_cost = pos.avg_cost * pos.quantity</code> 把总成本也算成负数。
+          </p>
+          <p>
+            而汇总时 <code>portfolio_service.py:47</code> 用 <code>if pos.quantity &lt;= 0: continue</code>
+            跳过这笔持仓——于是<strong>负数总成本留在了汇总里，持仓本身却看不见了</strong>。
+            用户既看不到出错的那一行，也看不懂总成本为什么是负的。
+          </p>
+          <p class="ev"><b>复现</b> add --type BUY --qty 10   然后   add --type SELL --qty 15
+
+<b>实际输出</b>  总市值 0.00 | 总成本 <b>-750.00</b> | 总盈亏 0.00 (<b>-0.00%</b>) | 累计费用 0.00
+<b>期望</b>      明确拒绝，或提示「卖出数量超过持有 5 股」
+
+<b>修复</b> _sell 内校验 qty &gt; pos.quantity 时抛领域异常；买入侧校验 qty &gt; 0</p>
+        </div>
+      </div>
+
+      <div class="row" data-sev="done">
+        <div class="stripe"></div>
+        <div class="row-body">
+          <div class="row-top">
+            <h3>入口点指向 <code>cli</code> 而不是 <code>main</code>，整套错误处理是死代码</h3>
+            <span class="pill done">P0 · 已修复 da9c0fe</span>
+          </div>
+          <p>
+            <code>cli/main.py</code> 里那套把 <code>DataSourceUnavailableError→1</code>、
+            <code>SymbolNotFoundError→2</code>、<code>ConfigError→3</code>、<code>DatabaseError→4</code>
+            的映射，写在 <code>main()</code> 函数里。但入口点注册的是裸 click group <code>cli</code>，
+            <code>main()</code> 只在 <code>if __name__ == "__main__"</code> 下运行。
+          </p>
+          <p>
+            后果：<strong>用户安装后执行任何命令，自定义异常都不会被捕获</strong>，
+            看到的是裸 Python traceback，退出码恒为 1。文档里整整一章
+            <code>ERROR_HANDLING.md</code> 定义的退出码与 <code>错误（N）：</code> 统一前缀，
+            对真实用户完全不生效。下面 P2 里大半个异常路径问题，根因都是这一行。
+          </p>
+          <p class="ev"><b>实测</b> 用非法 config.yaml 触发 ConfigError：
+<b>→ holdings list</b>          裸 traceback，退出码 1   （文档定义应为 3）
+<b>→ python -c "main()"</b>     错误（3）：配置文件格式错误：config.yaml   ✓ 正确
+
+<b>修复</b> pyproject.toml:31 改为 holdings = "holdings.cli.main:main"</p>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ======================= P1 ======================= -->
+  <section>
+    <div class="sec-head">
+      <h2>文档承诺了，代码没实现</h2>
+      <span class="count">P1 · 5 项</span>
+    </div>
+    <p class="sec-note">
+      这一类不会让程序崩溃，但会让读文档的人做出错误判断。每一项都已逐行核对过源码。
+    </p>
+
+    <div class="rows">
+
+      <div class="row" data-sev="p1">
+        <div class="stripe"></div>
+        <div class="row-body">
+          <div class="row-top">
+            <h3><code>asset_meta</code> 表与「基金托管费」是死代码</h3>
+            <span class="pill p1">P1 · → B-01</span>
+          </div>
+          <p>
+            <code>docs/SCHEMA.md</code> 定义并详解了 <code>asset_meta</code> 表，含
+            <code>annual_management_fee</code>（年化管理费率）字段。
+            实际全项目<strong>没有任何 DAO 读写它</strong>——建表语句之外零引用。
+            这意味着文档反复强调的「完整支持基金托管费」，实际只支持一次性 <code>--fee</code>，
+            按年计提的管理费完全没实现。
+          </p>
+          <p class="ev">grep asset_meta → 仅命中 <b>storage/db.py:36</b> 建表 与 <b>tests/test_storage.py:26</b> 的「表存在」断言</p>
+        </div>
+      </div>
+
+      <div class="row" data-sev="p1">
+        <div class="stripe"></div>
+        <div class="row-body">
+          <div class="row-top">
+            <h3>绩效指标模块写完了，但从未被接上</h3>
+            <span class="pill p1">P1 · → B-02</span>
+          </div>
+          <p>
+            <code>portfolio/metrics.py</code> 完整实现了 <code>max_drawdown</code>、
+            <code>annualized_return</code>、<code>sharpe_ratio</code> 三个纯函数，
+            但<strong>没有任何地方 import 或调用</strong>——它只出现在
+            <code>portfolio/__init__.py</code> 的 <code>__all__</code> 里。
+            <code>VISION.md</code> 与 <code>USER_STORIES.md</code> 承诺的「回撤曲线」「与回撤数据一起导出」因此都没落地。
+          </p>
+          <p class="ev">grep metrics → 仅命中 <b>portfolio/__init__.py:3</b> 的 __all__；chart_service 只画 total_value</p>
+        </div>
+      </div>
+
+      <div class="row" data-sev="done">
+        <div class="stripe"></div>
+        <div class="row-body">
+          <div class="row-top">
+            <h3>6 个配置项里有 4 个是死的</h3>
+            <span class="pill done">P1 · 已修复 1a3405e</span>
+          </div>
+          <p>
+            <code>docs/CONFIG_SPEC.md</code> 把每个配置项都写成了生效的行为，
+            <code>FAQ.md</code> 甚至指导用户「调整 <code>sync.retry_count</code>」。
+            实际上只有 <code>database_path</code> 和 <code>cache_ttl_seconds</code> 被真正读取。
+          </p>
+          <p class="ev"><b>default_market</b>          ❌ 零引用（sync.py:11 硬编码 default="全部"）
+<b>data_sources.priority</b>  ❌ 零引用（降级顺序硬编码在各 fetcher 里）
+<b>sync.timeout_seconds</b>   ❌ 零引用（数据层全程无任何 timeout 参数）
+<b>sync.retry_count</b>       ❌ 零引用（重试次数硬编码 range(2) + sleep(0.5)）
+database_path            ✓ 生效
+cache_ttl_seconds        ✓ 生效
+
+<b>本条已修复的是「文档骗人」，不是「配置项生效」</b>：CONFIG_SPEC 现已把这 4 项标为
+「尚未生效」并说明改它们没有任何效果，FAQ 里那句误导性的建议也删了。
+<b>让这 4 项真正生效（或干脆移除）是另一件事，已转入 docs/BACKLOG.md 的 B-05。</b></p>
+        </div>
+      </div>
+
+      <div class="row" data-sev="done">
+        <div class="stripe"></div>
+        <div class="row-body">
+          <div class="row-top">
+            <h3>「三级降级 + 超时重试」名不副实</h3>
+            <span class="pill done">P1 · 已修复 1a3405e</span>
+          </div>
+          <p>
+            <code>README</code>、<code>FEATURES</code>、<code>CHANGELOG</code>、<code>FAQ</code> 都写着「三级降级与超时重试」。
+            实际每个市场最多只有两个数据源，且只有 A 股有降级逻辑：
+          </p>
+          <p class="ev">A 股   <b>akshare ×2 → yfinance ×1</b>    两个源，重试 1 次
+美股   <b>yfinance 单源</b>                 无降级、无重试
+黄金   <b>国内 ETF 借用 A 股链路；国际 GC=F 单源 yfinance</b>
+
+数据层 grep timeout → <b>零命中</b>，「超时重试」没有超时
+
+<b>本条已修复的是「文档吹牛」，不是「补上超时」</b>：README / FEATURES / ROADMAP / FAQ
+现在如实写明只有 A 股有降级与 1 次重试、美股为单一数据源、全项目无网络超时设置。
+<b>真正的超时与可配置重试仍待实现，已转入 docs/BACKLOG.md 的 B-05。</b></p>
+        </div>
+      </div>
+
+      <div class="row" data-sev="done">
+        <div class="stripe"></div>
+        <div class="row-body">
+          <div class="row-top">
+            <h3>异常体系只实现了一半</h3>
+            <span class="pill done">P1 · 已修复 da9c0fe</span>
+          </div>
+          <p>
+            <code>ERROR_HANDLING.md</code> 声明了 <code>HoldingsError</code> 作为所有自定义异常的基类，
+            并定义了退出码 5（参数校验失败）。两者在代码里都不存在：
+            四个异常类各自直接继承 <code>Exception</code>，全项目没有任何校验异常，
+            也没有任何命令在入口做参数校验——这正是下面 P2 那一串裸 traceback 的直接原因。
+          </p>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ======================= P2 ======================= -->
+  <section>
+    <div class="sec-head">
+      <h2>用户能直接撞上的行为缺陷</h2>
+      <span class="count">P2 · 14 项</span>
+    </div>
+    <p class="sec-note">
+      前 5 项是「照文档做，结果不对」；后 8 项是「传错参数或环境不全时，程序的表现不可接受」。
+    </p>
+
+    <div class="rows">
+
+      <div class="row" data-sev="done">
+        <div class="stripe"></div>
+        <div class="row-body">
+          <div class="row-top">
+            <h3><code>holdings list --sort 盈亏率</code> 静默失效</h3>
+            <span class="pill done">P2 · 已修复 fe251e8</span>
+          </div>
+          <p>
+            README 的快速开始和 <code>USER_GUIDE.md</code> 都用这个例子。
+            但排序判定是 <code>sort_key in df.columns</code>，而 DataFrame 的列名全是英文
+            （<code>profit_rate</code>、<code>profit</code>…），中文标签只在渲染层做映射。
+            于是<strong>按文档写法执行既不排序、也不报错</strong>，用户以为排好了。
+          </p>
+          <p class="ev">list.py:23   if sort_key and not df.empty and <b>sort_key in df.columns</b>:
+list.py:9    help="排序字段，如：<b>盈亏率</b>"   ← 提示的就是匹配不上的那个词</p>
+        </div>
+      </div>
+
+      <div class="row" data-sev="p2">
+        <div class="stripe"></div>
+        <div class="row-body">
+          <div class="row-top">
+            <h3><code>snapshot</code> 的文档示例跑不通，<code>--note</code> 还被静默丢弃</h3>
+            <span class="pill p2">P2 · 数据丢失 · → B-03</span>
+          </div>
+          <p>
+            <code>USER_GUIDE.md</code> 的示例是 <code>holdings snapshot --note "月度定投第12期"</code>，
+            但 <code>--total</code> 是 <code>required=True</code>，照抄会直接报 Missing option。
+            更麻烦的是 <code>--note</code> <strong>根本不写入数据库</strong>：
+            <code>snapshots</code> 表没有 note 列，<code>snapshot_dao</code> 只插 5 列。
+            终端却回显「已记录快照 #2（月度定投第12期）」，<strong>让用户以为存下了</strong>。
+          </p>
+          <p class="ev">PRAGMA table_info(snapshots) → id, snapshot_date, total_value, cash_balance,
+                            equity_value, gold_value, created_at   （<b>无 note</b>）
+models/snapshot.py 的 Snapshot 也没有 note 字段，snapshot_dao.add 只插 5 列</p>
+        </div>
+      </div>
+
+      <div class="row" data-sev="p2">
+        <div class="stripe"></div>
+        <div class="row-body">
+          <div class="row-top">
+            <h3><code>chart --start</code> 是个空参数，「配置占比柱状图」不存在</h3>
+            <span class="pill p2">P2 · → B-04</span>
+          </div>
+          <p>
+            <code>USER_GUIDE.md:123</code> 演示用 <code>--start 2025-01-01</code> 做日期筛选，
+            但该参数的 help 原文就写着「暂存参数」，<code>networth_figure</code> 也没有对应形参，传了完全不生效。
+            另外四份文档都提到的「配置占比柱状图」，实际输出是 Rich 两列表格，
+            全项目 grep <code>Bar</code> 零命中。
+          </p>
+        </div>
+      </div>
+
+      <div class="row" data-sev="done">
+        <div class="stripe"></div>
+        <div class="row-body">
+          <div class="row-top">
+            <h3>10 个命令，文档只写了 9 个；若干参数未记录</h3>
+            <span class="pill done">P2 · 已修复 1a3405e</span>
+          </div>
+          <p>
+            <code>holdings check</code>（依赖自检，含 <code>--json</code>）在
+            <code>USER_GUIDE.md</code>、<code>FEATURES.md</code> 的命令总览、README 里都没有出现，
+            只有 CHANGELOG 提了一句。
+            <code>add</code> 的 <code>--date</code> / <code>--group</code>、
+            <code>list</code> 的 <code>--group</code> 同样不在参数表中。
+          </p>
+        </div>
+      </div>
+
+      <div class="row" data-sev="p2">
+        <div class="stripe"></div>
+        <div class="row-body">
+          <div class="row-top">
+            <h3>错误提示格式不统一，退出码语义冲突</h3>
+            <span class="pill p2">P2 · → B-08</span>
+          </div>
+          <p>
+            <code>remove</code> 与 <code>check</code> 不走 <code>错误（N）：</code> 前缀，直接输出裸文本后
+            <code>SystemExit</code>。且 <code>check</code> 用退出码 1 表示「依赖缺失」，
+            而文档把 1 定义为「网络错误 / 数据源不可用」——同一退出码两种含义。
+          </p>
+        </div>
+      </div>
+
+      <div class="row" data-sev="done">
+        <div class="stripe"></div>
+        <div class="row-body">
+          <div class="row-top">
+            <h3>参数从不校验，非法输入直接抛裸 traceback</h3>
+            <span class="pill done">P2 · 已修复 da9c0fe</span>
+          </div>
+          <p>
+            命令里用裸 <code>MarketType(...)</code> / <code>TradeType(...)</code> /
+            <code>date.fromisoformat(...)</code> 直接构造，没有 <code>click.Choice</code> 也没有前置校验。
+            配合 P0 的入口点缺陷，用户看到的永远是整段 Python traceback。
+          </p>
+          <p class="ev">add.py:41   MarketType(market)        --market foo      → ValueError: 'foo' is not a valid MarketType
+add.py:44   TradeType(trade_type)     --type HODL       → 同上
+add.py:43   date.fromisoformat(...)   --date 2020-13-45 → ValueError: month must be in 1..12
+sync.py:25  MarketType(market)        --market foo      → 同上</p>
+        </div>
+      </div>
+
+      <div class="row" data-sev="done">
+        <div class="stripe"></div>
+        <div class="row-body">
+          <div class="row-top">
+            <h3>负数量 / 零数量买入被接受，污染总成本与累计费用</h3>
+            <span class="pill done">P2 · 已修复 da9c0fe</span>
+          </div>
+          <p>
+            <code>--qty</code> 是裸 <code>float</code>，没有 <code>min</code> 约束，计算层也不校验。
+            负数量买入会被记进账本并把总成本拉低；<code>--qty 0</code> 配 <code>--fee 10</code>
+            则产生<strong>「累计费用 10.00 但列表里找不到这笔钱」的孤儿费用</strong>——
+            费用计入了总计，却没有任何持仓行与之对应。
+          </p>
+          <p class="ev">实测  add --qty -5           → #6: NEG BUY qty=-5.0 被接受，pos.total_cost += -500
+实测  add --qty 0 --fee 10   → 累计费用 10.00，但 list 中无对应持仓行</p>
+        </div>
+      </div>
+
+      <div class="row" data-sev="done">
+        <div class="stripe"></div>
+        <div class="row-body">
+          <div class="row-top">
+            <h3>CSV 导入部分失败不回滚，且不报行号</h3>
+            <span class="pill done">P2 · 已修复 da9c0fe</span>
+          </div>
+          <p>
+            <code>import_cmd.py</code> 每行 <code>add</code> 后立即 commit。
+            循环中途某行抛异常时，<strong>前面已成功的行已经落库且不会被回滚</strong>，
+            用户既不知道导入了多少，也不知道从哪一行断的。
+          </p>
+          <p class="ev">实测 partial.csv 第 1 行 NVDA 已持久化，第 2 行坏日期中断 → holdings list 能看到 NVDA，但命令整体失败</p>
+        </div>
+      </div>
+
+      <div class="row" data-sev="done">
+        <div class="stripe"></div>
+        <div class="row-body">
+          <div class="row-top">
+            <h3>CSV 列缺失或值非法 → <code>KeyError</code> 裸 traceback</h3>
+            <span class="pill done">P2 · 已修复 da9c0fe</span>
+          </div>
+          <p>
+            导入直接取 <code>row["symbol"]</code> 等字段，没有表头校验。
+            CSV 少一列或某个值不是数字/日期，抛出的都是解释器原生异常，没有任何「第 N 行哪一列缺失」的提示。
+          </p>
+          <p class="ev">实测 缺 price 列        → KeyError: 'price'
+实测 trade_date 非日期  → ValueError（无行号、无列名）</p>
+        </div>
+      </div>
+
+      <div class="row" data-sev="done">
+        <div class="stripe"></div>
+        <div class="row-body">
+          <div class="row-top">
+            <h3><code>sync</code> 全部拉取失败仍返回退出码 0</h3>
+            <span class="pill done">P2 · 已修复 da9c0fe</span>
+          </div>
+          <p>
+            <code>sync_service</code> 用 <code>except Exception</code> 把每个标的的失败吞进
+            <code>failed</code> 列表，命令打完红字就正常返回。
+            脚本化调用<strong>无法据此判断同步彻底失败</strong>——本环境未装 yfinance/akshare，
+            实测正是「5 行全失败，退出码 0」。
+          </p>
+        </div>
+      </div>
+
+      <div class="row compact" data-sev="p2">
+        <div class="stripe"></div>
+        <div class="row-body">
+          <div class="row-top">
+            <h3><code>check --json</code> 与文本模式退出码不一致</h3>
+            <span class="pill p2">P2 · → B-08</span>
+          </div>
+          <p>
+            缺必需依赖时，默认模式 exit 1，<code>--json</code> 模式却 exit 0 并照常输出 JSON。靠退出码判断的脚本会漏检。
+          </p>
+        </div>
+      </div>
+
+      <div class="row compact" data-sev="p2">
+        <div class="stripe"></div>
+        <div class="row-body">
+          <div class="row-top">
+            <h3>没有行情时显示「现价 0、盈亏率 −100%」</h3>
+            <span class="pill p2">P2 · 误导 · → B-06</span>
+          </div>
+          <p>
+            从未 sync 就执行 <code>list</code>／<code>report</code>，无缓存时 <code>current_price</code> 取 0，
+            盈亏率算成 <code>−100.00%</code>——看起来像血亏，实际只是没有数据，且没有任何「未同步」标注。
+          </p>
+        </div>
+      </div>
+
+      <div class="row compact" data-sev="done">
+        <div class="stripe"></div>
+        <div class="row-body">
+          <div class="row-top">
+            <h3>畸形 <code>config.yaml</code> 抛 <code>ParserError</code> 而非 <code>ConfigError</code></h3>
+            <span class="pill done">P2 · 已修复 da9c0fe</span>
+          </div>
+          <p>
+            <code>config.py</code> 只对「加载结果不是 dict」抛 <code>ConfigError</code>，
+            但 <code>yaml.safe_load</code> 遇到语法错误会自己先抛 <code>yaml.parser.ParserError</code>，
+            于是退出码 3 的契约在这条最常见路径上失效。
+          </p>
+        </div>
+      </div>
+
+      <div class="row compact" data-sev="p2">
+        <div class="stripe"></div>
+        <div class="row-body">
+          <div class="row-top">
+            <h3>80 列终端下持仓表把标的代码截成 4 个字符</h3>
+            <span class="pill p2">P2 · 新增 · → B-07</span>
+          </div>
+          <p>
+            持仓表共 10 列，总宽超出默认的 80 列终端宽度后，Rich 对每一列平均截断，
+            代码列只剩 <code>6005…</code>、<code>5188…</code>——<strong>用户无法从表里
+            认出自己持有的是哪只标的</strong>。这条是 2026-09-15 复核排序修复时实测发现的，
+            不在最初的审计清单里。
+          </p>
+          <p class="ev"><b>实测</b> holdings list（80 列终端）
+<b>实际</b>  │ 6005… │ A股 │ stock │ 100.… │ 1680… │ 1750… │ 178,… │ 5.00… │ 6,94… │ 4.13% │
+<b>期望</b>  代码、市场这类标识列不被截断；或窄终端下自动减少列数
+
+<b>可选方向</b> 给标识列设 no_wrap/min_width，或按终端宽度分「简表 / 详表」两档</p>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ======================= P3 ======================= -->
+  <section>
+    <div class="sec-head">
+      <h2>工程卫生</h2>
+      <span class="count">P3 · 6 项</span>
+    </div>
+
+    <div class="rows">
+
+      <div class="row" data-sev="p3">
+        <div class="stripe"></div>
+        <div class="row-body">
+          <div class="row-top">
+            <h3><code>utils/</code> 与 <code>cli/</code> 两层零测试</h3>
+            <span class="pill p3">P3 · → B-09</span>
+          </div>
+          <p>
+            21 个文件完全没有测试覆盖，其中 <code>utils/config.py</code>（106 行，含递归 deep merge 与默认值合并）
+            是配置系统的核心。测试已从 6 个增至 56 个，但全部集中在
+            calculator / storage / services / data 四层——恰好绕过了本次审计问题最多的那一层。
+          </p>
+        </div>
+      </div>
+
+      <div class="row" data-sev="done">
+        <div class="stripe"></div>
+        <div class="row-body">
+          <div class="row-top">
+            <h3>测试策略文档与现状对不上</h3>
+            <span class="pill done">P3 · 已修复 1a3405e</span>
+          </div>
+          <p>
+            <code>TESTING_STRATEGY.md</code> 的目录树列了 <code>test_fetcher_mock.py</code>（不存在），
+            并规定用 <code>responses</code> 库模拟网络请求。
+            实际 <code>test_data.py</code> 全程用 monkeypatch，<code>responses</code> 装了但从没用过。
+            该文档还把 <code>metrics.py</code> 列为「必须测试」，而它至今零测试。
+          </p>
+        </div>
+      </div>
+
+      <div class="row" data-sev="done">
+        <div class="stripe"></div>
+        <div class="row-body">
+          <div class="row-top">
+            <h3>配置系统的三处文档-实现错位</h3>
+            <span class="pill done">P3 · 已修复 1a3405e</span>
+          </div>
+          <p>
+            <code>CONFIG_SPEC.md</code> 称提供 <code>load_config()</code> / <code>save_config()</code>，
+            但模块级只存在前者（<code>Config.save()</code> 是实例方法）。
+            文档还规定「文件缺失时应生成默认配置文件并提示用户」「字段取值非法应抛 ConfigError」，
+            两条都未实现——<code>load_config</code> 缺文件时只返回默认值不落盘，
+            且<strong>不做任何字段值校验</strong>，负数 <code>cache_ttl_seconds</code> 会被照单全收。
+          </p>
+        </div>
+      </div>
+
+      <div class="row compact" data-sev="done">
+        <div class="stripe"></div>
+        <div class="row-body">
+          <div class="row-top">
+            <h3><code>add</code> 的「交互式输入」不存在</h3>
+            <span class="pill done">P3 · 已修复 1a3405e</span>
+          </div>
+          <p>
+            <code>USER_GUIDE.md</code> 称 <code>add</code>「支持交互式输入或全参数传入」，
+            但五个必填参数全是 <code>required=True</code>，全项目没有任何 <code>click.prompt</code>。
+          </p>
+        </div>
+      </div>
+
+      <div class="row compact" data-sev="done">
+        <div class="stripe"></div>
+        <div class="row-body">
+          <div class="row-top">
+            <h3><code>--fee-column</code> 指向不存在的列时静默按 0 计费</h3>
+            <span class="pill done">P3 · 已修复 da9c0fe</span>
+          </div>
+          <p>
+            <code>row.get(fee_column)</code> 拿不到就返回 <code>None</code> → 0.0，所有费用被当作 0 导入，无任何警告。
+          </p>
+        </div>
+      </div>
+
+      <div class="row compact" data-sev="done">
+        <div class="stripe"></div>
+        <div class="row-body">
+          <div class="row-top">
+            <h3><code>connect()</code> 建表失败时连接泄漏</h3>
+            <span class="pill done">P3 · 已修复 da9c0fe</span>
+          </div>
+          <p>
+            <code>db.py:66-70</code> 先 <code>sqlite3.connect</code> 再 <code>init_schema</code>，
+            后者抛 <code>DatabaseError</code> 时连接句柄未关闭。三个 DAO 的正常路径都有 <code>try/finally</code>，
+            仅此处例外；进程短命时影响小。
+          </p>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ======================= 模块完整度 ======================= -->
+  <section>
+    <div class="sec-head">
+      <h2>模块完整度</h2>
+      <span class="count">7 个模块</span>
+    </div>
+    <p class="sec-note">
+      「完整度」按「文档承诺的功能是否有对应实现」衡量，不是按代码量。
+      <code>data</code> 层的两个真 bug 已修，但文档对它的能力描述仍然偏高。
+    </p>
+
+    <div class="tbl-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>模块</th><th>文件</th><th>测试</th><th>状态</th><th>说明</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="name">portfolio</td>
+            <td class="num">4</td>
+            <td>
+              <div class="bar"><div class="bar-track"><div class="bar-fill" style="width:67%"></div></div><span class="bar-num">2/3</span></div>
+            </td>
+            <td><span class="tag mid">部分</span></td>
+            <td><code>calculator</code> 有卖出越界缺陷；<code>metrics.py</code> 零调用零测试</td>
+          </tr>
+          <tr>
+            <td class="name">storage</td>
+            <td class="num">5</td>
+            <td>
+              <div class="bar"><div class="bar-track"><div class="bar-fill" style="width:80%"></div></div><span class="bar-num">4/5</span></div>
+            </td>
+            <td><span class="tag ok">良好</span></td>
+            <td>四个 DAO 中三个已覆盖；<code>asset_meta</code> 无 DAO</td>
+          </tr>
+          <tr>
+            <td class="name">services</td>
+            <td class="num">4</td>
+            <td>
+              <div class="bar"><div class="bar-track"><div class="bar-fill" style="width:50%"></div></div><span class="bar-num">2/4</span></div>
+            </td>
+            <td><span class="tag ok">良好</span></td>
+            <td><code>portfolio_service</code> / <code>sync_service</code> 已覆盖</td>
+          </tr>
+          <tr>
+            <td class="name">data</td>
+            <td class="num">5</td>
+            <td>
+              <div class="bar"><div class="bar-track"><div class="bar-fill" style="width:100%"></div></div><span class="bar-num">5/5</span></div>
+            </td>
+            <td><span class="tag bad">已修 2 处</span></td>
+            <td>循环导入 + 时区各修一处；降级能力与文档不符</td>
+          </tr>
+          <tr>
+            <td class="name">models</td>
+            <td class="num">4</td>
+            <td>
+              <div class="bar"><div class="bar-track"><div class="bar-fill" style="width:100%"></div></div><span class="bar-num">4/4</span></div>
+            </td>
+            <td><span class="tag ok">良好</span></td>
+            <td>随 storage 测试间接覆盖；<code>snapshots</code> 缺 note 字段</td>
+          </tr>
+          <tr>
+            <td class="name">cli</td>
+            <td class="num">16</td>
+            <td>
+              <div class="bar"><div class="bar-track"><div class="bar-fill none" style="width:2%"></div></div><span class="bar-num">0/16</span></div>
+            </td>
+            <td><span class="tag bad">待补</span></td>
+            <td>16 个文件零测试；P0 入口点与多数 P2 缺陷都集中在此层</td>
+          </tr>
+          <tr>
+            <td class="name">utils</td>
+            <td class="num">5</td>
+            <td>
+              <div class="bar"><div class="bar-track"><div class="bar-fill none" style="width:2%"></div></div><span class="bar-num">0/5</span></div>
+            </td>
+            <td><span class="tag bad">待补</span></td>
+            <td>配置系统核心 <code>config.py</code> 零测试、零校验</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ======================= 下一步 ======================= -->
+  <section>
+    <div class="sec-head">
+      <h2>当初的建议与执行结果</h2>
+      <span class="count">3 项已做 / 1 项进行中</span>
+    </div>
+    <p class="sec-note">
+      报告出完后，你决定四个方向都做。下面是当初建议的四项及其当前状态；
+      <strong>剩余工作的完整清单已随代码入库到 <code>docs/BACKLOG.md</code></strong>，
+      本页不再兼作工作清单。
+    </p>
+
+    <div class="cards">
+
+      <div class="card">
+        <span class="idx">01</span>
+        <h3>修入口点，让错误处理真正生效 <span class="pill done">已完成 da9c0fe</span></h3>
+        <p>
+          改一行，<code>ERROR_HANDLING.md</code> 的退出码与统一前缀立刻对所有用户生效。
+          <code>remove</code> / <code>check</code> 的报错格式统一转入 BACKLOG 的 B-08。
+        </p>
+        <ul>
+          <li>✅ pyproject 入口点指向 <code>main</code></li>
+          <li>✅ 补 <code>HoldingsError</code> 基类与退出码 5</li>
+          <li>⬜ 统一 <code>remove</code> / <code>check</code> 的报错格式 → B-08</li>
+        </ul>
+        <div class="cost">错误码契约已由 12 个用例锁住</div>
+      </div>
+
+      <div class="card">
+        <span class="idx">02</span>
+        <h3>加输入校验与事务边界 <span class="pill done">已完成 da9c0fe</span></h3>
+        <p>
+          堵住了唯一会静默写坏数据的一类缺陷。写入闸门对<strong>合并历史后的完整序列</strong>
+          做严格重放校验，补录往日交易也按当时的持仓判定。
+        </p>
+        <ul>
+          <li>✅ 卖出不得超过持有、买入数量须 &gt; 0</li>
+          <li>✅ market / type / date 用 <code>click.Choice</code> / 回调校验</li>
+          <li>✅ CSV 导入加表头校验 + 整批回滚 + 行号</li>
+          <li>✅ <code>sync</code> 全失败时返回 1</li>
+        </ul>
+        <div class="cost">本报告风险最高的一项，已落地</div>
+      </div>
+
+      <div class="card">
+        <span class="idx">03</span>
+        <h3>补 utils / cli 层测试 <span class="pill p2">进行中</span></h3>
+        <p>
+          测试从 56 增至 112，<code>utils/config.py</code> 到 90%、退出码契约与排序契约被逐条锁住。
+          但 <code>metrics.py</code> 仍是 0%，<code>data/</code> 的降级路径无测试。
+        </p>
+        <ul>
+          <li>✅ <code>config.py</code> 的 deep merge 与 YAML 错误</li>
+          <li>✅ 退出码契约（走 <code>main()</code>，非 CliRunner）</li>
+          <li>⬜ <code>metrics.py</code> 三个纯函数 → B-02</li>
+          <li>⬜ formatter / currency / deps / data 层 → B-09、B-10</li>
+        </ul>
+        <div class="cost">全项目覆盖率 67%，未达目标</div>
+      </div>
+
+      <div class="card">
+        <span class="idx">04</span>
+        <h3>把死代码接上 <span class="pill p1">未开始</span></h3>
+        <p>
+          <code>asset_meta</code> 与 <code>metrics.py</code> 仍是死代码——这一项没动，
+          因为它是唯一需要设计决策的一项。
+        </p>
+        <ul>
+          <li>⬜ <code>asset_meta</code> DAO + 费率录入 + 展示 → B-01</li>
+          <li>⬜ report 接上最大回撤 / 年化 / 夏普 → B-02</li>
+          <li>⚠️ <strong>不要</strong>实现「按持仓天数计提管理费」：<code>SCHEMA.md</code>
+              明确该费率只作参考展示，自动计提会与文档冲突</li>
+        </ul>
+        <div class="cost">详见 BACKLOG B-01 / B-02</div>
+      </div>
+
+    </div>
+  </section>
+
+  <footer>
+    <span>审计对象 <code>github.com/Chenghao999/holdings</code></span>
+    <span>基线提交 <code>8a94106</code></span>
+    <span>31 项发现均已逐行核对源码或实测复现</span>
+    <span>最近更新 <code>1a3405e</code> · 22 项已修复 / 9 项待处理</span>
+  </footer>
+
+</div>

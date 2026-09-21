@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}净值曲线 · holdings{% endblock %}
+
+{% block content %}
+<form method="get" action="/chart">
+  <label for="start">起始日期</label>
+  <input type="date" id="start" name="start" value="{{ start }}" />
+  <button type="submit">筛选</button>
+</form>
+
+{% if error %}
+<p class="hint">{{ error }}</p>
+{% else %}
+{# figure 是 plotly 生成的 HTML 片段，来自本进程而非用户输入，故按原样嵌入。 #}
+<section class="panel chart">{{ figure | safe }}</section>
+{% endif %}
+{% endblock %}

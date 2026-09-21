@@ -31,13 +31,14 @@
 | 阶段 | 形态 | 说明 |
 |------|------|------|
 | 当前（MVP） | 纯 CLI | 手动导入 + 自动同步，SQLite 本地存储 |
-| 中期 | Textual TUI ✅ / Web | 终端仪表盘**已落地**（[B-15](BACKLOG.md#b-15)），网页看板待做 |
+| 中期 | Textual TUI ✅ / Web ✅ | 终端仪表盘（[B-15](BACKLOG.md#b-15)）与网页只读看板（[B-20](BACKLOG.md#b-20)）均已落地 |
 | 远期 | PySide6 桌面 / FastAPI 服务 | 跨平台桌面应用或 RESTful 服务 |
 
 > **演进的前提已经在 CI 里了**：UI 要复用的是 `services/` 的返回值，而这些层
 > 不许打印、不许依赖终端库、`services` 也不许反向依赖 `cli`——
-> 六条铁律由 `tests/test_layering.py` 逐条守着，不是文档里的一句承诺。
-> 待做的工作见 [BACKLOG B-15](BACKLOG.md#b-15)。
+> 六条铁律由 `tests/test_layering.py` 逐条守着，不是文档里的一句承诺——
+> 第三个界面（Web）落地时没有为此改动核心层一行，就是这条的实证。
+> 待做的工作见 [BACKLOG](BACKLOG.md#剩余条目的执行顺序)。
 
 ## 成功标准
 

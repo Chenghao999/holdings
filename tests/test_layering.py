@@ -33,10 +33,12 @@ ALLOWED_IMPORTS: dict[str, set[str]] = {
     # 表现层只经 services 触碰核心层；utils / models / exceptions 是基础层，
     # 任何层都可以直接取用（命令解析配置、构造 DTO 都要用）。
     # 已知的越界由 ALLOWED_CLI_CORE_TOUCHES 给出，见下方拼装。
-    # cli 还允许 import tui：`holdings tui` 只是入口，界面本体在那边。
-    "cli": {"exceptions", "models", "utils", "services", "tui"},
-    # 另一条表现层。与 cli 平级、互不 import——各写各的界面，共用同一套 services。
+    # cli 还允许 import tui / web：`holdings tui` 与 `holdings web` 只是入口，
+    # 界面本体在那两层里。
+    "cli": {"exceptions", "models", "utils", "services", "tui", "web"},
+    # 另两条表现层。三者平级、互不 import——各写各的界面，共用同一套 services。
     "tui": {"exceptions", "models", "utils", "services"},
+    "web": {"exceptions", "models", "utils", "services"},
 }
 
 #: cli 已知的直接触碰核心层之处。这是一份**待办镜像**而不是许可证：

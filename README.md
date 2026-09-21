@@ -4,7 +4,8 @@
 
 `holdings` 是一款专为 Python 开发者设计的本地化投资管理命令行工具，旨在解决支付宝、券商 APP 数据分散、历史回溯困难的问题。
 
-- **当前阶段（MVP）**：纯命令行交互，支持手动导入 + 自动同步价格，数据全量本地存储（SQLite）。
+- **当前阶段**：以命令行为主，另有终端仪表盘与网页只读看板；支持手动导入 +
+  自动同步价格，数据全量本地存储（SQLite）。
 - **开源协议**：MIT
 - **标签**：`#portfolio-cli` `#quant` `#python` `#akshare` `#yfinance`
 
@@ -17,6 +18,8 @@
 - 本地 SQLite 存储，单文件便携，隐私安全。
 - 价格自动同步：A 股优先 akshare、失败降级 yfinance，美股 / 国际黄金走 yfinance，带 5 分钟缓存防重复请求。
 - 持仓盈亏报表、净值快照、交互式净值曲线。
+- 三种界面共用同一套服务层：CLI（`holdings …`）、终端仪表盘
+  （`holdings tui`）、网页只读看板（`holdings web`），各自按需安装。
 - 严格三层架构，为未来的 GUI / Web 扩展预留接口。
 
 ---
@@ -49,6 +52,9 @@ holdings list --sort 盈亏率
 
 # 同步最新价格
 holdings sync --market 全部
+
+# 打开网页看板（只读，需要 pip install 'holdings[web]'）
+holdings web
 ```
 
 命令出错时统一以 `错误（N）：…` 的格式输出到 stderr，并按错误类型返回退出码
