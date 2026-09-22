@@ -71,7 +71,7 @@ tests/
 ├── test_unpriced.py       # 没有行情时显示 —，不显示 −100%
 ├── test_multi_currency.py # 外币计价的标的不与人民币混加
 ├── test_narrow_terminal.py # 窄终端下代码列完整可见
-├── test_chart_cmd.py      # --start 真的筛日期；空区间报错而非空白图
+├── test_chart_cmd.py      # --start 真的筛日期；空区间报错而非空白图；成功路径真的落盘
 ├── test_meta_cmd.py       # meta 录入/查看/删除；费率不影响成本与盈亏
 ├── test_check_cmd.py      # check 的报错前缀与两种模式退出码一致
 ├── test_formatter.py      # 数值显示：— 的语义、ratio 与 percent 不可互换
@@ -89,15 +89,16 @@ tests/
 ## 覆盖率目标
 
 - `portfolio/calculator.py`：**≥ 90%**（关键在于费用与卖出边界）— 当前 **99%**。
-- 全项目行覆盖率：当前 **96%**（400 个用例）；`data/` 层 **98%**
+- 全项目行覆盖率：当前 **96%**（401 个用例）；`data/` 层 **98%**
   （`python -m pytest --cov=holdings`）。门槛 `fail_under = 95`，达不到
   `pytest` 直接返回非零——数值与理由见下面的「CI 里跑什么」。
 - 新增层不拉后腿：`web/app.py` **100%**——看板的每个分支（三个页面、缺 plotly、
-  日期筛空、日期不合法）都有用例走到。
-- 明确低于目标的区域：`cli/renderers/chart_renderer.py`（67%，漏的那一行是
-  `figure.write_html()`——用例都止步于「该不该产图」，没有一条真的把文件写出来过）、
-  `cli/renderers/table_renderer.py` 与 `cli/commands/init.py`（均 93%，前者是费用表与
-  占比表的空分支，后者是缺必需依赖时的警告分支）。
+  日期筛空、日期不合法）都有用例走到。产图那条链路也是 **100%**：
+  `cli/commands/chart.py` / `cli/renderers/chart_renderer.py` /
+  `services/chart_service.py`（前两者的最后几行曾长期无人执行，见
+  [BACKLOG B-25](BACKLOG.md)）。
+- 明确低于目标的区域：`cli/renderers/table_renderer.py` 与 `cli/commands/init.py`
+  （均 93%，前者是费用表与占比表的空分支，后者是缺必需依赖时的警告分支）。
   [BACKLOG](BACKLOG.md) 的 B-07 / B-09 / B-10 修掉的那几处已不在列
   （`cli/commands/sync.py` 由 22% 升至 95%）。
 
