@@ -89,12 +89,44 @@ tests/
 ## 覆盖率目标
 
 - `portfolio/calculator.py`：**≥ 90%**（关键在于费用与卖出边界）— 当前 **99%**。
-- 全项目行覆盖率：当前 **96%**（398 个用例）；`data/` 层 **98%**
-  （`python -m pytest --cov=holdings`）。
+- 全项目行覆盖率：当前 **96%**（400 个用例）；`data/` 层 **98%**
+  （`python -m pytest --cov=holdings`）。门槛 `fail_under = 95`，达不到
+  `pytest` 直接返回非零——数值与理由见下面的「CI 里跑什么」。
 - 新增层不拉后腿：`web/app.py` **100%**——看板的每个分支（三个页面、缺 plotly、
   日期筛空、日期不合法）都有用例走到。
-- 明确低于目标的区域：`cli/renderers/chart_renderer.py`（67%，未装 plotly 的分支）、
+- 明确低于目标的区域：`cli/renderers/chart_renderer.py`（67%，漏的那一行是
+  `figure.write_html()`——用例都止步于「该不该产图」，没有一条真的把文件写出来过）、
   `cli/renderers/table_renderer.py` 与 `cli/commands/init.py`（均 93%，前者是费用表与
   占比表的空分支，后者是缺必需依赖时的警告分支）。
   [BACKLOG](BACKLOG.md) 的 B-07 / B-09 / B-10 修掉的那几处已不在列
   （`cli/commands/sync.py` 由 22% 升至 95%）。
+
+---
+
+## CI 里跑什么
+
+`.github/workflows/ci.yml` 分三个作业，各自证明一件**另外两个证明不了**的事
+（来历见 [BACKLOG B-24](BACKLOG.md)）：
+
+| 作业 | 证明什么 | 少了它，什么会漏过去 |
+|------|----------|----------------------|
+| `test`（3.10 / 3.12 / 3.13） | 用例、ruff、覆盖率门槛 | —— |
+| `package` | 装出来的 wheel 能用 | `pip install -e` 与 `pythonpath = ["src"]` 都直接读源码树：文件根本没进 wheel，用例照样全绿（B-20 的模板就是这么丢的） |
+| `extras` | `pyproject` 声明的每个 extra 都装得上 | 前两个作业装的是写死的那几个包，从不读 extra 声明本身：包名打错、版本号钉死成一个不存在的，谁都不会知道 |
+
+三处容易写错、踩过一次的细节：
+
+- **`package` 里的 `-o pythonpath=` 不能省。** `pyproject.toml` 写着
+  `pythonpath = ["src"]`，不盖掉的话 pytest 会把源码树放回 `sys.path`，
+  这个作业就退回成「测源码树」——而且照样全绿。同一作业里还有一句
+  「`holdings.__file__` 必须在 `site-packages` 下」的断言，防的是守卫自己失效。
+  这条命令的有效性实测过：故意让模板不进 wheel，它红 13 个用例，
+  与 B-20 那次 CI 失败同数。
+- **`extras` 的名单从 `pyproject.toml` 现读**，不在 workflow 里再抄一份：
+  抄一份的话，将来加了 extra 而忘了同步到这里，这条检查就悄悄失效了。
+- **`test` 作业装 `.[dev,chart]`。** 不装 plotly，绘图那几条用例会静默跳过，
+  于是那几行代码成了「看着测过」的样子。`data` 那两组很重（实测 344MB），
+  只在 `extras` 作业里装一次。
+- 覆盖率门槛写在 `pyproject.toml` 的 `[tool.coverage.report]`，本地
+  `pytest --cov` 与 CI 读同一份，不把数字再抄进 workflow。
+

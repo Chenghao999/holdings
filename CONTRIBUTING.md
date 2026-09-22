@@ -35,7 +35,7 @@ python3 -m venv .venv
 |------|------|
 | `.venv/bin/python -m pip install -e ".[dev]"` | 安装开发依赖 |
 | `pytest tests/` | 运行全部单元测试 |
-| `pytest tests/ --cov=holdings` | 运行测试并生成覆盖率报告 |
+| `pytest tests/ --cov=holdings` | 运行测试并生成覆盖率报告（低于 95% 会失败，门槛在 `pyproject.toml`） |
 | `ruff check .` | 代码规范检查 |
 | `ruff format .` | 代码格式化 |
 | `holdings --help` | 查看 CLI 命令 |

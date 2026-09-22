@@ -5,6 +5,23 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **CI 不再只验证「源码树能跑」**（[BACKLOG B-24](docs/BACKLOG.md)）：一条作业
+  拆成三条，每条证明一件原来没人证明的事。
+  - `package`：构建 wheel 并**不用 `-e`** 装进去，拿装出来的包跑
+    `tests/test_web.py`。`pip install -e` 与 `pythonpath = ["src"]` 都直接读
+    源码树，文件没进 wheel 也照样全绿——[B-20](docs/BACKLOG.md) 的模板就是
+    这么丢的。已用「故意去掉 `package-data`」的坏 wheel 实测：13 个用例变红。
+  - `extras`：装齐 `pyproject.toml` 声明的**每一个** extra（名单现读，不在
+    workflow 里抄一份）后跑全量用例。此前 CI 只装写死的 `[dev]`，
+    `web` 那一行的 `uvicorn` 即使名字打错也没人知道。
+  - `test` 作业接入覆盖率门槛：`fail_under = 95` 写在 `pyproject.toml` 的
+    `[tool.coverage.report]`，本地 `pytest --cov` 与 CI 读同一份。
+    取 95 而非 96，是因为实测值 95.55%，终端显示的 96% 是四舍五入来的。
+  - `test` 改为装 `.[dev,chart]`：不装 plotly 时绘图用例会静默跳过，
+    那几行代码会变成「看着测过」的样子。
+
 ### Added
 
 - **Web 只读看板**（[BACKLOG B-20](docs/BACKLOG.md)）：新增 `src/holdings/web/`
