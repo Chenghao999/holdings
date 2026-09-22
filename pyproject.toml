@@ -67,6 +67,19 @@ holdings = ["web/templates/*.html"]
 pythonpath = ["src"]
 testpaths = ["tests"]
 
+[tool.coverage.run]
+source = ["holdings"]
+
+[tool.coverage.report]
+# 门槛比实测值低一档：当前是 95.5%（1594 条语句、漏 71 条），终端上显示的
+# 96% 是四舍五入来的，照那个数卡会立刻红。留一档余量是为了让门槛拦住
+# 「成片掉下去」，而不是被增删一行语句反复绊倒。
+#
+# 放在这里而不是 workflow 的命令行里：本地跑 `pytest --cov` 与 CI 用同一个数，
+# 两处各写一个早晚会分叉。
+fail_under = 95
+show_missing = true
+
 [tool.ruff]
 line-length = 100
 target-version = "py310"

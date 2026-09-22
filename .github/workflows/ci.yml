@@ -6,6 +6,7 @@ on:
   pull_request:
 
 jobs:
+  # 「源码树能跑」：用例、静态检查、覆盖率门槛。
   test:
     runs-on: ubuntu-latest
     strategy:
@@ -20,14 +21,84 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
+        # 带上 chart：不装 plotly 的话，绘图那几条用例会静默跳过，
+        # 那几行代码就成了「看着测过」的样子。data 那两组（akshare /
+        # yfinance）很重（实测 344MB），放在下面的 extras 作业里装一次就够。
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          pip install -e ".[dev,chart]"
 
       - name: Run tests
-        run: pytest tests/ -q
+        # 覆盖率门槛写在 pyproject 的 [tool.coverage.report] 里，本地与 CI 同一份，
+        # 不在这里再写一遍——两处各写一个数，早晚会分叉。
+        run: pytest tests/ -q --cov=holdings
 
       - name: Lint with ruff
         run: |
           ruff check .
           ruff format --check .
+
+  # 「装出来的分发包能用」。上面那个作业证明不了这件事：`pip install -e` 与
+  # pyproject 里的 `pythonpath = ["src"]` 都直接读源码树，文件根本没进 wheel
+  # 也照样全绿。B-20 的模板就是这么丢的——本地 400 个用例全过，
+  # CI 上每一次请求都是 TemplateNotFound。
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build the wheel
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build --wheel --outdir dist
+
+      - name: Install the wheel, not the source tree
+        # 这里特意不写 `.[web]`：那会以可编辑方式把源码树装进来，盖掉刚装的
+        # wheel，整个作业又变回在测源码树——正是这个作业要防的事。
+        run: |
+          pip install dist/*.whl
+          pip install pytest "fastapi>=0.110" "jinja2>=3.1" "httpx>=0.27"
+
+      - name: Run the web tests against the installed wheel
+        run: |
+          python - <<'PY'
+          import pathlib, holdings
+
+          path = pathlib.Path(holdings.__file__).resolve()
+          # 先确认被测的真是装出来的包。少了这一行，将来某次路径变化让 import
+          # 落回源码树，下面那条命令会安静地测错东西，而且它照样全绿。
+          assert "site-packages" in path.parts, f"被测的不是装出来的包：{path}"
+          print("被测的包：", path)
+          PY
+          # `-o pythonpath=` 不能省：pyproject 里写着 pythonpath = ["src"]，
+          # 不盖掉的话 pytest 会把源码树放回 sys.path。
+          # 已实测：故意让模板不进 wheel，这条命令红 13 个用例，与 B-20 那次同数。
+          pytest tests/test_web.py -q -o pythonpath= -p no:cacheprovider
+
+  # 「每个 extra 都装得上」。上面两个作业装的是写死的那几个包，看不到 extra
+  # 声明本身：声明里把包名打错、或钉一个不存在的版本号，谁都不会知道。
+  extras:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install every extra pyproject declares
+        # 名单从 pyproject 现读，而不是在这里抄一份：抄一份的话，将来加了 extra
+        # 而忘了加到这里，这一条就悄悄失效了。（3.12 自带 tomllib，不必装解析器。）
+        run: |
+          extras=$(python -c "import pathlib, tomllib; print(','.join(tomllib.loads(pathlib.Path('pyproject.toml').read_text(encoding='utf-8'))['project']['optional-dependencies']))")
+          echo "pyproject 声明的 extra：$extras"
+          pip install -e ".[$extras]"
+
+      - name: Run the full suite with every extra available
+        # 与 test 作业的区别：那边只装得动轻的那几组，这边 plotly / textual /
+        # fastapi / akshare / yfinance 全都在，跳过的那几条用例在这里真的跑。
+        run: pytest tests/ -q
