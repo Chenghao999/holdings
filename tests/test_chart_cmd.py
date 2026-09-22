@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import sys
 from datetime import date
 
@@ -136,3 +137,44 @@ def test_start_help_no_longer_says_it_is_a_placeholder():
 
     assert "暂存" not in help_text
     assert "YYYY-MM-DD" in help_text
+
+
+# ------------------------------------------------------------------ 产图路径
+
+requires_plotly = pytest.mark.skipif(
+    importlib.util.find_spec("plotly") is None,
+    reason="需要 plotly（chart extra；CI 的 test 作业装的是 .[dev,chart]）",
+)
+
+
+@requires_plotly
+def test_the_chart_is_written_and_the_browser_is_asked_to_open_it(
+    use_db, monkeypatch, capsys, tmp_path
+):
+    """成功路径：图真的写出来了、告诉用户写到哪儿、并请浏览器打开。
+
+    这条此前完全没有。上面四条覆盖的都是**图该不该产**（未来日期、非法日期）
+    与**数据算得对不对**（`chart_service`），而「算完之后落盘并告知用户」那段
+    ——`chart.py` 最后三行——在测试里从没执行过。于是 plotly 换了
+    `write_html` 的签名、输出路径处理错了、或者干脆忘了通知用户，
+    CI 都不会红，用户敲一下才知道。
+
+    `webbrowser.open` 必须打桩：不打桩时本地跑一次测试就弹一个浏览器窗口，
+    在 CI 上则是一个没人看、也没人发现失败的副作用。
+    """
+    out_file = tmp_path / "networth.html"
+    opened: list[str] = []
+    monkeypatch.setattr("webbrowser.open", lambda url: opened.append(url) or True)
+
+    code = _run(monkeypatch, "--output", str(out_file))
+    out = capsys.readouterr().out
+
+    assert code == 0
+    html = out_file.read_text(encoding="utf-8")
+    # 「是个 plotly 图」而不是「建出来就空着的文件」——退出码 0 只说明没抛异常
+    assert "Plotly.newPlot" in html
+    # 快照日期要真的进到图里：只断言「文件非空」的话，一张空图也能过
+    assert "2025-01-01" in html
+    assert "已生成图表" in out
+    assert str(out_file) in out, "得说清写到哪儿了，否则用户还得自己去找文件"
+    assert opened == [str(out_file)], "没请浏览器打开，这一步就白写了"
