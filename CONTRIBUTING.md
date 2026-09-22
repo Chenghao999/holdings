@@ -52,9 +52,25 @@ python3 -m venv .venv
 - `storage/`：持久化层（SQLite CRUD）
 - `utils/`：工具函数
 
+## 分支与 PR 粒度
+
+**一个工作项 = 一个分支 = 一个 PR。** 分支从最新的 `main` 切出，分支名与 PR 标题都带上
+条目编号（如 `b-03-snapshot-note` / `B-03: snapshot 的 --note 落库`）——清单、PR、
+`git log` 三者据此互相追溯。
+
+- **一个 PR 里可以有几个提交，但不跨工作项**：「实现 + 测试 + 文档」拆成几个提交是好的；
+  把 B-03 与 B-06 塞进同一个 PR 则不行——那样的 PR 没法只批准一半，也没法只回滚一半。
+- **CI 必须绿才合。** 挂了先修 CI，不要在红的基础上叠加。
+- 合并后删掉分支，并把本地 `main` 同步到最新。
+
+细则与理由（为什么要这么细）只在
+[编码与提交规范](docs/CODING_STANDARDS.md#合并粒度一个功能一个-pr硬性要求) 里写一遍，
+这里只放可操作的那部分；**提交**（而不是 PR）的粒度要求见该文件上一节。
+
 ## 提交 PR 前检查清单
 
 1. 运行 `pytest tests/` 全部通过。
 2. 运行 `ruff check .` 与 `ruff format .` 无报错。
 3. 新增代码遵循三层分离铁律（业务层无 `print` / `click.echo` / `rich.print`）。
 4. 提交信息遵循 [Conventional Commits](https://www.conventionalcommits.org/) 规范（见 [CODING_STANDARDS.md](docs/CODING_STANDARDS.md)）。
+5. 本 PR 只做一个工作项（见 [分支与 PR 粒度](#分支与-pr-粒度)）——混进了第二个条目，就把它拆出去再提。
