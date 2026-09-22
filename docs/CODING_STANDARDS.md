@@ -87,8 +87,11 @@
 2. **一个 PR 里可以有几个提交，但不跨工作项**：同一功能的「实现 + 测试 + 文档」
    拆成几个提交是好的；把 B-03 和 B-06 放进同一个 PR 则不行——那样的 PR 没法
    只批准一半，也没法只回滚一半。
-3. **CI 必须绿才合**（`.github/workflows/ci.yml`：三个 Python 版本跑 `pytest`
-   与 `ruff check` / `ruff format --check`）。CI 挂了先修 CI，不要在红的基础上叠加。
+3. **CI 必须绿才合**（`.github/workflows/ci.yml` 分三个作业：`test` 在三个 Python
+   版本上跑 `pytest`（含覆盖率门槛）与 `ruff check` / `ruff format --check`；
+   `package` 验证**装出来的 wheel** 能用；`extras` 验证声明的每个 extra 都装得上。
+   详见[测试策略](TESTING_STRATEGY.md#ci-里跑什么)）。CI 挂了先修 CI，
+   不要在红的基础上叠加。
 4. **合并后删掉分支**，本地 `main` 同步到远端再开下一个分支，避免在过期的
    `main` 上开工。
 5. **PR 描述写清「为什么」和「怎么验证」**，而不是复述 diff：改了什么、
