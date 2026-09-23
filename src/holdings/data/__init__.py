@@ -1,3 +1,3 @@
-"""数据获取层：外部行情 API 封装，含重试与降级。不依赖 storage。"""
+"""数据适配层：外部数据的来源，含行情 API 与对账单文件。不依赖 storage。"""
 
-__all__ = ["a_stock", "fetcher", "gold", "us_stock"]
+__all__ = ["a_stock", "brokers", "fetcher", "gold", "us_stock"]

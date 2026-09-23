@@ -1,8 +1,7 @@
-"""holdings import 命令：CSV 批量导入。"""
+"""holdings import 命令：对账单批量导入。"""
 
 from __future__ import annotations
 
-import csv
 from dataclasses import dataclass
 from datetime import date
 
@@ -16,9 +15,8 @@ from holdings.models.enums import (
     TradeType,
     classify_trade_type,
 )
+from holdings.models.statement import StatementRow
 from holdings.models.transaction import Transaction
-
-REQUIRED_COLUMNS = ("symbol", "trade_date", "trade_type", "quantity", "price")
 
 #: 每一类不入账的行为什么不入账。措辞要让用户明白「没坏，只是没做」——
 #: 含糊其辞会被读成「已经处理过了」。
@@ -42,33 +40,35 @@ class UnpostedRow:
 
 @click.command()
 @click.option(
-    "--file", "file_path", required=True, type=click.Path(exists=True), help="CSV 文件路径"
+    "--file", "file_path", required=True, type=click.Path(exists=True), help="对账单文件路径"
 )
 @click.option("--group", default=None, help="组合分组")
-@click.option("--fee-column", default=None, help="费用列名，映射到 fee 字段")
+@click.option("--broker", default=None, help="对账单格式名；不给则按表头自动识别")
+@click.option("--fee-column", default=None, help="费用列名（照文件里的写法），覆盖格式自带的费用列")
 @click.option("--strict", is_flag=True, help="有未入账的行时一笔都不写，并以退出码 5 结束")
-def import_cmd(file_path: str, group: str | None, fee_column: str | None, strict: bool) -> None:
-    """从 CSV 批量导入历史交易。
+def import_cmd(
+    file_path: str, group: str | None, broker: str | None, fee_column: str | None, strict: bool
+) -> None:
+    """从对账单文件批量导入历史交易。
 
     整批校验、整批落库：任何一行非法都不会写入任何数据，并指出出错的行号。
 
     对账单里认得出、但本工具不入账的行（分红、送转、配股、银证转账、利息）
     同样一笔不写，但会逐行列出行号与原因——静默跳过会让「导入成功」变成假话。
     """
-    from holdings.services import trade_service
+    from holdings.services import import_service, trade_service
     from holdings.utils.config import load_config
 
     cfg = load_config()
-    with open(file_path, encoding="utf-8-sig", newline="") as f:
-        reader = csv.DictReader(f)
-        _check_header(reader.fieldnames or [], fee_column)
-        rows = list(reader)
-
-    if not rows:
-        click.echo("CSV 中没有数据行，未导入任何交易")
+    statement = import_service.read_statement(file_path, broker=broker, fee_column=fee_column)
+    if not statement.rows:
+        click.echo("文件中没有数据行，未导入任何交易")
         return
 
-    transactions, unposted = _split_rows(rows, group or cfg.default_group, fee_column)
+    # 自动识别挑中了谁要说出来：认错了才有得查，而识别本身不报错。
+    click.echo(f"解析格式：{statement.broker_label}")
+
+    transactions, unposted = _split_rows(statement.rows, group or cfg.default_group)
 
     # --strict 是「要么全进、要么不进」，而不是「先进去再报错」：本命令的契约
     # 本来就是整批校验、整批写入，而 import 目前还没有幂等（BACKLOG B-29）——
@@ -82,13 +82,13 @@ def import_cmd(file_path: str, group: str | None, fee_column: str | None, strict
 
     # 整批校验通过才落库；TradeValidationError 冒泡到入口，映射为退出码 5。
     ids = trade_service.add_transactions(cfg.database_path, transactions)
-    _echo_summary(len(rows), len(ids), unposted)
+    _echo_summary(len(statement.rows), len(ids), unposted)
 
 
 def _split_rows(
-    rows: list[dict[str, str]], group: str, fee_column: str | None
+    rows: list[StatementRow], group: str
 ) -> tuple[list[Transaction], list[UnpostedRow]]:
-    """把 CSV 行分成「入账的交易」与「认得出但不入账的行」。
+    """把对账单的行分成「入账的交易」与「认得出但不入账的行」。
 
     `trade_type` **认不出**的行仍然整批拒绝（退出码 5），与改动前一致：
     「这个值非法」要用户去改文件，「这个值认识、只是暂不入账」只要用户知道。
@@ -97,15 +97,17 @@ def _split_rows(
     """
     transactions: list[Transaction] = []
     unposted: list[UnpostedRow] = []
-    for line_no, row in enumerate(rows, start=2):  # 第 1 行是表头
-        raw_type = (row.get("trade_type") or "").strip()
+    for row in rows:
+        raw_type = row.get("trade_type")
         category = classify_trade_type(raw_type)
         if isinstance(category, NonTradeType):
-            unposted.append(UnpostedRow(line_no, raw_type, category))
+            unposted.append(UnpostedRow(row.line_no, raw_type, category))
         elif category is None:
-            raise TradeValidationError(f"第 {line_no} 行 trade_type 列不是合法交易类型：{raw_type}")
+            raise TradeValidationError(
+                f"第 {row.line_no} 行 trade_type 列不是合法交易类型：{raw_type}"
+            )
         else:
-            transactions.append(_row_to_transaction(row, line_no, group, fee_column, category))
+            transactions.append(_row_to_transaction(row, group, category))
     return transactions, unposted
 
 
@@ -131,73 +133,57 @@ def _line_numbers(unposted: list[UnpostedRow]) -> str:
     return "、".join(str(row.line_no) for row in unposted)
 
 
-def _check_header(fieldnames: list[str], fee_column: str | None) -> None:
-    """校验表头。缺失列与不存在的费用列都在这里一次性报清楚。
-
-    用 TradeValidationError（退出码 5）而非 click.BadParameter：
-    这些是文件内容问题、不是命令行参数问题，报错文案也就不该带
-    「Invalid value for ...」这类 click 前缀。
-    """
-    missing = [c for c in REQUIRED_COLUMNS if c not in fieldnames]
-    if missing:
-        raise TradeValidationError(
-            f"CSV 缺少必需列：{'、'.join(missing)}（现有列：{'、'.join(fieldnames)}）"
-        )
-    if fee_column and fee_column not in fieldnames:
-        # 此前是静默按 0 计费，用户会以为费用导进来了。
-        raise TradeValidationError(
-            f"--fee-column 指定的列不存在：{fee_column}（现有列：{'、'.join(fieldnames)}）"
-        )
-
-
-def _row_to_transaction(
-    row: dict[str, str],
-    line_no: int,
-    group: str,
-    fee_column: str | None,
-    trade_type: TradeType,
-) -> Transaction:
-    """把一行 CSV 转成 Transaction，出错时带上行号与列名。
+def _row_to_transaction(row: StatementRow, group: str, trade_type: TradeType) -> Transaction:
+    """把一行对账单转成 Transaction，出错时带上行号与列名。
 
     `trade_type` 由调用方判定后传入：入账与否在 `_split_rows` 已经分过，
     这里再解一次，就会有第二个「什么算合法交易类型」的答案。
     """
+    line_no = row.line_no
 
     def fail(column: str, reason: str) -> TradeValidationError:
         return TradeValidationError(f"第 {line_no} 行 {column} 列{reason}")
 
+    raw_date = row.get("trade_date")
     try:
-        trade_date = date.fromisoformat(row["trade_date"])
+        trade_date = date.fromisoformat(raw_date)
     except ValueError:
-        raise fail("trade_date", f"不是合法日期（应为 YYYY-MM-DD）：{row['trade_date']}") from None
+        raise fail("trade_date", f"不是合法日期（应为 YYYY-MM-DD）：{raw_date}") from None
 
+    raw_market = row.get("market")
     try:
-        market = MarketType(row.get("market") or MarketType.A_SHARE.value)
+        market = MarketType(raw_market or MarketType.A_SHARE.value)
     except ValueError:
-        raise fail("market", f"不是合法市场：{row.get('market')}") from None
+        raise fail("market", f"不是合法市场：{raw_market}") from None
 
+    raw_asset_type = row.get("asset_type")
     try:
-        asset_type = AssetType(row.get("asset_type") or AssetType.STOCK.value)
+        asset_type = AssetType(raw_asset_type or AssetType.STOCK.value)
     except ValueError:
-        raise fail("asset_type", f"不是合法资产类型：{row.get('asset_type')}") from None
+        raise fail("asset_type", f"不是合法资产类型：{raw_asset_type}") from None
 
+    raw_quantity = row.get("quantity")
     try:
-        quantity = float(row["quantity"])
+        quantity = float(raw_quantity)
     except ValueError:
-        raise fail("quantity", f"不是合法数字：{row['quantity']}") from None
+        raise fail("quantity", f"不是合法数字：{raw_quantity}") from None
 
+    raw_price = row.get("price")
     try:
-        price = float(row["price"])
+        price = float(raw_price)
     except ValueError:
-        raise fail("price", f"不是合法数字：{row['price']}") from None
+        raise fail("price", f"不是合法数字：{raw_price}") from None
 
+    # 费用列叫什么由解析器说了算（`佣金` / `手续费` / 三列相加），
+    # 报错得用它的叫法，否则用户在自己的文件里找不到「fee」这一列。
+    raw_fee = row.get("fee")
     try:
-        fee = float(row[fee_column]) if fee_column and row.get(fee_column) else 0.0
+        fee = float(raw_fee) if raw_fee else 0.0
     except ValueError:
-        raise fail(str(fee_column), f"不是合法数字：{row.get(fee_column)}") from None
+        raise fail(row.fee_source, f"不是合法数字：{raw_fee}") from None
 
     return Transaction(
-        symbol=row["symbol"],
+        symbol=row.get("symbol"),
         market=market,
         asset_type=asset_type,
         trade_date=trade_date,
@@ -206,5 +192,7 @@ def _row_to_transaction(
         price=price,
         fee=fee,
         portfolio_group=group,
-        notes=row.get("notes"),
+        # 没有备注列时存 NULL 而不是空串：「没写备注」与「写了个空备注」
+        # 在查询与展示上是两回事（同 SCHEMA 里 snapshot.note 的口径）。
+        notes=row.get("notes") or None,
     )

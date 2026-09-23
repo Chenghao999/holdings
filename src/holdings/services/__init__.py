@@ -3,6 +3,7 @@
 __all__ = [
     "asset_meta_service",
     "chart_service",
+    "import_service",
     "portfolio_service",
     "report_service",
     "sync_service",
