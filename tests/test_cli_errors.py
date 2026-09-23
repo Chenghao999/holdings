@@ -369,3 +369,76 @@ def test_declining_the_confirmation_aborts_with_130(tmp_path, monkeypatch, capsy
     assert code == 0
     assert "已取消" in capsys.readouterr().out
     assert transaction_dao.get(str(db), tx_id) is not None, "拒绝确认时不能删"
+
+
+def _write_import_csv(tmp_path, *rows: str):
+    """写一份导入用的 CSV（表头 + 给定行），返回路径。"""
+    header = "symbol,market,trade_date,trade_type,quantity,price\n"
+    csv_file = tmp_path / "trades.csv"
+    csv_file.write_text(header + "".join(f"{r}\n" for r in rows), encoding="utf-8")
+    return csv_file
+
+
+def test_import_of_unposted_rows_exits_0_by_default(tmp_path, monkeypatch, capsys):
+    """认得出但不入账的行不是错误：默认退出码仍是 0，靠汇总行告诉用户。
+
+    （`--strict` 才把它升级成失败，见下一条。）
+    """
+    monkeypatch.chdir(tmp_path)
+    csv_file = _write_import_csv(
+        tmp_path,
+        "600519,A股,2025-01-02,BUY,100,10",
+        "600519,A股,2025-06-20,分红派息,0,0",
+    )
+
+    code = run_main(monkeypatch, "import", "--file", str(csv_file))
+
+    assert code == 0
+    out = capsys.readouterr().out
+    assert "识别 2 行，入账 1 笔，未入账 1 行" in out
+    assert "第 3 行 分红派息，未入账" in out
+
+
+def test_import_with_unposted_rows_exits_5_under_strict(tmp_path, monkeypatch, capsys):
+    """`--strict` 是 B-27 定下的：有未入账的行就非零退出，且一笔都不写。
+
+    非零而不是 0，是为了让脚本能判断「这份对账单有没有被完整导入」；
+    一笔都不写，是因为 import 还没有幂等（BACKLOG B-29）——写了一半再以
+    非零退出码结束，用户重跑一次就把账翻倍了。
+    """
+    from holdings.storage import transaction_dao
+
+    monkeypatch.chdir(tmp_path)
+    csv_file = _write_import_csv(
+        tmp_path,
+        "600519,A股,2025-01-02,BUY,100,10",
+        "600519,A股,2025-06-20,分红派息,0,0",
+    )
+
+    code = run_main(monkeypatch, "import", "--file", str(csv_file), "--strict")
+
+    assert code == 5
+    assert "错误（5）" in capsys.readouterr().err
+    assert transaction_dao.get_all(str(tmp_path / "data" / "holdings.db")) == []
+
+
+def test_import_of_an_unknown_trade_type_exits_5(tmp_path, monkeypatch, capsys):
+    """认不出的取值与「认识但不入账」区别对待：前者整批拒绝。
+
+    这一条锁的是 B-27 划的那条界——不能为了「让对账单导得进来」，
+    把认不出的值也当成不入账放过。
+    """
+    from holdings.storage import transaction_dao
+
+    monkeypatch.chdir(tmp_path)
+    csv_file = _write_import_csv(
+        tmp_path,
+        "600519,A股,2025-01-02,BUY,100,10",
+        "600519,A股,2025-06-20,HODL,0,0",
+    )
+
+    code = run_main(monkeypatch, "import", "--file", str(csv_file))
+
+    assert code == 5
+    assert "不是合法交易类型" in capsys.readouterr().err
+    assert transaction_dao.get_all(str(tmp_path / "data" / "holdings.db")) == []

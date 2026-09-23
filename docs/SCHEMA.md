@@ -105,6 +105,11 @@ CREATE INDEX idx_cache_time ON price_cache(update_time);
 | `SELL` | 卖出 | 数量减少，成本价不变 |
 | `FEE` | 定期/独立费用 | 不改变数量与成本，仅影响现金余额，报表单独列示 |
 
+> **这张表也是本列的取值全集**：对账单里的分红 / 送转 / 配股 / 银证转账 / 利息
+> **不会**写进 `transactions`，因此不会出现在这一列里——`import` 把它们逐行报出来
+> 但不入账（[B-27](BACKLOG.md#b-27)，分类表见 [USER_GUIDE](USER_GUIDE.md) 第 5 节）。
+> 也就是说，库里看到 `trade_type` 只有这三种，不是导入漏了，是设计如此。
+
 ### snapshots 字段说明
 
 - `snapshot_date` 唯一：同一天只保留一份快照，重复写入报错而不是覆盖。
