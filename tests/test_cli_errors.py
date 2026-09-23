@@ -442,3 +442,44 @@ def test_import_of_an_unknown_trade_type_exits_5(tmp_path, monkeypatch, capsys):
     assert code == 5
     assert "不是合法交易类型" in capsys.readouterr().err
     assert transaction_dao.get_all(str(tmp_path / "data" / "holdings.db")) == []
+
+
+def test_import_of_an_unrecognized_format_exits_5(tmp_path, monkeypatch, capsys):
+    """认不出对账单的格式时，退出码 5 且一笔都不写。
+
+    这一条锁的是 B-28 的判据：格式陌生时**不猜**。猜一个最像的也能跑到底，
+    但那意味着整批数字可能是错的，而用户会以为导成功了。
+    """
+    from holdings.storage import transaction_dao
+
+    monkeypatch.chdir(tmp_path)
+    stranger = tmp_path / "stranger.csv"
+    stranger.write_text(
+        "交易日期,证券编码,摘要,股数,单价\n2025-01-02,600519,买入,100,10\n", encoding="utf-8"
+    )
+
+    code = run_main(monkeypatch, "import", "--file", str(stranger))
+
+    assert code == 5
+    assert "错误（5）：" in capsys.readouterr().err
+    assert transaction_dao.get_all(str(tmp_path / "data" / "holdings.db")) == []
+
+
+def test_a_gb18030_statement_imports(tmp_path, monkeypatch, capsys):
+    """GBK 的对账单要能直接读，不能要求用户先去转一次码。
+
+    Windows 上 Excel 另存为 CSV 默认就是 GBK——这是最常拿到的那种文件。
+    """
+    monkeypatch.chdir(tmp_path)
+    statement = tmp_path / "gbk.csv"
+    statement.write_bytes(
+        (
+            "成交日期,证券代码,业务名称,成交数量,成交均价,佣金,印花税,过户费,交易市场\n"
+            "2025-01-02,600519,证券买入,100,1500.00,5.00,0.00,0.10,上海\n"
+        ).encode("gb18030")
+    )
+
+    code = run_main(monkeypatch, "import", "--file", str(statement))
+
+    assert code == 0
+    assert "识别 1 行，入账 1 笔，未入账 0 行" in capsys.readouterr().out

@@ -28,12 +28,12 @@ FIVE_NON_TRADE_ROWS = [
 
 @pytest.fixture
 def run_import(tmp_path, monkeypatch):
-    """在临时工作目录里写一个 CSV 并执行导入，返回 (result, 落库交易数)。"""
+    """在临时工作目录里写一份对账单并执行导入，返回 (result, 落库交易数)。"""
 
-    def _run(csv_text: str, *extra: str):
+    def _run(text: str, *extra: str, encoding: str = "utf-8"):
         monkeypatch.chdir(tmp_path)
         csv_file = tmp_path / "in.csv"
-        csv_file.write_text(csv_text, encoding="utf-8")
+        csv_file.write_bytes(text.encode(encoding))
         result = CliRunner().invoke(import_cmd, ["--file", str(csv_file), *extra])
         count = len(transaction_dao.get_all(str(tmp_path / "data" / "holdings.db")))
         return result, count
@@ -258,3 +258,94 @@ def test_strict_imports_normally_when_every_row_is_postable(run_import):
     assert result.exit_code == 0
     assert count == 1
     assert "识别 1 行，入账 1 笔，未入账 0 行" in result.output
+
+
+# --- 券商格式（B-28）----------------------------------------------------------
+#
+# 用户手里的对账单不是英文表头的 CSV：编码是 GBK、表头是中文、费用拆三列。
+# 下面两份夹具是**示例**格式（见 `data/brokers/demo_a.py`），真实券商的解析器
+# 等真实样本（BACKLOG B-30）。
+
+DEMO_A_TEXT = (
+    "成交日期,证券代码,业务名称,成交数量,成交均价,佣金,印花税,过户费,交易市场\n"
+    "2025-01-02,600519,证券买入,100,1500.00,5.00,0.00,0.10,上海\n"
+    "2025-06-20,600519,分红派息,0,0,0,0,0,上海\n"
+    "2025-03-03,600519,证券卖出,20,1600.00,5.00,1.60,0.02,上海\n"
+)
+
+DEMO_B_TEXT = (
+    "发生日期,股票代码,业务标志,成交股数,成交价格,手续费,市场\n"
+    "2025-01-02,600519,普通买入,100,1500.00,5.10,A股\n"
+    "2025-03-03,600519,BUY,10,1510.00,3.00,沪市\n"
+)
+
+
+def test_a_broker_statement_is_recognized_and_imported(run_import):
+    """判据：夹具整批导入，走自动识别那条路。"""
+    result, count = run_import(DEMO_A_TEXT)
+
+    assert result.exit_code == 0
+    assert count == 2, "买入与卖出入账，分红那行不写"
+    assert "识别 3 行，入账 2 笔，未入账 1 行" in result.output
+    assert "第 3 行 分红派息，未入账" in result.output
+
+
+def test_the_second_broker_format_also_imports(run_import):
+    """判据里的「两个夹具各能整批导入」，第二个。"""
+    result, count = run_import(DEMO_B_TEXT)
+
+    assert result.exit_code == 0
+    assert count == 2
+    assert "识别 2 行，入账 2 笔，未入账 0 行" in result.output
+
+
+def test_the_broker_option_takes_the_same_path_as_detection(run_import):
+    """`--broker` 指定与自动识别必须走到同一处，不是两条实现。"""
+    result, count = run_import(DEMO_A_TEXT, "--broker", "demo-a")
+
+    assert result.exit_code == 0
+    assert count == 2
+    assert "解析格式：示例格式 A" in result.output
+
+
+def test_the_recognized_format_is_reported(run_import):
+    """认成了哪家要说出来——识别本身不报错，不说就没得查。"""
+    result, _ = run_import(DEMO_B_TEXT)
+
+    assert "解析格式：示例格式 B" in result.output
+
+
+def test_an_unfamiliar_header_is_refused_rather_than_guessed(run_import):
+    """判据：表头陌生时是「请用 --broker 指定」，不是半批乱数据。"""
+    result, count = run_import("交易日期,证券编码,摘要,股数,单价\n2025-01-02,600519,买入,100,10\n")
+
+    assert isinstance(result.exception, TradeValidationError)
+    assert "认不出这份对账单的格式" in str(result.exception)
+    assert "--broker" in str(result.exception)
+    assert count == 0
+
+
+def test_an_unknown_broker_name_is_refused(run_import):
+    result, count = run_import(DEMO_A_TEXT, "--broker", "demo-z")
+
+    assert isinstance(result.exception, TradeValidationError)
+    assert "没有名为 demo-z 的对账单格式" in str(result.exception)
+    assert count == 0
+
+
+def test_a_gb18030_statement_is_read(run_import):
+    """判据：GB18030 与 UTF-8 各有用例。Windows 上 Excel 另存为就是 GBK。"""
+    result, count = run_import(DEMO_A_TEXT, encoding="gb18030")
+
+    assert result.exit_code == 0
+    assert count == 2
+
+
+def test_the_split_fee_columns_end_up_in_the_transaction(run_import, tmp_path):
+    """佣金 5.00 + 印花税 0 + 过户费 0.10，一列都不许漏。"""
+    run_import(DEMO_A_TEXT)
+
+    txs = transaction_dao.get_all(str(tmp_path / "data" / "holdings.db"))
+    buy = next(tx for tx in txs if tx.trade_type is TradeType.BUY)
+
+    assert buy.fee == pytest.approx(5.10)

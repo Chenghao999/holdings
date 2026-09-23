@@ -6,7 +6,8 @@
 
 - 新增交易（`add`），支持 `--fee` 参数。
 - 删除交易（`remove`），需二次确认。
-- CSV 批量导入（`import`），支持费用列映射（`--fee-column`）。
+- 对账单批量导入（`import`）：`--broker` 指定券商格式或按表头自动识别，
+  `--fee-column` 映射费用列；编码自动探测（UTF-8 / GBK / UTF-16），不用先转码。
 - 导入时**认得出但不入账**的行（分红派息 / 送股转增 / 配股 / 银证转账 / 利息）
   逐行列出行号与原因，不静默跳过；取值认不出的仍然整批拒绝。
   `--strict` 时整批不写、退出码 5（详见 [USER_GUIDE](USER_GUIDE.md) 第 5 节）。
@@ -72,7 +73,7 @@
 | `holdings init` | 初始化数据库与配置 |
 | `holdings add` | 新增交易（含费用） |
 | `holdings list` | 查看持仓明细（可按列排序） |
-| `holdings import` | CSV 批量导入（整批事务；未入账的行逐行报出） |
+| `holdings import` | 对账单导入（按格式解析；整批事务；未入账的行逐行报出） |
 | `holdings sync` | 同步最新价格 |
 | `holdings report` | 生成综合报表 |
 | `holdings snapshot` | 记录资产快照 |
