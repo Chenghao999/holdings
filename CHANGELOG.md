@@ -21,6 +21,12 @@
     取 95 而非 96，是因为实测值 95.55%，终端显示的 96% 是四舍五入来的。
   - `test` 改为装 `.[dev,chart]`：不装 plotly 时绘图用例会静默跳过，
     那几行代码会变成「看着测过」的样子。
+- **分发包改名 `holdings` → `holdings-cli`**（[BACKLOG B-34](docs/BACKLOG.md)）：
+  README、`USER_GUIDE` 与 4 处「缺少可选依赖」的运行时提示一直让用户跑
+  `pip install 'holdings[web]'`，但 PyPI 上的 `holdings` 是**另一个人的项目**，
+  照文档装的人拿到的是别人的包。改名后这些提示才指向一个没人占的名字。
+  **命令名与导入名都不变**，仍是 `holdings`；改的只是 `pip install` 里那个名字。
+  本次**尚未上传 PyPI**（需要项目所有者的 token），在上传之前提示串依然不可执行。
 
 ### Added
 

@@ -4,7 +4,7 @@
 [B-15](../../../docs/BACKLOG.md) 说的「前置条件已具备」：核心层不许输出、
 不许依赖终端库、依赖方向合规，都有用例守着。
 
-Textual 是可选依赖（`pip install 'holdings[tui]'`），本模块只在真正启动界面时导入。
+Textual 是可选依赖（`pip install 'holdings-cli[tui]'`），本模块只在真正启动界面时导入。
 """
 
 from __future__ import annotations

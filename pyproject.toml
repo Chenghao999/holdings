@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "holdings"
+name = "holdings-cli"
 version = "1.0.0"
 description = "A CLI-first investment tracking tool, architected for future GUI/Web extensions."
 readme = "README.md"
@@ -27,7 +27,7 @@ data = ["akshare", "yfinance>=0.2.0"]
 chart = ["plotly>=5.0.0"]
 tui = ["textual>=0.50.0"]
 # 这里曾声明 web / gui 两组（streamlit、fastapi、PySide6），但源码里零引用，
-# `pip install 'holdings[gui]'` 会装好 200MB 的 PySide6 却无界面可用。
+# `pip install 'holdings-cli[gui]'` 会装好 200MB 的 PySide6 却无界面可用。
 # 已按 B-16 删除，现在 web 这一组随 B-20 的看板一起加回来；gui 仍无代码，
 # 形态见 B-22，等真动手时再加。
 web = ["fastapi>=0.110", "uvicorn>=0.27", "jinja2>=3.1"]
@@ -58,7 +58,7 @@ holdings = "holdings.cli.main:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-# 模板是 web 层的代码，不是文档：漏掉这一条，`pip install 'holdings[web]'`
+# 模板是 web 层的代码，不是文档：漏掉这一条，`pip install 'holdings-cli[web]'`
 # 装出来的包能 import、一请求就报「模板不存在」。这个错误只在装分发包时才出现，
 # 源码目录里跑（pythonpath=src）永远复现不了。
 holdings = ["web/templates/*.html"]

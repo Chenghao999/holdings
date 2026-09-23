@@ -25,7 +25,7 @@ def web_cmd(host: str, port: int) -> None:
         from holdings.exceptions import MissingDependencyError
 
         raise MissingDependencyError(
-            "未安装 fastapi / uvicorn，无法启动看板；请运行 pip install 'holdings[web]'"
+            "未安装 fastapi / uvicorn，无法启动看板；请运行 pip install 'holdings-cli[web]'"
         ) from exc
 
     from holdings.web.app import create_app

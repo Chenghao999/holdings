@@ -8,7 +8,7 @@
 校验结果连同「哪一条不合法、为什么」一起搬进页面才算数，而一个绕开闸门的
 Web 表单正好是那种「多了个入口就少了一道校验」的坏例子。先把读的做扎实。
 
-FastAPI / uvicorn / jinja2 是可选依赖（`pip install 'holdings[web]'`），
+FastAPI / uvicorn / jinja2 是可选依赖（`pip install 'holdings-cli[web]'`），
 本模块只在真正启动看板时导入。
 
 [B-11]: ../../../docs/BACKLOG.md#b-11

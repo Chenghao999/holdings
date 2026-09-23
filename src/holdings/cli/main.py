@@ -21,7 +21,7 @@ from holdings.cli.commands.web import web_cmd
 
 
 @click.group()
-@click.version_option(package_name="holdings")
+@click.version_option(package_name="holdings-cli")
 def cli() -> None:
     """holdings —— 个人投资持仓追踪工具。"""
 

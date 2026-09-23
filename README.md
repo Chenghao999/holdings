@@ -53,7 +53,7 @@ holdings list --sort 盈亏率
 # 同步最新价格
 holdings sync --market 全部
 
-# 打开网页看板（只读，需要 pip install 'holdings[web]'）
+# 打开网页看板（只读，需要 pip install 'holdings-cli[web]'）
 holdings web
 ```
 

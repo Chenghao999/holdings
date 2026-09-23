@@ -197,7 +197,7 @@ def test_version_is_the_packaged_one(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
 
     assert run_main(monkeypatch, "--version") == 0
-    packaged = metadata.version("holdings")
+    packaged = metadata.version("holdings-cli")
     assert packaged in capsys.readouterr().out
     assert holdings.__version__ == packaged
 
@@ -272,7 +272,7 @@ def test_sync_failing_entirely_exits_1_with_the_prefix(tmp_path, monkeypatch, ca
     assert code == 1
     assert "错误（1）：" in err
     assert "全部同步失败" in err
-    assert "holdings[data]" in err, "安装提示里的方括号要原样出现，不能被 Rich 吃掉"
+    assert "holdings-cli[data]" in err, "安装提示里的方括号要原样出现，不能被 Rich 吃掉"
 
 
 def test_command_bodies_do_not_raise_systemexit():
