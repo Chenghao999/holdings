@@ -15,7 +15,7 @@ holdings init
 初始化后会在项目目录生成 `data/holdings.db` 与 `config.yaml`。
 
 > 数据源依赖（akshare / yfinance）不在默认安装里。同步价格前请先
-> `pip install 'holdings[data]'`，或用 `holdings check` 确认是否齐全。
+> `pip install 'holdings-cli[data]'`，或用 `holdings check` 确认是否齐全。
 
 ---
 
@@ -383,7 +383,7 @@ holdings remove --id 3
 ### 12. `holdings tui` —— 终端界面
 
 ```bash
-pip install 'holdings[tui]'    # 需要 Textual，默认不装
+pip install 'holdings-cli[tui]'    # 需要 Textual，默认不装
 holdings tui
 ```
 
@@ -402,7 +402,7 @@ holdings tui
 ### 13. `holdings web` —— 只读看板
 
 ```bash
-pip install 'holdings[web]'    # 需要 FastAPI，默认不装
+pip install 'holdings-cli[web]'    # 需要 FastAPI，默认不装
 holdings web
 # 看板已起在 http://127.0.0.1:8420/
 ```

@@ -51,7 +51,7 @@ def networth_figure(db_path: str, start: date | None = None) -> Any:
         from holdings.exceptions import MissingDependencyError
 
         raise MissingDependencyError(
-            "未安装 plotly，无法生成图表；请运行 pip install 'holdings[chart]'"
+            "未安装 plotly，无法生成图表；请运行 pip install 'holdings-cli[chart]'"
         ) from exc
 
     fig = go.Figure()

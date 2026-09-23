@@ -8,6 +8,10 @@
 这 8 项都是 v2.0.0 的能力建设，建议顺序见文末
 「[剩余条目的执行顺序](#剩余条目的执行顺序)」。
 
+上面那句「v1.0.0 已发布」指的是**打了 git tag**——本项目**从未上传 PyPI**，
+而文档里让用户跑的 `pip install 'holdings[…]'` 指向的是别人的同名包。
+这一项已作为 [B-34](#b-34) 补上，不在原计划的执行顺序里。
+
 ## 怎么读这份清单
 
 - 每项给出 **优先级 / 位置 / 现状 / 要做什么 / 完成判据**。完成判据是「这件事算不算做完」的客观标准，
@@ -86,6 +90,7 @@
 | [B-31](#b-31) | P2 | 「股票信息」目前只有价格 | 新增 `data/instrument.py` |
 | [B-32](#b-32) | P2 | 导入时只有代码，市场只能默认 | `cli/commands/import_cmd.py` |
 | [B-33](#b-33) | P3 | 加一个市场要改 `get_fetcher` 的 if-chain | `data/fetcher.py` |
+| [B-34](#b-34) | ✅ 已完成 | 安装提示让用户装到的是别人的同名包 | `pyproject.toml`、`README.md`、4 处提示串 |
 
 ---
 
@@ -2142,6 +2147,77 @@ fetcher」这一层。所以这是收尾，不是重写。
 - [ ] 加一个市场或一个数据源，`fetcher.py` 一个字不改。
 - [ ] 现有取价用例全绿且**一条都不用改**——这是「行为不变」的证据。
 - [ ] 黄金的取路规则与「不读 priority」这点仍被用例锁住。
+
+---
+
+## B-34　安装提示让用户装到的是别人的包
+
+**优先级** ✅ 已完成（2026-09-23）
+**位置** `pyproject.toml`、`src/holdings/__init__.py`、`src/holdings/cli/main.py`、
+`README.md`、`docs/USER_GUIDE.md`、`docs/FEATURES.md`、4 处运行时提示串
+
+### 现状
+
+清单里写着 **v1.0.0 已发布**，但那个「发布」指的是打了 git tag `v1.0.0`
+——**这个项目从来没上传过 PyPI**。与此同时，README、`USER_GUIDE`、`FEATURES`
+和 4 处「缺少可选依赖」的运行时提示，都在让用户执行 `pip install 'holdings[web]'`
+这类命令。
+
+而 PyPI 上的 `holdings` 是**另一个人的项目**：Peter Foldiak 的
+[petfold/holdings](https://github.com/petfold/holdings)，版本 0.2.1。
+
+照文档装的人因此**装到的是别人的包**，而且接着跑 `holdings web` 会报
+「未安装 fastapi」——因为那个包根本没有这些 extra。这比「文档承诺了但功能
+不存在」更糟一层：功能缺失只是没有，**这个是把人指到别人家门口**。
+
+### 要做什么
+
+分发名从 `holdings` 改为 PyPI 上实测可用的 `holdings-cli`。**命令名与导入名
+都不变**，仍是 `holdings`；换的只是 `pip install` 里那个名字：
+
+```bash
+pip install 'holdings-cli[web]'   # 而不是 'holdings[web]'
+```
+
+改动分四类，**漏一类就还是坏的**：
+
+1. **打包元数据**：`pyproject.toml` 的 `name`。
+2. **两处按分发名查元数据的地方**——最容易漏的一类。`holdings/__init__.py`
+   的 `version("holdings")` 与 `cli/main.py` 的 `version_option(package_name=…)`
+   都是按**分发名**查的。改名后不跟着改会抛 `PackageNotFoundError`，
+   而 `__init__.py` 里那个 `except` 会把它咽下去、静默降级成 `0.0.0+unknown`
+   ——`holdings --version` 从此说假话，且没有任何东西会响。这正是
+   [B-18](#b-18) 立「版本号单一来源」时要防的那类静默失配。
+3. **用户会照着敲的命令**：README、`USER_GUIDE`（3 处）、`FEATURES`，
+   以及 `cli/commands/web.py`、`cli/commands/tui.py`、`cli/commands/sync.py`、
+   `services/chart_service.py` 里的运行时提示串（`web/app.py`、`tui/app.py`
+   的模块 docstring 同）。
+4. **锁住这些字符串的用例**：`test_cli_errors.py`（含写死分发名的
+   `metadata.version(...)`）、`test_web.py`（2 处）、`test_tui.py`、
+   `test_services.py`。
+
+`cli/commands/check.py` 与 `init.py` 的提示是 `pip install -e .`，不含分发名，
+不受影响。`CHANGELOG.md` 与 `docs/BACKLOG.md` 里**已完成条目**中的旧名**不改**：
+那是当时发生过的事的记录，回头改掉等于篡改历史；改名的说明由本条与对应的
+CHANGELOG 段落承担。
+
+### 完成判据
+
+- ✅ `pip wheel .` 产出的 wheel 名为 `holdings_cli-1.0.0-py3-none-any.whl`，
+  `METADATA` 的 `Name: holdings-cli`，5 个 extra（`data` / `chart` / `tui` /
+  `web` / `dev`）一个不少。
+- ✅ 入口点仍是 `holdings = holdings.cli.main:main`——**命令名不变**。
+- ✅ 全仓库 grep 安装提示，除 `CHANGELOG.md` 与 `docs/BACKLOG.md` 的历史条目外
+  无残留；`portfolio_service.py` 里 `foreign_holdings[symbol]` 这类同名子串
+  未被误伤。
+- ✅ 466 条用例全绿；`ruff check .` 与 `ruff format --check .` 均通过。
+- ✅ 重装 editable 后 `holdings --version` 输出 `1.0.0`。
+
+> **本条没做完的部分**：真正的 `twine upload` 需要项目所有者的 PyPI token，
+> 不在改动范围内。**在上传之前，文档里的 `pip install 'holdings-cli[…]'`
+> 依然不可执行**——区别只在于，这次它指向的名字是空着的，不会把人带到
+> 别人的包。要真正闭环，还得补一次上传，并顺手填上 `pyproject.toml` 里
+> 仍是占位符的 `authors`。
 
 ---
 

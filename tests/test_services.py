@@ -252,7 +252,7 @@ def test_chart_without_plotly_raises_missing_dependency(db_path, monkeypatch):
 
     assert issubclass(MissingDependencyError, HoldingsError)
     # 提示必须给出可执行的安装命令，而不是只说「未安装」
-    assert "holdings[chart]" in str(exc.value)
+    assert "holdings-cli[chart]" in str(exc.value)
 
 
 # ----------------------------------------------------------- report_service

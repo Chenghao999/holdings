@@ -113,7 +113,7 @@ def test_without_the_web_extra_exits_6_with_an_install_hint(monkeypatch, tmp_pat
 
     assert code == 6
     assert "错误（6）：" in err
-    assert "holdings[web]" in err, "要给出可执行的安装命令"
+    assert "holdings-cli[web]" in err, "要给出可执行的安装命令"
 
 
 # ------------------------------------------------------------------ 命令层
@@ -325,7 +325,7 @@ def test_the_chart_page_explains_a_missing_plotly(monkeypatch, db_path):
     response = _client(db_path).get("/chart")
 
     assert response.status_code == 200
-    assert "holdings[chart]" in response.text
+    assert "holdings-cli[chart]" in response.text
 
 
 @requires_fastapi

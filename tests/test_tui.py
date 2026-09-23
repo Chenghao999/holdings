@@ -75,7 +75,7 @@ def test_without_textual_exits_6_with_an_install_hint(monkeypatch, capsys, tmp_p
     err = capsys.readouterr().err
     assert code == 6
     assert "错误（6）：" in err
-    assert "holdings[tui]" in err, "要给出可执行的安装命令"
+    assert "holdings-cli[tui]" in err, "要给出可执行的安装命令"
 
 
 # ------------------------------------------------------------------ 界面

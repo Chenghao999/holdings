@@ -22,7 +22,7 @@ def tui_cmd() -> None:
         from holdings.exceptions import MissingDependencyError
 
         raise MissingDependencyError(
-            "未安装 textual，无法启动界面；请运行 pip install 'holdings[tui]'"
+            "未安装 textual，无法启动界面；请运行 pip install 'holdings-cli[tui]'"
         ) from exc
 
     HoldingsApp(load_config().database_path).run()

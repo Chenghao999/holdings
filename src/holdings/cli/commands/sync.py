@@ -76,7 +76,7 @@ def sync_cmd(market: str) -> None:
 
     if updated == 0:
         missing = "、".join(p for p in _REQUIRED_PACKAGES if not is_installed(p))
-        hint = "请安装数据源依赖 pip install 'holdings[data]'" + (
+        hint = "请安装数据源依赖 pip install 'holdings-cli[data]'" + (
             f"（未安装：{missing}）" if missing else ""
         )
         # 抛异常而不是自己 SystemExit(1)：文案统一成「错误（1）：…」，
