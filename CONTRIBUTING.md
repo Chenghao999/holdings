@@ -47,7 +47,7 @@ python3 -m venv .venv
 - `services/`：统一服务层（GUI 与 CLI 共用）
 - `cli/`：表现层（终端），极薄，仅渲染
 - `models/`：Pydantic 数据模型
-- `data/`：数据获取层（外部 API 封装）
+- `data/`：数据适配层（行情 API、券商对账单文件）
 - `portfolio/`：业务逻辑层（纯计算，无 IO）
 - `storage/`：持久化层（SQLite CRUD）
 - `utils/`：工具函数

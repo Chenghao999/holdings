@@ -34,13 +34,18 @@ holdings/
 │       │   ├── asset_meta_dao.py            #    资产基础信息 CRUD
 │       │   └── price_cache_dao.py           #    价格缓存 CRUD + TTL 新鲜度判断
 │       │
-│       ├── data/                            # 【数据获取层·只找外部 API，不碰 DB】
+│       ├── data/                            # 【数据适配层·外部 API 与文件格式，不碰 DB】
 │       │   ├── fetcher.py                   #    工厂统一入口，同步/异步双接口
 │       │   ├── sources.py                   #    按 data_sources.priority 依次尝试各源
 │       │   ├── resilience.py                #    网络调用的超时（守护线程）与重试次数
 │       │   ├── a_stock.py                   #    akshare / yfinance 两个源，顺序由配置决定
 │       │   ├── us_stock.py                  #    yfinance 实现（单一数据源）
-│       │   └── gold.py                      #    黄金：按代码选路，不参与优先级配置
+│       │   ├── gold.py                      #    黄金：按代码选路，不参与优先级配置
+│       │   └── brokers/                     #    对账单文件：编码探测 + 一家券商一个解析器
+│       │       ├── base.py                  #      子类只填映射表，识别与解析在基类
+│       │       ├── encoding.py              #      BOM → UTF-8 → GB18030，顺序不能颠倒
+│       │       ├── canonical.py             #      本工具自己的英文表头格式
+│       │       └── demo_a.py / demo_b.py    #      示例格式，真实券商见 BACKLOG B-30
 │       │
 │       ├── services/                        # 【编排层·唯一被 CLI/GUI 调用的入口】
 │       │   ├── portfolio_service.py         #    编排 portfolio + storage + data；持仓表的列契约、汇总的基准货币
@@ -165,7 +170,7 @@ models / utils (基础层)
 | `utils/` | 通用纯函数与配置读写 | 不 import 业务模块、不联网 |
 | `portfolio/` | 成本/盈亏/配比/指标纯计算 | 不读写 DB、不联网、不 print |
 | `storage/` | SQLite 建表与 CRUD | 不计算盈亏、不拉行情、不 print |
-| `data/` | 封装外部行情 API | 不写 DB、不算盈亏、不 print |
+| `data/` | 封装外部数据源：行情 API、对账单文件 | 不写 DB、不算盈亏、不 print |
 | `services/` | 跨模块编排、组装返回对象 | 不写 SQL、不发请求、不算算法 |
 | `cli/` | 参数解析、调用 service、渲染 | 不写业务、不写 SQL、不发请求 |
 | `tui/` | 终端界面（Textual） | 同上；也不 import `cli/`——两个界面各自演进，共用 `services/` |
