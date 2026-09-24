@@ -30,6 +30,9 @@ class CanonicalCsv(BrokerParser):
         "price": ("price",),
         "fee": ("fee",),
         "notes": ("notes",),
+        #: 可选的流水号：有它就能精确判重（BACKLOG B-29）。券商的解析器把自家
+        #: 那一列映射到这里即生效，本工具自己的格式就先叫 `external_id`。
+        "external_id": ("external_id",),
     }
 
     def matches(self, header: Sequence[str], sample: Sequence[Sequence[str]]) -> bool:

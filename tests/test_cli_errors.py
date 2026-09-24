@@ -403,8 +403,8 @@ def test_import_with_unposted_rows_exits_5_under_strict(tmp_path, monkeypatch, c
     """`--strict` 是 B-27 定下的：有未入账的行就非零退出，且一笔都不写。
 
     非零而不是 0，是为了让脚本能判断「这份对账单有没有被完整导入」；
-    一笔都不写，是因为 import 还没有幂等（BACKLOG B-29）——写了一半再以
-    非零退出码结束，用户重跑一次就把账翻倍了。
+    一笔都不写，是因为本命令的契约就是整批校验、整批写入——写了一半再以非零
+    退出码结束，用户看到的库与「导入成功」之间就差了半份文件。
     """
     from holdings.storage import transaction_dao
 
@@ -442,6 +442,25 @@ def test_import_of_an_unknown_trade_type_exits_5(tmp_path, monkeypatch, capsys):
     assert code == 5
     assert "不是合法交易类型" in capsys.readouterr().err
     assert transaction_dao.get_all(str(tmp_path / "data" / "holdings.db")) == []
+
+
+def test_re_importing_the_same_file_exits_5(tmp_path, monkeypatch, capsys):
+    """B-29 的判据：同一份文件导第二遍时退出码 5，且一笔都不写。
+
+    非零而不是 0，脚本才能判断「这份对账单到底导进去没有」；而默认不是静默
+    跳过，是因为被跳过的可能是两笔真实成交里的一笔（见 `--dedupe off`）。
+    """
+    from holdings.storage import transaction_dao
+
+    monkeypatch.chdir(tmp_path)
+    csv_file = _write_import_csv(tmp_path, "600519,A股,2025-01-02,BUY,100,10")
+    assert run_main(monkeypatch, "import", "--file", str(csv_file)) == 0
+
+    code = run_main(monkeypatch, "import", "--file", str(csv_file))
+
+    assert code == 5
+    assert "重复" in capsys.readouterr().err
+    assert len(transaction_dao.get_all(str(tmp_path / "data" / "holdings.db"))) == 1
 
 
 def test_import_of_an_unrecognized_format_exits_5(tmp_path, monkeypatch, capsys):
