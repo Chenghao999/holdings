@@ -65,6 +65,7 @@ tests/
 ├── test_cli_errors.py     # 退出码契约（需通过 main()，见下）
 ├── test_import_cmd.py     # CSV 整批事务、表头校验、不入账的行必须报出来（按行号）
 ├── test_brokers.py        # 对账单解析器：编码顺序、格式识别、认不出/像两家都报错
+├── test_import_dedupe.py  # 导入幂等：同一文件两遍库不变、重复行报出行号、三种 dedupe
 ├── test_list_cmd.py       # --sort 排序契约
 ├── test_sync_cmd.py       # --market 默认值来自 default_market
 ├── test_report_cmd.py     # 绩效行：算不出来时必须显示 —，不是 0
@@ -90,7 +91,7 @@ tests/
 ## 覆盖率目标
 
 - `portfolio/calculator.py`：**≥ 90%**（关键在于费用与卖出边界）— 当前 **99%**。
-- 全项目行覆盖率：当前 **96.88%**（466 个用例）；`data/` 层 **98%**
+- 全项目行覆盖率：当前 **96.97%**（488 个用例）；`data/` 层 **98%**
   （`python -m pytest --cov=holdings`）。门槛 `fail_under = 95`，达不到
   `pytest` 直接返回非零——数值与理由见下面的「CI 里跑什么」。
 - 新增层不拉后腿：`web/app.py` **100%**——看板的每个分支（三个页面、缺 plotly、
