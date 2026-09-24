@@ -23,6 +23,8 @@ _COLUMNS = (
     "price",
     "fee",
     "notes",
+    "source",
+    "external_id",
 )
 
 
@@ -39,6 +41,8 @@ def _row_to_transaction(row: sqlite3.Row) -> Transaction:
         price=row["price"],
         fee=row["fee"],
         notes=row["notes"],
+        source=row["source"],
+        external_id=row["external_id"],
     )
 
 
@@ -59,6 +63,8 @@ def _to_params(tx: Transaction) -> tuple:
         tx.price,
         tx.fee,
         tx.notes,
+        tx.source,
+        tx.external_id,
     )
 
 

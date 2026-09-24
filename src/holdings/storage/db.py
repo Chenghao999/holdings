@@ -22,7 +22,9 @@ CREATE TABLE IF NOT EXISTS transactions (
     quantity REAL NOT NULL,
     price REAL NOT NULL,
     fee REAL DEFAULT 0,
-    notes TEXT
+    notes TEXT,
+    source TEXT,
+    external_id TEXT
 );
 
 CREATE TABLE IF NOT EXISTS snapshots (
@@ -98,6 +100,14 @@ def _migrate(conn: sqlite3.Connection) -> None:
     """
     if "note" not in _columns(conn, "snapshots"):
         conn.execute("ALTER TABLE snapshots ADD COLUMN note TEXT")
+
+    # B-29：导入判重要的两列。老库补上后这两列是 NULL，语义是「不知道来源、
+    # 没有流水号」——比补一个空串诚实，也让「指纹判重」这条退路自然生效。
+    transactions = _columns(conn, "transactions")
+    if "source" not in transactions:
+        conn.execute("ALTER TABLE transactions ADD COLUMN source TEXT")
+    if "external_id" not in transactions:
+        conn.execute("ALTER TABLE transactions ADD COLUMN external_id TEXT")
 
 
 def _columns(conn: sqlite3.Connection, table: str) -> set[str]:

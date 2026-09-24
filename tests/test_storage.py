@@ -265,6 +265,59 @@ def test_connect_migrates_a_database_created_before_note_existed(tmp_path):
     assert snapshot_dao.get_all(str(old_db))[1].note == "迁移之后记的"
 
 
+def test_connect_migrates_a_database_created_before_import_dedupe(tmp_path, make_tx):
+    """老库缺 source / external_id 时，connect() 要补上，且不动已有数据。
+
+    B-29 加这两列时，用户手里的库是改动前建的——`CREATE TABLE IF NOT EXISTS`
+    对它完全不生效，不补列的话第一次 `import` 就会撞上「no such column」。
+    """
+    old_db = tmp_path / "old.db"
+    conn = sqlite3.connect(old_db)
+    try:
+        conn.executescript(
+            """
+            CREATE TABLE transactions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                portfolio_group TEXT DEFAULT '默认',
+                symbol TEXT NOT NULL,
+                market TEXT NOT NULL,
+                asset_type TEXT NOT NULL,
+                trade_date TEXT NOT NULL,
+                trade_type TEXT NOT NULL,
+                quantity REAL NOT NULL,
+                price REAL NOT NULL,
+                fee REAL DEFAULT 0,
+                notes TEXT
+            );
+            INSERT INTO transactions
+                (symbol, market, asset_type, trade_date, trade_type, quantity, price, fee)
+            VALUES ('600519', 'A股', 'stock', '2025-01-01', 'BUY', 100, 10, 5.0);
+            """
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    db.connect(str(old_db))  # 迁移在这里发生
+
+    probe = sqlite3.connect(old_db)
+    try:
+        columns = db._columns(probe, "transactions")
+    finally:
+        probe.close()
+    assert {"source", "external_id"} <= columns
+
+    got = transaction_dao.get_all(str(old_db))
+    assert got[0].quantity == 100, "补列不该动到已有数据"
+    assert got[0].source is None and got[0].external_id is None, (
+        "老数据不知道来源、也没有流水号，是 NULL——补一个猜出来的值会让判重跟着出错"
+    )
+
+    # 补列之后要能正常写入并读回这两列
+    transaction_dao.add(str(old_db), make_tx(source="csv", external_id="HT-1"))
+    assert transaction_dao.get_all(str(old_db))[1].external_id == "HT-1"
+
+
 # --------------------------------------------------------------- price_cache_dao
 
 

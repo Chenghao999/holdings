@@ -40,7 +40,9 @@ CREATE TABLE transactions (
     quantity REAL NOT NULL,               -- 对于FEE类型，quantity填0
     price REAL NOT NULL,                  -- 对于FEE类型，price填0
     fee REAL DEFAULT 0,                   -- 统一费用字段（佣金、印花税、托管费等）
-    notes TEXT
+    notes TEXT,
+    source TEXT,                          -- 来源：对账单格式名（'csv' / 'demo-a'），手录的为 NULL
+    external_id TEXT                      -- 券商流水号，判重用；对账单里没有这一列时为 NULL
 );
 
 -- 2. 每日快照表（净值曲线数据源）
@@ -96,6 +98,15 @@ CREATE INDEX idx_cache_time ON price_cache(update_time);
 | `price` | REAL | NOT NULL | 单价，`FEE` 类型填 0 |
 | `fee` | REAL | DEFAULT 0 | 统一费用字段（佣金、印花税、托管费） |
 | `notes` | TEXT | - | 备注 |
+| `source` | TEXT | - | 这笔从哪来：对账单格式名（`--broker` 的取值）。手录的不写，存 `NULL` |
+| `external_id` | TEXT | - | 券商流水号。有它就能精确判重，没有才退到全字段指纹 |
+
+> **这两列只用于判重，不参与任何计算。** `import` 落库前会拿它们（没有
+> `external_id` 时用「标的 + 日期 + 类型 + 数量 + 价格 + 费用」的指纹）与库里
+> 已有的比对，重复的默认**报错而不是跳过**——见
+> [USER_GUIDE](USER_GUIDE.md) 第 5 节的 `--dedupe`（[B-29](BACKLOG.md#b-29)）。
+> 这里没有 UNIQUE 索引是有意的：`--dedupe off` 明说「这两笔就是要都记」，
+> 数据库层面拦下来会让那个选项变成一句空话。
 
 ### trade_type 的三种语义
 
@@ -116,10 +127,12 @@ CREATE INDEX idx_cache_time ON price_cache(update_time);
 - `note`：`holdings snapshot --note "…"` 写的备注。不传存 `NULL`——「没写备注」
   与「写了个空备注」在查询与展示上是两回事。
 
-> **补列迁移**：`note` 是后加的列，而 `CREATE TABLE IF NOT EXISTS` 对**已经存在**
-> 的表完全不生效，老库不会自己长出这一列。`storage/db.py` 的 `_migrate()` 用
-> `PRAGMA table_info` 探测后 `ALTER TABLE` 补上，判定「这一列在不在」而不是查
-> 版本号——这个库由用户直接拿着用，不会有谁去维护 schema_version。
+> **补列迁移**：`note`、`source`、`external_id` 都是后加的列，而
+> `CREATE TABLE IF NOT EXISTS` 对**已经存在**的表完全不生效，老库不会自己长出
+> 这几列。`storage/db.py` 的 `_migrate()` 用 `PRAGMA table_info` 探测后
+> `ALTER TABLE` 补上，判定「这一列在不在」而不是查版本号——这个库由用户直接
+> 拿着用，不会有谁去维护 schema_version。补出来的列在老数据上是 `NULL`，
+> 语义就是「不知道来源、没有流水号」，不猜一个值填进去。
 
 ### asset_meta 字段说明
 
