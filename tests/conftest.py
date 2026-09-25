@@ -32,6 +32,8 @@ def make_tx():
         fee: float = 0.0,
         group: str = "默认",
         notes: str | None = None,
+        source: str | None = None,
+        external_id: str | None = None,
     ) -> Transaction:
         return Transaction(
             symbol=symbol,
@@ -44,6 +46,8 @@ def make_tx():
             fee=fee,
             portfolio_group=group,
             notes=notes,
+            source=source,
+            external_id=external_id,
         )
 
     return _make

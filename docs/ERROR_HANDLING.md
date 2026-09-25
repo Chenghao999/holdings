@@ -13,7 +13,7 @@
 | `SymbolNotFoundError` | 标的代码不存在或无法识别 | 未找到该标的，请检查代码与市场 |
 | `ConfigError` | 配置文件缺失、YAML 语法错误或字段非法 | 配置错误，请检查 config.yaml |
 | `DatabaseError` | 数据库读写失败 | 数据库操作失败 |
-| `TradeValidationError` | 交易数据不合法（买入数量非正、卖出超过当时持有量、费用或单价为负）；或 `import` 的文件有缺列 / 坏取值 / 编码读不出 / 格式认不出 / `--broker` 名字不存在；或 `import --strict` 下有未入账的行 | 该笔交易不合法，已拒绝写入 |
+| `TradeValidationError` | 交易数据不合法（买入数量非正、卖出超过当时持有量、费用或单价为负）；或 `import` 的文件有缺列 / 坏取值 / 编码读不出 / 格式认不出 / `--broker` 名字不存在；或 `import --strict` 下有未入账的行；或 `import` 查到与已有记录重复的行（`--dedupe` 默认报错） | 该笔交易不合法，已拒绝写入 |
 | `MissingDependencyError` | 依赖未安装（画图缺 plotly、`check` 发现必需包缺失） | 缺少依赖，请按提示安装 |
 | `RecordNotFoundError` | 要操作的记录不存在（如 `remove --id` 给的交易号） | 未找到该记录 |
 

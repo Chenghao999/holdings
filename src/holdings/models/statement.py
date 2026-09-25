@@ -36,4 +36,7 @@ class Statement:
     #: 用的哪个解析器，人话名字。自动识别之后要能告诉用户它认成了谁——
     #: 认错了才有得查。
     broker_label: str
+    #: 同一个解析器的**标识**（`--broker` 的取值），随每笔交易存进 `source` 列。
+    #: 与人话名字分开：标识是拿去比对与查询的，改名不该让历史数据的来源对不上。
+    broker_name: str
     rows: list[StatementRow]

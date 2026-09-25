@@ -89,4 +89,8 @@ def parse_file(path: str, *, broker: str | None = None, fee_column: str | None =
 
     header = [cell.strip() for cell in table[0]]
     parser = get_broker(broker) if broker else detect(header, table[1 : SAMPLE_ROWS + 1])
-    return Statement(broker_label=parser.label, rows=parser.parse(text, fee_column=fee_column))
+    return Statement(
+        broker_label=parser.label,
+        broker_name=parser.name,
+        rows=parser.parse(text, fee_column=fee_column),
+    )
