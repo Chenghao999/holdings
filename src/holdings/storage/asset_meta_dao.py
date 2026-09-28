@@ -13,14 +13,17 @@ import sqlite3
 from datetime import datetime
 
 from holdings.models.asset_meta import AssetMeta
+from holdings.storage import db
 from holdings.storage.db import DatabaseError, connect
 
 _UPSERT_SQL = """
-INSERT INTO asset_meta (symbol, name, market, currency, annual_management_fee, updated_at)
-VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+INSERT INTO asset_meta
+    (symbol, name, market, asset_type, currency, annual_management_fee, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
 ON CONFLICT(symbol) DO UPDATE SET
     name = excluded.name,
     market = excluded.market,
+    asset_type = excluded.asset_type,
     currency = excluded.currency,
     annual_management_fee = excluded.annual_management_fee,
     updated_at = CURRENT_TIMESTAMP
@@ -32,6 +35,7 @@ def _row_to_asset_meta(row: sqlite3.Row) -> AssetMeta:
         symbol=row["symbol"],
         name=row["name"],
         market=row["market"],
+        asset_type=row["asset_type"],
         currency=row["currency"],
         annual_management_fee=row["annual_management_fee"],
         updated_at=(datetime.fromisoformat(row["updated_at"]) if row["updated_at"] else None),
@@ -77,6 +81,7 @@ def upsert(db_path: str, meta: AssetMeta) -> None:
                 meta.symbol,
                 meta.name,
                 meta.market,
+                meta.asset_type.value if meta.asset_type else None,
                 meta.currency,
                 meta.annual_management_fee,
             ),
@@ -86,6 +91,18 @@ def upsert(db_path: str, meta: AssetMeta) -> None:
         raise DatabaseError(f"写入资产信息失败：{exc}") from exc
     finally:
         conn.close()
+
+
+def is_fresh(db_path: str, symbol: str, ttl_seconds: int) -> bool:
+    """这条资料是否在 ttl 秒内更新过（判断要不要再联网取一次）。"""
+    meta = get(db_path, symbol)
+    if meta is None or meta.name is None:
+        # 没有名字的记录不算「有新资料」：手工只填过年化管理费率（`holdings meta
+        # --fee`）的行也在库里，那种行取过资料之后才该算数。
+        return False
+    return db.timestamp_is_fresh(
+        meta.updated_at.isoformat() if meta.updated_at else None, ttl_seconds
+    )
 
 
 def delete(db_path: str, symbol: str) -> bool:

@@ -26,7 +26,18 @@ DEFAULT_CONFIG: dict = {
         "priority": {
             "A股": ["akshare", "yfinance"],
             "美股": ["yfinance"],
-        }
+        },
+        # 取「标的资料」（名称 / 资产类型 / 币种）的源顺序。与取价分开配：
+        # 能报价的源不一定知道这标的叫什么，绑成一份会让人没法单独调。
+        # 黄金同样不在此列，理由与取价那边一致——它没有「彼此的备份」。
+        "instrument_priority": {
+            "A股": ["akshare", "yfinance"],
+            "美股": ["yfinance"],
+        },
+        # 资料缓存的有效期。**故意比 `cache_ttl_seconds` 长得多**：价格 5 分钟
+        # 就过期是合理的，而「600519 叫贵州茅台」这种东西一年也不会变，
+        # 按 5 分钟算等于每次导入都要再联网问一遍，缓存就白做了。
+        "instrument_ttl_seconds": 86400,
     },
     "sync": {"timeout_seconds": 10, "retry_count": 1},
     "database_path": "data/holdings.db",
@@ -40,6 +51,7 @@ _FIELD_RULES: tuple[tuple[str, str, str], ...] = (
     ("default_group", "str", "字符串"),
     ("default_market", "str", "字符串"),
     ("cache_ttl_seconds", "non_negative_int", "非负整数"),
+    ("data_sources.instrument_ttl_seconds", "non_negative_int", "非负整数"),
     ("sync.timeout_seconds", "non_negative_number", "非负数字"),
     ("sync.retry_count", "non_negative_int", "非负整数"),
 )
@@ -72,6 +84,10 @@ class Config:
     @property
     def data_sources(self) -> dict:
         return self._data["data_sources"]
+
+    @property
+    def instrument_ttl_seconds(self) -> int:
+        return int(self.data_sources["instrument_ttl_seconds"])
 
     @property
     def sync(self) -> dict:
@@ -178,20 +194,21 @@ def _matches(value: object, kind: str) -> bool:
 
 
 def _validate_priority(data_sources: object, path: Path) -> None:
-    """`data_sources.priority` 是「市场 → 数据源名列表」。"""
+    """`data_sources` 下几个「市场 → 数据源名列表」字段的形状都一样，一起查。"""
     if not isinstance(data_sources, dict):
         raise ConfigError(f"配置文件字段取值非法：{path} 的 data_sources 应为映射")
-    priority = data_sources.get("priority")
-    if priority is None:
-        return
-    if not isinstance(priority, dict):
-        raise ConfigError(f"配置文件字段取值非法：{path} 的 data_sources.priority 应为映射")
-    for market, names in priority.items():
-        if not isinstance(names, list) or not all(isinstance(n, str) for n in names):
-            raise ConfigError(
-                f"配置文件字段取值非法：{path} 的 data_sources.priority.{market} "
-                f"应为字符串列表，当前为 {names!r}"
-            )
+    for key in ("priority", "instrument_priority"):
+        priority = data_sources.get(key)
+        if priority is None:
+            continue
+        if not isinstance(priority, dict):
+            raise ConfigError(f"配置文件字段取值非法：{path} 的 data_sources.{key} 应为映射")
+        for market, names in priority.items():
+            if not isinstance(names, list) or not all(isinstance(n, str) for n in names):
+                raise ConfigError(
+                    f"配置文件字段取值非法：{path} 的 data_sources.{key}.{market} "
+                    f"应为字符串列表，当前为 {names!r}"
+                )
 
 
 def _brief_yaml_error(exc: yaml.YAMLError) -> str:

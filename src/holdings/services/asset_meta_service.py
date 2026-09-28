@@ -5,7 +5,10 @@ CLI 经由本模块访问 `asset_meta_dao`（架构铁律 3）。
 
 from __future__ import annotations
 
+from holdings.data import instrument
+from holdings.exceptions import HoldingsError
 from holdings.models.asset_meta import AssetMeta
+from holdings.models.enums import MarketType
 from holdings.storage import asset_meta_dao
 
 
@@ -22,6 +25,57 @@ def get(db_path: str, symbol: str) -> AssetMeta | None:
 def remove(db_path: str, symbol: str) -> bool:
     """按代码删除，返回是否真的删掉了一条。"""
     return asset_meta_dao.delete(db_path, symbol)
+
+
+def lookup(
+    db_path: str, symbol: str, market: MarketType, ttl_seconds: int | None = None
+) -> AssetMeta | None:
+    """取一个标的的资料，**先看缓存、再联网，取不到就返回 None**。
+
+    这条路径存在的意义是给导入补上名称与市场，所以它对失败的态度与 `sync`
+    相反：`sync` 取不到价是一件要报出来的事，而**导入不该因为没网就做不了**。
+    取不到不是错误，是「这个名字暂时不知道」——返回 `None`，让人照常记账。
+
+    缓存走 `asset_meta`：资料一年也不会变，每次导入都联网问一遍是白问。
+    写缓存时**保留已有的年化管理费率**——那份数据只有用户手工填得出来，
+    不该被一次「我查到了名字」抹掉。
+    """
+    existing = asset_meta_dao.get(db_path, symbol)
+    ttl = instrument_ttl_seconds() if ttl_seconds is None else ttl_seconds
+    if asset_meta_dao.is_fresh(db_path, symbol, ttl):
+        return existing
+
+    try:
+        info = instrument.fetch_instrument(symbol, market)
+    except (HoldingsError, OSError) as exc:
+        # 取不到就用手上这条（可能为空）。**只捕获已知异常**：数据源不可用、
+        # 编码、网络这些都在 HoldingsError 之下；真出了别的错（代码 bug），
+        # 那不该被「没网也一样」吞掉。
+        del exc  # 失败原因对调用方无用，它只关心「有没有拿到」
+        return existing
+
+    merged = AssetMeta(
+        symbol=symbol,
+        name=info.name,
+        market=info.market.value if info.market else (existing.market if existing else None),
+        asset_type=info.asset_type,
+        currency=info.currency,
+        annual_management_fee=existing.annual_management_fee if existing else 0.0,
+    )
+    asset_meta_dao.upsert(db_path, merged)
+    return merged
+
+
+def instrument_ttl_seconds() -> int:
+    """资料缓存的有效期，读配置（`data_sources.instrument_ttl_seconds`）。"""
+    from holdings.utils.config import load_config
+
+    try:
+        return load_config().instrument_ttl_seconds
+    except (HoldingsError, OSError):
+        from holdings.utils.config import DEFAULT_CONFIG
+
+        return int(DEFAULT_CONFIG["data_sources"]["instrument_ttl_seconds"])
 
 
 def fee_rate_total(db_path: str, symbols: list[str]) -> float:

@@ -1,7 +1,7 @@
 """storage 层的单元测试（db / 四个 DAO）。"""
 
 import sqlite3
-from datetime import date
+from datetime import date, datetime, timezone
 
 import pytest
 
@@ -318,6 +318,53 @@ def test_connect_migrates_a_database_created_before_import_dedupe(tmp_path, make
     assert transaction_dao.get_all(str(old_db))[1].external_id == "HT-1"
 
 
+def test_connect_migrates_a_database_created_before_instrument_info(tmp_path):
+    """老库缺 `asset_meta.asset_type` 时补上，且已有资料不受影响（B-31）。
+
+    补出来是 NULL——**「不知道」而不是「是 stock」**：资产类型猜错会一路走进
+    报表，而用户看不出那是猜的。手工填过的名称 / 费率同样一个字都不该动。
+    """
+    old_db = tmp_path / "old.db"
+    conn = sqlite3.connect(old_db)
+    try:
+        conn.executescript(
+            """
+            CREATE TABLE asset_meta (
+                symbol TEXT PRIMARY KEY,
+                name TEXT,
+                market TEXT,
+                currency TEXT DEFAULT 'CNY',
+                annual_management_fee REAL DEFAULT 0,
+                updated_at TEXT
+            );
+            INSERT INTO asset_meta
+                (symbol, name, market, currency, annual_management_fee)
+            VALUES ('600519', '贵州茅台', 'A股', 'CNY', 0.5);
+            """
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    db.connect(str(old_db))  # 迁移在这里发生
+
+    probe = sqlite3.connect(old_db)
+    try:
+        assert "asset_type" in db._columns(probe, "asset_meta")
+    finally:
+        probe.close()
+
+    got = asset_meta_dao.get(str(old_db), "600519")
+    assert (got.name, got.market, got.annual_management_fee) == ("贵州茅台", "A股", 0.5)
+    assert got.asset_type is None, "老数据不知道资产类型，补一个猜出来的值会跟着误导报表"
+
+    # 补列之后要能正常写入并读回
+    asset_meta_dao.upsert(
+        str(old_db), AssetMeta(symbol="600519", name="贵州茅台", asset_type="etf")
+    )
+    assert asset_meta_dao.get(str(old_db), "600519").asset_type is AssetType.ETF
+
+
 # --------------------------------------------------------------- price_cache_dao
 
 
@@ -477,6 +524,45 @@ def test_asset_meta_delete_reports_whether_it_removed_anything(db_path):
     assert asset_meta_dao.delete(db_path, "518880") is True
     assert asset_meta_dao.get(db_path, "518880") is None
     assert asset_meta_dao.delete(db_path, "518880") is False, "重复删除应返回 False"
+
+
+# --------------------------------------------------------------- 缓存新鲜度
+
+
+def test_timestamp_is_fresh_compares_against_utc_not_local_time():
+    """SQLite 的 `CURRENT_TIMESTAMP` 存的是 UTC，算年龄就得跟 UTC 比。
+
+    用本地时间在东八区会把「刚刚写入」算成 8 小时前，于是缓存永远不新鲜、
+    每次都重新联网——而一切看起来都正常。这条用例专门钉住这个方向。
+    """
+    just_now_utc = datetime.now(timezone.utc).replace(tzinfo=None).isoformat(sep=" ")
+
+    assert db.timestamp_is_fresh(just_now_utc, ttl_seconds=300) is True
+    assert db.timestamp_is_fresh(just_now_utc, ttl_seconds=0) is False, "ttl 为 0 就是永不新鲜"
+
+
+@pytest.mark.parametrize("value", [None, "", "不是时间"])
+def test_timestamp_is_fresh_is_false_for_a_missing_or_broken_value(value):
+    """读不出时间就当过期——重新取一次的代价远小于用一份不知道多旧的资料。"""
+    assert db.timestamp_is_fresh(value, ttl_seconds=86400) is False
+
+
+def test_asset_meta_is_fresh_needs_a_name(db_path):
+    """只有费率、没有名字的行不算「有新资料」。
+
+    手工 `holdings meta --fee` 建出来的行也在库里，若把它当缓存命中，
+    这条代码的名称就永远取不回来了。
+    """
+    asset_meta_dao.upsert(db_path, _meta(annual_management_fee=0.5))
+
+    assert asset_meta_dao.is_fresh(db_path, "518880", ttl_seconds=86400) is False
+
+    asset_meta_dao.upsert(db_path, _meta(name="黄金ETF"))
+    assert asset_meta_dao.is_fresh(db_path, "518880", ttl_seconds=86400) is True
+
+
+def test_asset_meta_is_fresh_is_false_for_an_unknown_symbol(db_path):
+    assert asset_meta_dao.is_fresh(db_path, "从没记过", ttl_seconds=86400) is False
 
 
 class _FailingConnection:
