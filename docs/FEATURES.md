@@ -52,6 +52,11 @@
 > `AssetType` 枚举定义了 `stock` / `etf` / `gold` 三种，但**当前没有区分 ETF 的入口**：
 > `add` 按市场推断，市场为「黄金」时记 `gold`，其余一律记 `stock`。
 > 需要标注 ETF 时请直接改库，或等后续版本提供显式参数。
+>
+> **取自数据源的那条路已经通了，只是还没接到命令上**（[B-31](BACKLOG.md#b-31)）：
+> `data/instrument.py` 能问出股票的资产类型（yfinance 的 `quoteType`），
+> 结果存进 `asset_meta.asset_type`。把它用在导入上的是
+> [B-32](BACKLOG.md#b-32)；在那之前 `add` 的推断规则不变。
 
 ## v2.0（界面层，进行中）
 

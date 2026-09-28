@@ -60,6 +60,7 @@ tests/
 ├── test_trade_service.py  # 写入闸门与乱序补录
 ├── test_services.py       # 汇总 / 绩效指标 / 同步 / 图表
 ├── test_data.py           # 数据源：工厂、降级链路、重试、优先级、解析分支（不触网）
+├── test_instrument.py     # 标的资料：取名称/资产类型、按配置降级、asset_meta 缓存（不触网）
 ├── test_resilience.py     # 网络超时：sync 不被不响应的数据源挂死
 ├── test_config.py         # 配置加载、YAML 错误与字段取值校验
 ├── test_cli_errors.py     # 退出码契约（需通过 main()，见下）
@@ -91,7 +92,7 @@ tests/
 ## 覆盖率目标
 
 - `portfolio/calculator.py`：**≥ 90%**（关键在于费用与卖出边界）— 当前 **99%**。
-- 全项目行覆盖率：当前 **96.97%**（488 个用例）；`data/` 层 **98%**
+- 全项目行覆盖率：当前 **97.21%**（522 个用例）；`data/` 层 **98%**
   （`python -m pytest --cov=holdings`）。门槛 `fail_under = 95`，达不到
   `pytest` 直接返回非零——数值与理由见下面的「CI 里跑什么」。
 - 新增层不拉后腿：`web/app.py` **100%**——看板的每个分支（三个页面、缺 plotly、
@@ -99,6 +100,11 @@ tests/
   `cli/commands/chart.py` / `cli/renderers/chart_renderer.py` /
   `services/chart_service.py`（前两者的最后几行曾长期无人执行，见
   [BACKLOG B-25](BACKLOG.md)）。
+- 标的资料那两个新模块（[BACKLOG B-31](BACKLOG.md)）也是 **100%**：
+  `data/instrument.py` 的每个真实数据源分支（akshare 名称列、yfinance 的
+  `quoteType` / 币种回落、缺可选依赖）与 `services/asset_meta_service.py`
+  的命中 / 未命中 / 取不到三条路各有用例。手法都是 `sys.modules` 里塞假模块，
+  一条也不触网。
 - 明确低于目标的区域：`cli/renderers/table_renderer.py` 与 `cli/commands/init.py`
   （均 93%，前者是费用表与占比表的空分支，后者是缺必需依赖时的警告分支）。
   [BACKLOG](BACKLOG.md) 的 B-07 / B-09 / B-10 修掉的那几处已不在列
