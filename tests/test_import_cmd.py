@@ -349,3 +349,108 @@ def test_the_split_fee_columns_end_up_in_the_transaction(run_import, tmp_path):
     buy = next(tx for tx in txs if tx.trade_type is TradeType.BUY)
 
     assert buy.fee == pytest.approx(5.10)
+
+
+# --- 资金账号落成组合分组（B-32）------------------------------------------------
+#
+# 对账单天然带资金账号，而 `portfolio_group` 正好是干这个的。此前一次导入只能
+# 给全批指定同一个组，两账号的对账单导进来就分不开了。
+
+ACCOUNT_HEADER = "symbol,market,trade_date,trade_type,quantity,price,account\n"
+
+
+def _groups(run_import_result, tmp_path) -> dict[str, int]:
+    """库里每个组合各几笔——按 `portfolio_group` 数，不按命令输出数。"""
+    counts: dict[str, int] = {}
+    for tx in transaction_dao.get_all(str(tmp_path / "data" / "holdings.db")):
+        counts[tx.portfolio_group] = counts.get(tx.portfolio_group, 0) + 1
+    return counts
+
+
+def test_the_account_column_splits_one_statement_into_several_groups(run_import, tmp_path):
+    """判据：一份含两个资金账号的样本，导入后两个 group 各自落得进去。"""
+    run_import(
+        ACCOUNT_HEADER
+        + "600519,A股,2025-01-02,BUY,100,10,A12345\n"
+        + "600519,A股,2025-01-03,BUY,100,11,A12345\n"
+        + "NVDA,美股,2025-01-04,BUY,10,100,B67890\n"
+    )
+
+    assert _groups(None, tmp_path) == {"A12345": 2, "B67890": 1}
+
+
+def test_the_group_line_is_printed_only_when_there_is_more_than_one(run_import, tmp_path):
+    """分散到多个组必须当场说——不然用户按默认分组看会以为账丢了。
+
+    只有一个组时不印：那是常态，每次都印就成了废话（同「重复 0 行」只印一次
+    的道理反着来，因为那一个是「真的查过」）。
+    """
+    split_result, _ = run_import(
+        ACCOUNT_HEADER
+        + "600519,A股,2025-01-02,BUY,100,10,A12345\n"
+        + "NVDA,美股,2025-01-04,BUY,10,100,B67890\n"
+    )
+    single_result, _ = run_import(
+        ACCOUNT_HEADER
+        + "600519,A股,2025-01-02,BUY,100,10,A12345\n"
+        + "600519,A股,2025-01-03,BUY,100,11,A12345\n",
+        "--dedupe",
+        "off",
+    )
+
+    assert "落组：A12345 1 笔、B67890 1 笔" in split_result.output
+    assert "落组" not in single_result.output
+
+
+def test_the_group_option_only_catches_rows_without_an_account(run_import, tmp_path):
+    """账号优先、`--group` 兜底：文件说得比命令行细。
+
+    反过来让 `--group` 压过账号，上面那份两账号的对账单就会静默并成一个组。
+    """
+    run_import(
+        ACCOUNT_HEADER
+        + "600519,A股,2025-01-02,BUY,100,10,A12345\n"
+        + "NVDA,美股,2025-01-04,BUY,10,100,\n",
+        "--group",
+        "养老金",
+    )
+
+    assert _groups(None, tmp_path) == {"A12345": 1, "养老金": 1}
+
+
+def test_a_statement_without_an_account_column_stays_in_one_group(run_import, tmp_path):
+    """没有账号列时与改动前一样：全批落进 `--group`，一个字都不变。"""
+    result, _ = run_import(HEADER + "NVDA,美股,2025-01-02,BUY,10,100\n", "--group", "养老金")
+
+    assert _groups(None, tmp_path) == {"养老金": 1}
+    assert "落组" not in result.output
+
+
+def test_demo_a_maps_its_own_account_column(run_import, tmp_path):
+    """券商的列名由解析器映射过来，命令行的代码不认识「资金账号」这四个字。"""
+    run_import(
+        "成交日期,证券代码,业务名称,成交数量,成交均价,佣金,印花税,过户费,交易市场,资金账号\n"
+        "2025-01-02,600519,证券买入,100,1500.00,5.00,0.00,0.10,上海,A12345\n"
+    )
+
+    assert _groups(None, tmp_path) == {"A12345": 1}
+
+
+def test_the_group_breakdown_counts_what_was_actually_written(run_import, tmp_path):
+    """`--dedupe skip` 丢掉的行不该还算在里面——否则「落组」与「入账 N 笔」对不上。
+
+    第二份文件里 A12345 那行是重复的、B67890 那行是新的。按拆分时数会是两个组
+    （于是印「落组」），按真正写进去的那批数只剩一个组。
+    """
+    run_import(ACCOUNT_HEADER + "600519,A股,2025-01-02,BUY,100,10,A12345\n")
+    result, _ = run_import(
+        ACCOUNT_HEADER
+        + "600519,A股,2025-01-02,BUY,100,10,A12345\n"
+        + "NVDA,美股,2025-01-04,BUY,10,100,B67890\n",
+        "--dedupe",
+        "skip",
+    )
+
+    assert "入账 1 笔" in result.output
+    assert "落组" not in result.output, "丢掉重复那行之后只剩一个组，不该再印落组"
+    assert _groups(None, tmp_path) == {"A12345": 1, "B67890": 1}

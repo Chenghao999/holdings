@@ -53,10 +53,11 @@
 > `add` 按市场推断，市场为「黄金」时记 `gold`，其余一律记 `stock`。
 > 需要标注 ETF 时请直接改库，或等后续版本提供显式参数。
 >
-> **取自数据源的那条路已经通了，只是还没接到命令上**（[B-31](BACKLOG.md#b-31)）：
-> `data/instrument.py` 能问出股票的资产类型（yfinance 的 `quoteType`），
-> 结果存进 `asset_meta.asset_type`。把它用在导入上的是
-> [B-32](BACKLOG.md#b-32)；在那之前 `add` 的推断规则不变。
+> **取自数据源的那条路已经通了**（[B-31](BACKLOG.md#b-31)）：`data/instrument.py`
+> 能问出股票的资产类型（yfinance 的 `quoteType`），结果存进 `asset_meta.asset_type`。
+> **导入时会用它补上**（[B-32](BACKLOG.md#b-32)）：对账单里没写 `asset_type` 列时按
+> 代码去问，问不到才退回 `stock` 并把行号报出来。`add` 的推断规则不变——
+> 它没有代码可问（那是手工录入，用户就在跟前）。
 
 ## v2.0（界面层，进行中）
 

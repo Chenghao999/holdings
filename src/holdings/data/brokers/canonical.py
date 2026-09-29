@@ -33,6 +33,9 @@ class CanonicalCsv(BrokerParser):
         #: 可选的流水号：有它就能精确判重（BACKLOG B-29）。券商的解析器把自家
         #: 那一列映射到这里即生效，本工具自己的格式就先叫 `external_id`。
         "external_id": ("external_id",),
+        #: 可选的资金账号：一次导入可以落成多个组合分组（BACKLOG B-32）。
+        #: 它**不决定对错、只决定这笔记在哪个组**，所以没有它照样导得进来。
+        "account": ("account",),
     }
 
     def matches(self, header: Sequence[str], sample: Sequence[Sequence[str]]) -> bool:
