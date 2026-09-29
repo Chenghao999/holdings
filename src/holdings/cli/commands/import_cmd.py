@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Callable
+from dataclasses import dataclass, replace
 from datetime import date
 
 import click
 
 from holdings.exceptions import TradeValidationError
+from holdings.models.asset_meta import AssetMeta
 from holdings.models.enums import (
     AssetType,
     MarketType,
@@ -49,6 +51,23 @@ class PostedRow:
 
     line_no: int
     transaction: Transaction
+    #: 文件里这一列是空的——落库前会按代码去数据源补，补不到才沿用默认值
+    #: （见 `_complete_instruments`）。文件写了的以文件为准，不去问。
+    needs_market: bool = False
+    needs_asset_type: bool = False
+
+
+@dataclass(frozen=True)
+class Defaulted:
+    """文件里空着、数据源也没问到，最终按默认值记下的一列。
+
+    记到**列**而不是行：市场查到了而资产类型没查到是常事（不是每个源都分得出
+    股票与 ETF），说成「这一行没取到」就成了假话，用户会以为市场也是默认值。
+    """
+
+    line_no: int
+    column: str
+    value: str
 
 
 @click.command()
@@ -90,7 +109,7 @@ def import_cmd(
     对账单里有资金账号时，**按账号分别落成组合分组**：文件说得比命令行细，
     这时 `--group` 只接住没有账号的行（BACKLOG B-32）。
     """
-    from holdings.services import import_service, trade_service
+    from holdings.services import asset_meta_service, import_service, trade_service
     from holdings.utils.config import load_config
 
     cfg = load_config()
@@ -136,6 +155,10 @@ def import_cmd(
             dropped = {duplicate.index for duplicate in duplicates}
             posted = [row for index, row in enumerate(posted) if index not in dropped]
 
+    # 补全放在校验与查重**之后**：上面两步都可能整批中止，而这一步会联网、
+    # 还会把查到的资料写进 `asset_meta` 缓存——一次失败的导入不该留下痕迹。
+    posted, defaulted = _complete_instruments(posted, cfg.database_path, asset_meta_service.lookup)
+
     # 整批校验通过才落库；TradeValidationError 冒泡到入口，映射为退出码 5。
     ids = trade_service.add_transactions(cfg.database_path, [row.transaction for row in posted])
     _echo_summary(
@@ -144,6 +167,7 @@ def import_cmd(
         unposted,
         None if dedupe == "off" else len(duplicates),
         _group_counts(posted),
+        defaulted,
     )
 
 
@@ -175,8 +199,95 @@ def _split_rows(
             )
         else:
             group = row.get("account") or fallback_group
-            posted.append(PostedRow(row.line_no, _row_to_transaction(row, group, category, source)))
+            posted.append(
+                PostedRow(
+                    line_no=row.line_no,
+                    transaction=_row_to_transaction(row, group, category, source),
+                    needs_market=not row.get("market"),
+                    needs_asset_type=not row.get("asset_type"),
+                )
+            )
     return posted, unposted
+
+
+def _complete_instruments(
+    posted: list[PostedRow],
+    db_path: str,
+    lookup: Callable[..., AssetMeta | None],
+) -> tuple[list[PostedRow], list[Defaulted]]:
+    """按代码把市场与资产类型补上，返回补好的行与**按默认值记的那几列**。
+
+    券商 CSV 里通常只有代码，此前 `market` 缺省成 A 股、`asset_type` 缺省成
+    stock，于是一份美股对账单整份被记成 A 股——`report` / `sync` 据此取价，
+    取不到只显示 `—`，用户得逐个用 `meta` 手工修（BACKLOG B-32）。
+
+    文件里写了的以文件为准（它比按代码形状排的顺序准），只补空的那些列；
+    两列都写了也仍去查一次，那是为了把**名称**落进 `asset_meta`，
+    `holdings list` 的名称列才显示得出来。
+
+    **补不到不是错误**：一份对账单不该因为没网就导不进来，缺的列沿用默认值，
+    但用了哪些默认值要报出来——不说明就等于把默认值当成了事实。
+
+    `lookup` 按 (代码, 市场) 记忆：对账单里同一个标的会出现很多行，
+    逐行去问是白问。传的是 `asset_meta_service.lookup`，好让用例能换掉它。
+    """
+    asked: dict[tuple[str, MarketType | None], AssetMeta | None] = {}
+    completed: list[PostedRow] = []
+    defaulted: list[Defaulted] = []
+    for row in posted:
+        transaction = row.transaction
+        # 市场是默认值时不拿它去查——那正是要查掉的东西。
+        market = None if row.needs_market else transaction.market
+        key = (transaction.symbol, market)
+        if key not in asked:
+            asked[key] = lookup(db_path, transaction.symbol, market)
+        meta = asked[key]
+
+        market_from_source = _market_of(meta) if row.needs_market and meta is not None else None
+        asset_type_from_source = (
+            meta.asset_type if row.needs_asset_type and meta is not None else None
+        )
+
+        # 报的是**这一列**没问到，不是「整行没取到」：市场查到了而资产类型没查到
+        # 是常事（不是每个源都分得出股票与 ETF），说成整行没取到就成了假话。
+        if row.needs_market and market_from_source is None:
+            defaulted.append(Defaulted(row.line_no, "市场", transaction.market.value))
+        if row.needs_asset_type and asset_type_from_source is None:
+            defaulted.append(Defaulted(row.line_no, "资产类型", transaction.asset_type.value))
+
+        if market_from_source is None and asset_type_from_source is None:
+            completed.append(row)
+            continue
+        completed.append(
+            replace(
+                row,
+                # `Transaction` 是 pydantic 模型不是 dataclass，改字段要用
+                # `model_copy(update=...)`。这里不传 `model_validate`：赋进去的
+                # 是枚举成员本身，不是需要解析的原始值。
+                transaction=transaction.model_copy(
+                    update={
+                        "market": market_from_source or transaction.market,
+                        "asset_type": asset_type_from_source or transaction.asset_type,
+                    }
+                ),
+            )
+        )
+    return completed, defaulted
+
+
+def _market_of(meta: AssetMeta) -> MarketType | None:
+    """`AssetMeta.market` 是字符串（那是数据库里的样子），转不回枚举就当没查到。
+
+    转不回来要么是用户在 `holdings meta` 里手填了个不存在的市场，要么是更早的
+    版本写坏了库。这两种都不该让**整份对账单导不进来**，也不该拿一个瞎猜的
+    市场顶上——当作没查到，让它落到默认值，汇总里那一行会被报出来。
+
+    空值与 `None` 不必单独判：`MarketType("")` 同样抛 `ValueError`。
+    """
+    try:
+        return MarketType(meta.market)
+    except ValueError:
+        return None
 
 
 def _group_counts(posted: list[PostedRow]) -> dict[str, int]:
@@ -198,6 +309,7 @@ def _echo_summary(
     unposted: list[UnpostedRow],
     duplicates: int | None,
     groups: dict[str, int],
+    defaulted: list[Defaulted],
 ) -> None:
     """固定三段：识别 / 入账 / 未入账。
 
@@ -208,6 +320,10 @@ def _echo_summary(
     **落组那一截只在真有多个组时印**：一个组是常态，每次都印就成了废话；
     而一旦对账单里的账号让账分散到几个组，用户必须当场知道——否则他按
     `holdings list` 的默认分组去看，会以为这笔导入丢了。
+
+    **标的资料那一截必须逐列报出没取到的**：默认值本身没有错，但把默认值
+    当成事实才是错的——一份被整份记成 A 股的美股对账单，用户不去查就永远
+    不知道（BACKLOG B-32）。
     """
     line = f"识别 {total} 行，入账 {posted} 笔，未入账 {len(unposted)} 行"
     if duplicates is not None:
@@ -216,7 +332,29 @@ def _echo_summary(
     if len(groups) > 1:
         breakdown = "、".join(f"{name} {count} 笔" for name, count in groups.items())
         click.echo(f"落组：{breakdown}")
+    _echo_instruments(posted, defaulted)
     _echo_unposted(unposted)
+
+
+def _echo_instruments(posted: int, defaulted: list[Defaulted]) -> None:
+    """标的资料是取到的还是按默认值记的。
+
+    **一行都没有时不印这一截**：一份整批未入账的对账单本来就没标的资料可言，
+    印一句「全部取自对账单或数据源」是在拿 0 当成绩。
+
+    取不到不是错误（离线照常导入），但**必须逐列说出来**：不说，用户就以为
+    市场是从对账单里读出来的，而实际是默认值。
+    """
+    if not posted:
+        return
+    if not defaulted:
+        click.echo("标的资料：全部取自对账单或数据源")
+        return
+    rows = len({item.line_no for item in defaulted})
+    click.echo(f"标的资料：{rows} 行有列按默认值记")
+    for item in defaulted:
+        click.echo(f"  第 {item.line_no} 行{item.column}没取到，按默认值记：{item.value}")
+    click.echo("  对不上的可用 holdings meta 改")
 
 
 def _echo_duplicates(posted: list[PostedRow], duplicates: list[Duplicate]) -> None:

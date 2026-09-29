@@ -15,11 +15,15 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 from holdings.data import sources
 from holdings.data.fetcher import DataSourceUnavailableError, SymbolNotFoundError
 from holdings.models.enums import AssetType, MarketType
+
+#: A 股代码的形状：6 位数字。个股（60/00/30/68）与场内基金（51/15/16）都是它。
+_A_SHARE_CODE = re.compile(r"\d{6}")
 
 
 @dataclass
@@ -38,6 +42,25 @@ class SymbolInfo:
     currency: str = "CNY"
     #: 这条资料是哪个源给的（`akshare` / `yfinance`），与 `PriceResult.source` 同义。
     source: str = ""
+
+
+def market_candidates(symbol: str) -> list[MarketType]:
+    """只有代码、不知道市场时，**按什么顺序去问**。
+
+    返回的是问的顺序，不是结论：真正落库的市场取自数据源回给我们的
+    `SymbolInfo.market`。按代码形状排只是为了少发一半无谓的请求——akshare
+    取一次资料要拉整张全市场表，拿美股代码去问它是白问。
+
+    **黄金不在候选里**：它没有取资料的源（见 `fetch_instrument`），而且国内
+    黄金 ETF（如 518880）走的本就是 A 股那条链路，问得到。真正的黄金合约
+    （`GC=F`）得靠对账单自带的市场列，或者事后 `holdings meta` 补。
+    """
+    by_shape = (
+        [MarketType.A_SHARE, MarketType.US_STOCK]
+        if _A_SHARE_CODE.fullmatch(symbol)
+        else [MarketType.US_STOCK, MarketType.A_SHARE]
+    )
+    return by_shape
 
 
 def fetch_instrument(symbol: str, market: MarketType) -> SymbolInfo:

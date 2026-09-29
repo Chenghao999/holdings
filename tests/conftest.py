@@ -7,8 +7,23 @@ from datetime import date
 
 import pytest
 
+from holdings.data import instrument
 from holdings.models.enums import AssetType, MarketType, TradeType
 from holdings.models.transaction import Transaction
+
+
+@pytest.fixture(autouse=True)
+def no_network(monkeypatch):
+    """用例一律不触网：把标的资料的源表清空。
+
+    `holdings import` 会按代码去数据源补名称与市场（BACKLOG B-32），而本机与
+    CI 都可能装着 yfinance——不挡住的话，一次 `pytest` 会发出成百上千个真实
+    请求：跑得慢、结果还随网络变，而失败长得像代码坏了。
+
+    需要那条链路的用例自己往 `instrument._SOURCES` 里装假源，见
+    `tests/test_instrument.py` 的 `fake_sources`。
+    """
+    monkeypatch.setattr(instrument, "_SOURCES", {})
 
 
 @pytest.fixture
