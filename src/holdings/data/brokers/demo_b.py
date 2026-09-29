@@ -23,6 +23,7 @@ class DemoB(BrokerParser):
         "quantity": ("成交股数",),
         "price": ("成交价格",),
         "market": ("市场",),
+        "account": ("股东账号",),
     }
     #: 这家只把自家叫法翻过来；`业务标志` 直接写 `BUY` / `SELL` 的行原样
     #: 落到 `classify_trade_type` 上，一样认得出。

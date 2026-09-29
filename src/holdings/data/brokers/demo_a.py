@@ -26,6 +26,7 @@ class DemoA(BrokerParser):
         "quantity": ("成交数量",),
         "price": ("成交均价",),
         "market": ("交易市场",),
+        "account": ("资金账号",),
     }
     #: 只翻「买入」的几种写法，够说明问题即可；分红 / 送转这些留给
     #: `classify_trade_type`，所有券商共用一份。

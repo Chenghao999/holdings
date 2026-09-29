@@ -55,7 +55,9 @@ class PostedRow:
 @click.option(
     "--file", "file_path", required=True, type=click.Path(exists=True), help="对账单文件路径"
 )
-@click.option("--group", default=None, help="组合分组")
+@click.option(
+    "--group", default=None, help="组合分组；对账单带资金账号时以账号为准，它只接住没有账号的行"
+)
 @click.option("--broker", default=None, help="对账单格式名；不给则按表头自动识别")
 @click.option("--fee-column", default=None, help="费用列名（照文件里的写法），覆盖格式自带的费用列")
 @click.option("--strict", is_flag=True, help="有未入账的行时一笔都不写，并以退出码 5 结束")
@@ -84,6 +86,9 @@ def import_cmd(
     同一份文件导两遍、或逐月导出时月份之间有重叠，重复的行**默认报错而不是
     跳过**：静默跳过与静默重复一样坏，一个少算一个多算，用户都看不出来。
     确认不是同一笔（同一天同价同费的两笔真实成交）再用 `--dedupe off` 放行。
+
+    对账单里有资金账号时，**按账号分别落成组合分组**：文件说得比命令行细，
+    这时 `--group` 只接住没有账号的行（BACKLOG B-32）。
     """
     from holdings.services import import_service, trade_service
     from holdings.utils.config import load_config
@@ -134,12 +139,16 @@ def import_cmd(
     # 整批校验通过才落库；TradeValidationError 冒泡到入口，映射为退出码 5。
     ids = trade_service.add_transactions(cfg.database_path, [row.transaction for row in posted])
     _echo_summary(
-        len(statement.rows), len(ids), unposted, None if dedupe == "off" else len(duplicates)
+        len(statement.rows),
+        len(ids),
+        unposted,
+        None if dedupe == "off" else len(duplicates),
+        _group_counts(posted),
     )
 
 
 def _split_rows(
-    rows: list[StatementRow], group: str, source: str
+    rows: list[StatementRow], fallback_group: str, source: str
 ) -> tuple[list[PostedRow], list[UnpostedRow]]:
     """把对账单的行分成「入账的交易」与「认得出但不入账的行」。
 
@@ -147,6 +156,11 @@ def _split_rows(
     「这个值非法」要用户去改文件，「这个值认识、只是暂不入账」只要用户知道。
     把后者也当成错误，一份正确的对账单就永远导不进来；把前者当成不入账放过，
     用户改错了文件却什么也看不到。
+
+    **组合分组按对账单里的资金账号分，`--group` 只接住没有账号的行。**
+    文件说得很清楚每一行属于哪个账号，命令行的参数说不了这么细；反过来让
+    `--group` 压过账号，一份两账号的对账单就被并成一个组，而用户在汇总里
+    看不出来——所以是账号优先，`--group` 只当兜底（BACKLOG B-32）。
     """
     posted: list[PostedRow] = []
     unposted: list[UnpostedRow] = []
@@ -160,23 +174,48 @@ def _split_rows(
                 f"第 {row.line_no} 行 trade_type 列不是合法交易类型：{raw_type}"
             )
         else:
+            group = row.get("account") or fallback_group
             posted.append(PostedRow(row.line_no, _row_to_transaction(row, group, category, source)))
     return posted, unposted
 
 
+def _group_counts(posted: list[PostedRow]) -> dict[str, int]:
+    """落进每个组合各多少笔。
+
+    从**最终要写的那批**上数，而不是拆分时数：`--dedupe skip` 会丢掉几行，
+    按拆分时的数报出来就与「入账 N 笔」对不上了。
+    """
+    counts: dict[str, int] = {}
+    for row in posted:
+        group = row.transaction.portfolio_group
+        counts[group] = counts.get(group, 0) + 1
+    return counts
+
+
 def _echo_summary(
-    total: int, posted: int, unposted: list[UnpostedRow], duplicates: int | None
+    total: int,
+    posted: int,
+    unposted: list[UnpostedRow],
+    duplicates: int | None,
+    groups: dict[str, int],
 ) -> None:
     """固定三段：识别 / 入账 / 未入账。
 
     未入账是 0 也照印——「0」是被数出来的，不是没数，用户才能相信它。
     重复那一截同理，只在**真的查过**时才印：`--dedupe off` 印「重复 0 行」
     就成了谎话，那是没查，不是没重复。
+
+    **落组那一截只在真有多个组时印**：一个组是常态，每次都印就成了废话；
+    而一旦对账单里的账号让账分散到几个组，用户必须当场知道——否则他按
+    `holdings list` 的默认分组去看，会以为这笔导入丢了。
     """
     line = f"识别 {total} 行，入账 {posted} 笔，未入账 {len(unposted)} 行"
     if duplicates is not None:
         line += f"，重复 {duplicates} 行"
     click.echo(line)
+    if len(groups) > 1:
+        breakdown = "、".join(f"{name} {count} 笔" for name, count in groups.items())
+        click.echo(f"落组：{breakdown}")
     _echo_unposted(unposted)
 
 
