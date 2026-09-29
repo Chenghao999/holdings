@@ -12,9 +12,9 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
+from typing import TypeVar
 
 from holdings.data import resilience
-from holdings.data.fetcher import PriceResult
 from holdings.exceptions import DataSourceUnavailableError, HoldingsError
 from holdings.models.enums import MarketType
 from holdings.utils.config import DEFAULT_CONFIG
@@ -22,21 +22,31 @@ from holdings.utils.config import DEFAULT_CONFIG
 #: 两次尝试之间的退避秒数。
 RETRY_BACKOFF_SECONDS = 0.5
 
-Source = Callable[[str], PriceResult]
+_T = TypeVar("_T")
+
+#: 一个数据源：给代码，取回一样东西。取什么由调用方定——报价与标的资料
+#: 共用这套降级，所以这里不能写死成 `PriceResult`。
+Source = Callable[[str], _T]
+
+#: 取价的优先级键（`data_sources.priority`）。
+PRICE_PRIORITY_KEY = "priority"
+#: 取标的资料的优先级键。与取价分开配，因为**能报价的源不一定知道这标的叫什么**
+#: （例如给美股配的源未必认得 A 股代码），硬绑成一份会让用户没法单独调。
+INSTRUMENT_PRIORITY_KEY = "instrument_priority"
 
 
-def priority_for(market: MarketType) -> list[str]:
-    """该市场的数据源顺序。
+def priority_for(market: MarketType, key: str = PRICE_PRIORITY_KEY) -> list[str]:
+    """该市场在 `key` 这一项下的数据源顺序。
 
     读不到配置时回落到 `DEFAULT_CONFIG` 里的内置顺序——默认值只存在配置层
     一处，这里不另抄一份，免得两边悄悄分叉。配置写成一个空列表或非列表时
     同样回落：那多半是手写时的笔误，按默认顺序跑比整个同步失败有用。
     """
-    builtin = DEFAULT_CONFIG["data_sources"]["priority"].get(market.value, [])
+    builtin = DEFAULT_CONFIG["data_sources"].get(key, {}).get(market.value, [])
     try:
         from holdings.utils.config import load_config
 
-        configured = load_config().data_sources.get("priority", {}).get(market.value)
+        configured = load_config().data_sources.get(key, {}).get(market.value)
     except (HoldingsError, OSError):
         return list(builtin)
     if not isinstance(configured, list) or not configured:
@@ -47,21 +57,28 @@ def priority_for(market: MarketType) -> list[str]:
 def fetch_with_fallback(
     symbol: str,
     market: MarketType,
-    sources: dict[str, Source],
+    sources: dict[str, Source[_T]],
     unavailable_message: str,
     order: list[str] | None = None,
-) -> PriceResult:
+    key: str = PRICE_PRIORITY_KEY,
+) -> _T:
     """按顺序逐个数据源尝试，各自带 `sync.retry_count` 次重试。
 
     `sources` 是该市场**实现得出来**的源；配置里列了但这里没有的（例如给美股
     配了 `akshare`）会被跳过，而不是报错——上游库的能力边界不该由用户来记。
     真正的问题（配的源一个都没有）会明确指出，不让人对着「数据源不可用」猜。
 
+    返回类型随 `sources` 走：取价回 `PriceResult`，取标的资料回 `SymbolInfo`，
+    两者的重试与降级行为因此是同一条代码路径。
+
+    `key` 决定不传 `order` 时读哪一项配置（`data_sources.priority` 还是
+    `data_sources.instrument_priority`）。
+
     显式传入 `order` 时不读配置。这条通道是给黄金留的：它的两个源是两种
     **不同的标的**（国内现货/ETF 与国际 GC=F），不是彼此的备份，不能按优先级
     互相回退——详见 `gold.py` 里的说明。
     """
-    order = priority_for(market) if order is None else list(order)
+    order = priority_for(market, key) if order is None else list(order)
     usable = [name for name in order if name in sources]
     if not usable:
         raise DataSourceUnavailableError(

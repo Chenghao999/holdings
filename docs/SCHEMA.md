@@ -62,6 +62,7 @@ CREATE TABLE asset_meta (
     symbol TEXT PRIMARY KEY,
     name TEXT,
     market TEXT,
+    asset_type TEXT,                       -- stock / etf / gold，取不到时为 NULL
     currency TEXT DEFAULT 'CNY',
     annual_management_fee REAL DEFAULT 0,  -- 年化管理费率（如基金托管费），用于参考
     updated_at TEXT
@@ -127,12 +128,13 @@ CREATE INDEX idx_cache_time ON price_cache(update_time);
 - `note`：`holdings snapshot --note "…"` 写的备注。不传存 `NULL`——「没写备注」
   与「写了个空备注」在查询与展示上是两回事。
 
-> **补列迁移**：`note`、`source`、`external_id` 都是后加的列，而
+> **补列迁移**：`note`、`source`、`external_id`、`asset_type` 都是后加的列，而
 > `CREATE TABLE IF NOT EXISTS` 对**已经存在**的表完全不生效，老库不会自己长出
 > 这几列。`storage/db.py` 的 `_migrate()` 用 `PRAGMA table_info` 探测后
 > `ALTER TABLE` 补上，判定「这一列在不在」而不是查版本号——这个库由用户直接
 > 拿着用，不会有谁去维护 schema_version。补出来的列在老数据上是 `NULL`，
-> 语义就是「不知道来源、没有流水号」，不猜一个值填进去。
+> 语义就是「不知道来源、没有流水号、不知道资产类型」，不猜一个值填进去——
+> 补一个猜出来的 `stock` 会让报表凭空多出一个看似确定的事实。
 
 ### asset_meta 字段说明
 
@@ -141,6 +143,7 @@ CREATE INDEX idx_cache_time ON price_cache(update_time);
 | `symbol` | 主键，标的代码；重复写入是**覆盖**而不是插第二条 |
 | `name` | 标的名称，`holdings list` 的名称列取自这里；没有记录时回落显示代码 |
 | `market` | 市场（当前仅记录，不参与计算） |
+| `asset_type` | 资产类型（`stock` / `etf` / `gold`）。**允许为 NULL**：不是每个数据源都分得出股票与 ETF，而猜错的类型会一路走进报表，用户却看不出那是猜的 |
 | `currency` | 币种，默认 `CNY` |
 | `annual_management_fee` | 年化管理费率（%），**仅作参考展示，不直接参与单笔成本计算** |
 
@@ -161,6 +164,22 @@ CREATE INDEX idx_cache_time ON price_cache(update_time);
 - 同一 `symbol` 在 `price_cache` 中若 `update_time` 距今 **不足 5 分钟**，直接返回缓存，不发起网络请求。
 - 缓存时间可通过配置项 `cache_ttl_seconds` 调整（见 [CONFIG_SPEC.md](CONFIG_SPEC.md)）。
 - `source` 字段记录数据来源，便于排查降级链路。
+
+## 标的资料缓存过期策略
+
+`asset_meta` 同时也是**标的资料的缓存**（[B-31](BACKLOG.md#b-31)）：名称、市场、
+资产类型、币种由 `data/instrument.py` 从数据源取回，写入这张表，下次先看缓存。
+
+- 判定走 `storage/db.py:timestamp_is_fresh()`，`update_time` / `updated_at`
+  距今不足配置的 ttl 秒就直接用缓存。**两处的时间戳都由 SQLite 的
+  `CURRENT_TIMESTAMP` 写入，是 UTC**，算年龄必须与 UTC 相减——用本地时间
+  在东八区会把刚写入的缓存算成 8 小时前，缓存形同虚设而看不出异常。
+- 阈值是 `data_sources.instrument_ttl_seconds`（默认 1 天），与价格缓存的
+  `cache_ttl_seconds`（默认 5 分钟）分开：资料的寿命长得多。
+- **只有 `name` 的记录才算缓存命中**：只填过年化管理费率的行（`holdings meta --fee`
+  建的）不算，否则那条代码的名称永远取不回来。
+- 取不到时**不报错、不覆盖**已有内容：这是「暂时不知道」，不是「数据出错」。
+  导入不该因为没网就做不了。
 - **`currency` 决定这个标的进不进汇总**：非 `CNY` 的标的不与人民币相加，
   汇总里排除、行内由行情推出来的数字显示 `—`，现价带上币种。基准货币是
   `services/portfolio_service.BASE_CURRENCY`（[B-19](BACKLOG.md#b-19)）。

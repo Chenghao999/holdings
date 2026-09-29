@@ -6,6 +6,8 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
+from holdings.models.enums import AssetType
+
 
 class AssetMeta(BaseModel):
     """某标的的基础信息，对应数据库 `asset_meta` 表。
@@ -21,6 +23,9 @@ class AssetMeta(BaseModel):
     symbol: str
     name: str | None = None
     market: str | None = None
+    #: 资产类型。**允许为空**：不是每个数据源都分得出股票与 ETF，而猜一个
+    #: 错的类型会一路走进报表，用户却看不出那是猜的。
+    asset_type: AssetType | None = None
     currency: str = "CNY"
     annual_management_fee: float = 0.0
     updated_at: datetime | None = None

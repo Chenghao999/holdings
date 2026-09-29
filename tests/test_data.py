@@ -208,7 +208,9 @@ def test_backoff_is_not_paid_after_the_last_attempt(a_stock, monkeypatch):
     monkeypatch.setattr(module.time, "sleep", slept.append)
     monkeypatch.setattr(resilience, "retry_count", lambda: 2)
     # 只配 yfinance 一个源，退避次数就等于重试次数本身
-    monkeypatch.setattr(module, "priority_for", lambda market: ["yfinance"])
+    monkeypatch.setattr(
+        module, "priority_for", lambda market, key=module.PRICE_PRIORITY_KEY: ["yfinance"]
+    )
     _source(monkeypatch, a_stock, "_from_yfinance", [RuntimeError("一直失败")])
 
     with pytest.raises(fetcher.DataSourceUnavailableError):

@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
 
 from holdings.exceptions import DatabaseError
@@ -42,6 +43,7 @@ CREATE TABLE IF NOT EXISTS asset_meta (
     symbol TEXT PRIMARY KEY,
     name TEXT,
     market TEXT,
+    asset_type TEXT,
     currency TEXT DEFAULT 'CNY',
     annual_management_fee REAL DEFAULT 0,
     updated_at TEXT
@@ -108,6 +110,31 @@ def _migrate(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE transactions ADD COLUMN source TEXT")
     if "external_id" not in transactions:
         conn.execute("ALTER TABLE transactions ADD COLUMN external_id TEXT")
+
+    # B-31：标的资料现在能从数据源取回来，资产类型也就有了值可存。老库补上后
+    # 是 NULL——「不知道」而不是「是 stock」，手工 meta 填过的那几行不受影响。
+    if "asset_type" not in _columns(conn, "asset_meta"):
+        conn.execute("ALTER TABLE asset_meta ADD COLUMN asset_type TEXT")
+
+
+def timestamp_is_fresh(update_time: str | None, ttl_seconds: int) -> bool:
+    """库里那个 `CURRENT_TIMESTAMP` 写下的时间戳，距今是否还在 ttl 秒内。
+
+    放在这里而不是各个 DAO 里，是因为**算年龄那一步有个不写就会错一整天的细节**：
+    SQLite 的 `CURRENT_TIMESTAMP` 存的是 UTC，必须与 UTC 相减；用
+    `datetime.now()`（本地时间）在东八区会把刚写入的缓存算成 8 小时前，
+    于是缓存形同虚设——而看起来一切正常。
+
+    任何「多久算过期」的判断都该走这里，别再抄第二份。
+    """
+    if not update_time:
+        return False
+    try:
+        updated = datetime.fromisoformat(update_time)
+    except ValueError:
+        return False
+    now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+    return (now_utc - updated).total_seconds() < ttl_seconds
 
 
 def _columns(conn: sqlite3.Connection, table: str) -> set[str]:

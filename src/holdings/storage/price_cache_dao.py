@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import sqlite3
-from datetime import datetime, timezone
 
+from holdings.storage import db
 from holdings.storage.db import DatabaseError, connect
 
 
@@ -63,14 +63,6 @@ def upsert(
 def is_fresh(db_path: str, symbol: str, ttl_seconds: int) -> bool:
     """判断缓存是否在 ttl 秒内更新过。"""
     cached = get(db_path, symbol)
-    if cached is None or not cached.update_time:
+    if cached is None:
         return False
-    try:
-        updated = datetime.fromisoformat(cached.update_time)
-    except ValueError:
-        return False
-    # SQLite 的 CURRENT_TIMESTAMP 存的是 UTC，必须与 UTC 相减；
-    # 用 datetime.now()（本地时间）在东八区会把刚写入的缓存算成 8 小时前。
-    now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
-    age = (now_utc - updated).total_seconds()
-    return age < ttl_seconds
+    return db.timestamp_is_fresh(cached.update_time, ttl_seconds)
