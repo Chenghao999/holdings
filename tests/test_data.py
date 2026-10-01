@@ -4,17 +4,23 @@
 只断言「调用了几次、走的哪条路」。
 """
 
+import contextlib
+import inspect
 import sys
 import types
 
 import pandas as pd
 import pytest
 
-from holdings.data import fetcher, resilience
+from holdings.data import fetcher, instrument, resilience
 from holdings.data.a_stock import AStockFetcher
 from holdings.data.gold import GoldFetcher
 from holdings.data.us_stock import USStockFetcher
 from holdings.models.enums import MarketType
+
+#: `conftest` 的 `no_network` 夹具在用例运行时把这张表清空，这里留一份原样的
+#: ——「源表的调用契约」那条用例要检查的正是生产代码里这一份。
+_INSTRUMENT_SOURCES = instrument._SOURCES
 
 
 def test_data_layer_imports_without_circular_dependency():
@@ -326,8 +332,8 @@ def test_a_domestic_gold_symbol_never_gets_the_international_price(monkeypatch):
     monkeypatch.setattr(
         GoldFetcher,
         "_international_gold",
-        lambda self: (
-            international_calls.append("GC=F")
+        lambda self, symbol: (
+            international_calls.append(symbol)
             or fetcher.PriceResult(symbol="GC=F", price=2000.0, source="yfinance")
         ),
     )
@@ -339,16 +345,24 @@ def test_a_domestic_gold_symbol_never_gets_the_international_price(monkeypatch):
 
 
 def test_the_international_symbol_goes_to_the_international_quote(monkeypatch):
-    """`GC=F` 走国际金价；国内代码走 A 股链路——由代码选路，不靠配置。"""
+    """`GC=F` 走国际金价；国内代码走 A 股链路——由代码选路，不靠配置。
+
+    打桩的是 `yfinance` 这个**外部依赖**，不是 `GoldFetcher` 自己的方法：
+    打桩方法等于把被测的那次 `source(symbol)` 调用一起删掉。这里此前写的
+    `lambda self, symbol: …` 与调用侧对得上，于是 `_international_gold`
+    少了 `symbol` 形参也没红——`GC=F` 从 v0.1.0 起一次都没取到过（B-36）。
+    """
     from holdings.data.gold import GoldFetcher
 
-    monkeypatch.setattr(
-        GoldFetcher,
-        "_international_gold",
-        lambda self, symbol: fetcher.PriceResult(symbol="GC=F", price=2000.0, source="yfinance"),
-    )
+    seen: list[str] = []
+    monkeypatch.setitem(sys.modules, "yfinance", _yfinance_module(_history(2000.0), seen))
 
-    assert GoldFetcher().fetch("GC=F").price == 2000.0
+    result = GoldFetcher().fetch("GC=F")
+
+    assert seen == ["GC=F"], "国际金价走的是 GC=F 这个合约"
+    assert result.symbol == "GC=F"
+    assert result.price == 2000.0
+    assert result.currency == "USD"
 
 
 # ------------------------------------------------ 各数据源的解析与懒加载分支
@@ -458,17 +472,6 @@ def test_us_stock_reports_a_missing_symbol(monkeypatch):
         USStockFetcher()._from_yfinance("NOPE")
 
 
-def test_gold_uses_the_international_contract(monkeypatch):
-    seen: list[str] = []
-    monkeypatch.setitem(sys.modules, "yfinance", _yfinance_module(_history(2000.0), seen))
-
-    result = GoldFetcher()._international_gold()
-
-    assert seen == ["GC=F"], "国际金价走的是 GC=F 这个合约"
-    assert result.symbol == "GC=F"
-    assert result.currency == "USD"
-
-
 def test_us_stock_without_yfinance_raises_data_source_unavailable(monkeypatch):
     monkeypatch.setitem(sys.modules, "yfinance", None)
 
@@ -476,11 +479,37 @@ def test_us_stock_without_yfinance_raises_data_source_unavailable(monkeypatch):
         USStockFetcher()._from_yfinance("AAPL")
 
 
+def test_international_gold_reports_an_empty_quote(monkeypatch):
+    """取到空行情时说的是「没找到 GC=F 行情」，不是「数据源不可用」。"""
+    from holdings.data import sources
+    from holdings.data.gold import GoldFetcher
+
+    monkeypatch.setattr(sources.time, "sleep", lambda _seconds: None)
+    monkeypatch.setitem(sys.modules, "yfinance", _yfinance_module(pd.DataFrame()))
+
+    with pytest.raises(fetcher.DataSourceUnavailableError) as exc:
+        GoldFetcher().fetch("GC=F")
+
+    assert isinstance(exc.value.__cause__, fetcher.SymbolNotFoundError)
+
+
 def test_international_gold_without_yfinance_raises_data_source_unavailable(monkeypatch):
+    """缺 yfinance 时经 `fetch()` 报「数据源不可用」，真因留在异常链上。
+
+    走 `fetch()` 而不是直接调 `_international_gold()`：后者绕过了
+    `source(symbol)` 那次调用，签名错了也照样绿（B-36）。
+    """
+    from holdings.data import sources
+    from holdings.data.gold import GoldFetcher
+
+    monkeypatch.setattr(sources.time, "sleep", lambda _seconds: None)  # 重试的退避
     monkeypatch.setitem(sys.modules, "yfinance", None)
 
-    with pytest.raises(fetcher.DataSourceUnavailableError, match="yfinance"):
-        GoldFetcher()._international_gold()
+    with pytest.raises(fetcher.DataSourceUnavailableError, match="国际黄金数据源不可用") as exc:
+        GoldFetcher().fetch("GC=F")
+
+    # 真因要留在异常链上，别只剩一句「数据源不可用」。
+    assert "未安装 yfinance" in str(exc.value.__cause__)
 
 
 def test_a_domestic_gold_code_goes_through_the_a_share_path(monkeypatch):
@@ -490,3 +519,71 @@ def test_a_domestic_gold_code_goes_through_the_a_share_path(monkeypatch):
     result = GoldFetcher().fetch("600519")
 
     assert result.source == "akshare", "走的是 A 股那条链，而不是国际金价"
+
+
+# ------------------------------------------------------ 源表的调用契约
+
+
+def _price_source_tables(monkeypatch) -> dict[str, dict[str, object]]:
+    """抓出各市场交给降级链的源表。
+
+    源表在 `fetch()` 里就地构造，import 不到；拦一次 `fetch_with_fallback`
+    是唯一不给生产代码开测试专用接缝的办法。
+    """
+    from holdings.data import sources
+
+    tables: dict[str, dict[str, object]] = {}
+
+    def spy(symbol, market, table, message, order=None, key=sources.PRICE_PRIORITY_KEY):
+        tables[f"{market.value}/{key}"] = table
+        raise fetcher.DataSourceUnavailableError("打桩：这条用例只要源表")
+
+    monkeypatch.setattr(sources, "fetch_with_fallback", spy)
+    for fetcher_obj, symbol in (
+        (AStockFetcher(), "600519"),
+        (USStockFetcher(), "AAPL"),
+        (GoldFetcher(), "GC=F"),
+        (GoldFetcher(), "518880"),
+    ):
+        with contextlib.suppress(fetcher.DataSourceUnavailableError):
+            fetcher_obj.fetch(symbol)
+    return tables
+
+
+def _rejects_a_symbol(source: object) -> str | None:
+    """源收不下一个位置参数时返回原因，收得下返回 `None`。"""
+    try:
+        inspect.signature(source).bind("600519")
+    except TypeError as exc:
+        return str(exc)
+    return None
+
+
+def test_every_source_in_every_table_can_be_called_with_a_symbol(monkeypatch):
+    """源表里的每个源都必须收得下一个位置参数。
+
+    降级链按 `source(symbol)` 调源，而它是一句**故意写宽**的
+    `except Exception`（「降级要捕获所有异常」）：签名对不上时，报出来的
+    不是「我这段代码写错了」，而是「数据源不可用」。`GC=F` 就是这么坏了
+    整个 v1——用户去查网络、重装 yfinance，而问题在自己的代码里（B-36）。
+    """
+    tables = _price_source_tables(monkeypatch)
+    tables.update(
+        {f"{market.value}/instrument_priority": t for market, t in _INSTRUMENT_SOURCES.items()}
+    )
+    # 黄金国内代码走 A 股链路，源表与 A 股相同，不重复计入。
+    assert set(tables) == {
+        "A股/priority",
+        "美股/priority",
+        "黄金/priority",
+        "A股/instrument_priority",
+        "美股/instrument_priority",
+    }, "少抓到源表，说明这条用例自己失效了"
+
+    rejects = [
+        f"{where} 的源 {name} 收不下 symbol（{why}），取价时会变成「数据源不可用」"
+        for where, table in tables.items()
+        for name, source in table.items()
+        if (why := _rejects_a_symbol(source))
+    ]
+    assert not rejects, "\n".join(rejects)

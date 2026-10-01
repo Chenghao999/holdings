@@ -47,7 +47,7 @@
 |------|---------|------|
 | A 股 | akshare（降级 yfinance） | 股票与 ETF 均按 A 股行情拉取 |
 | 美股 | yfinance | |
-| 黄金 | akshare（国内现货 / 黄金ETF `518880`，降级 `GC=F`） | |
+| 黄金 | 国内现货 / 黄金ETF（`518880`）走 akshare，`GC=F` 走 yfinance 国际金价 | 由代码选路，两个源不互相降级 |
 
 > `AssetType` 枚举定义了 `stock` / `etf` / `gold` 三种，但**当前没有区分 ETF 的入口**：
 > `add` 按市场推断，市场为「黄金」时记 `gold`，其余一律记 `stock`。

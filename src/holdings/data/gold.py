@@ -35,7 +35,15 @@ class GoldFetcher:
 
         return AStockFetcher().fetch(symbol)
 
-    def _international_gold(self) -> PriceResult:
+    def _international_gold(self, symbol: str) -> PriceResult:
+        """国际金价。`symbol` 收下但**不用**：这个源只报 `GC=F` 一个合约。
+
+        形参必须在——源表统一按 `source(symbol)` 调用（见 `sources.py`）。
+        此前漏了它，`TypeError` 被降级链那句「捕获所有异常」的宽 `except`
+        吞成 `DataSourceUnavailableError`，于是从 v0.1.0 起 `holdings sync GC=F`
+        每次都以「国际黄金数据源不可用」告终，真因（自己代码的签名错）
+        变成了「上游挂了」，用户只会去查网络。
+        """
         try:
             import yfinance as yf  # 懒加载
         except ImportError as exc:
