@@ -22,11 +22,24 @@ A：默认 5 分钟内同一标的直接返回本地缓存，不重复请求，�
 
 ### Q：如何把数据库迁移到另一台电脑？
 
-A：直接拷贝 `data/holdings.db` 到新电脑对应目录即可。数据为单文件 SQLite，无需额外导出导入。
+A：两条路。**拷文件**：`data/holdings.db` 到新电脑对应目录即可，数据是单文件
+SQLite。**走导出**：`holdings export --out ledger.csv`，在新电脑
+`holdings import --file ledger.csv`——多一步，但账本是文本，出问题时看得见
+「哪几笔不对」（见 [`holdings export`](USER_GUIDE.md#6-holdings-export--导出账本--持仓表--快照)）。
 
 ### Q：如何备份我的数据？
 
-A：备份 `data/holdings.db`（交易与快照）以及 `config.yaml`（配置）两份文件即可。
+A：最小的一份是 `data/holdings.db`（交易与快照）加 `config.yaml`（配置）。
+想要一份能读、能查、能进 Excel 的，用 `holdings export`：
+
+```bash
+holdings export --out ledger.csv                  # 账本，能导回来
+holdings export --what snapshots --out 快照.csv    # 快照
+```
+
+**行情不在导出里**：现价 / 市值 / 盈亏是能从数据源重取的缓存，不是账本，
+导进新库后那几列为空，`holdings sync` 一次就回来。要备的是补不回来的东西——
+交易流水还能从券商重导，手记的快照不能。
 
 ---
 

@@ -40,6 +40,8 @@
 - 终端界面（`tui`，可选依赖）：持仓与报表两屏，与 CLI 同源。
 - 资产快照：`snapshot` 记录（含备注），`snapshots` 查看。
 - 净值曲线图导出（`chart`，生成交互式 HTML，需 `holdings-cli[chart]`）。
+- 数据导出（`export`）：账本 / 持仓表 / 快照 → CSV 或 JSON。账本一份能与
+  `import` 互相往返（备份、迁移），持仓表一份给 Excel 报税用。
 
 ## v1.0 支持的市场与资产类型
 
@@ -83,6 +85,7 @@
 | `holdings add` | 新增交易（含费用） |
 | `holdings list` | 查看持仓明细（可按列排序） |
 | `holdings import` | 对账单导入（按格式解析；整批事务；未入账的行逐行报出；重复的行查出来） |
+| `holdings export` | 导出账本 / 持仓表 / 快照为 CSV 或 JSON；账本用的就是 `import` 认的那份表头，**能导回来** |
 | `holdings sync` | 同步最新价格 |
 | `holdings report` | 生成综合报表 |
 | `holdings snapshot` | 记录资产快照 |

@@ -7,6 +7,23 @@
 
 ### Added
 
+- **`holdings export`：账本 / 持仓表 / 快照导出为 CSV 或 JSON**
+  （[BACKLOG B-37](docs/BACKLOG.md)，从 [B-23](docs/BACKLOG.md) 拆出）。此前只有
+  半个回路——`import` 能读三种对账单格式，却没有任何出口，报税、迁移、备份全堵着。
+  - **账本那一份能再导回来**：它的表头是从 `data/brokers/canonical.py` **派生**的
+    （不是照着另抄一份），也就是 `import` 认的那一份。`--what` 取 `ledger`（默认）/
+    `holdings` / `snapshots`，`--format` 取 `csv`（默认）/ `json`，`--out` 必填。
+  - **不做四舍五入**：数量与金额原样写出，Python 浮点 repr 自带「读回来还是同一个数」
+    的保证。把 `10.045` 写成 `10.05` 会让导回来的账本和原来不一样——这是备份不是报表。
+    组合分组跟着 `account` 列一起往返，一份两账户的账本导回来还是两账户。
+  - **CSV 带 BOM**（`utf-8-sig`）：Excel 双击打开中文不乱码；而本工具自己的
+    `decode_statement` 第一个剥的就是 BOM，所以带 BOM 的导出照样导得回来。行尾用 LF。
+  - **算不出来的值**在 CSV 里是空单元格、在 JSON 里是 `null`。JSON 用
+    `allow_nan=False` 写：`json.dumps` 默认会把 `NaN` 原样写出去，而那不是合法 JSON。
+  - **行情不进账本**：现价 / 市值 / 盈亏来自 `price_cache`，是能重取的缓存，
+    导进新库后为空，`sync` 一次就回来。往返唯一丢的是 `source`（会变成 `csv`）。
+  - **空库也导得出**：表头照写、0 行，并说明是「库里还没有记录」。
+
 - **导入时按代码补全市场与资产类型**（[BACKLOG B-32](docs/BACKLOG.md)）：对账单里
   没写这两列时，`import` 按代码去数据源问一次，补上再落库——此前整份对账单的市场
   都被记成默认的 A 股，`report` / `sync` 据此取价取不到，用户得逐个用 `meta` 手工修。
