@@ -34,23 +34,20 @@ class PriceResult:
 
 
 def get_fetcher(market: MarketType):
-    """根据市场返回对应 fetcher。
+    """根据市场返回对应 fetcher——**查一次表**，不再是一串 `if market == …`。
 
-    三个子模块都要从本模块导入 `DataSourceUnavailableError` / `SymbolNotFoundError` /
-    `PriceResult`，故此处必须延迟导入，否则与模块级导入构成循环依赖，
+    表在 `data/markets.py`：加一个市场是「加一个模块 + 在表里加一行」，本模块
+    不用改。此前每加一个市场都要在这里加一个分支，本模块于是成了「市场清单」
+    的第二个副本。
+
+    **导入仍放在函数体内**（与改动前一样），为的是避开循环依赖：各市场模块
+    要从本模块取 `DataSourceUnavailableError` / `SymbolNotFoundError` /
+    `PriceResult`，模块级导入会构成 fetcher → markets → a_stock → fetcher 的环，
     导致 `import holdings.data.fetcher` 直接失败（`holdings sync` 会整条挂掉）。
     """
-    from holdings.data.a_stock import AStockFetcher
-    from holdings.data.gold import GoldFetcher
-    from holdings.data.us_stock import USStockFetcher
+    from holdings.data import markets
 
-    if market == MarketType.A_SHARE:
-        return AStockFetcher()
-    if market == MarketType.US_STOCK:
-        return USStockFetcher()
-    if market == MarketType.GOLD:
-        return GoldFetcher()
-    raise SymbolNotFoundError(f"未知市场：{market}")
+    return markets.fetcher_for(market)
 
 
 def fetch_price(symbol: str, market: MarketType) -> PriceResult:

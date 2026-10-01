@@ -6,6 +6,7 @@
 
 import contextlib
 import inspect
+import pathlib
 import sys
 import types
 
@@ -57,6 +58,36 @@ def test_get_fetcher_dispatches_by_market(market, expected):
 def test_get_fetcher_rejects_unknown_market():
     with pytest.raises(fetcher.SymbolNotFoundError):
         fetcher.get_fetcher("不存在的市场")
+
+
+def test_a_new_market_is_one_registry_line(monkeypatch):
+    """加一个市场 = 加一个模块 + `markets.FETCHERS` 里一行，`fetcher.py` 一个字不改。
+
+    就地造一个没登记过的市场塞进注册表，`fetch_price` 照样把它路由过去——
+    这正是「加港股要改 `get_fetcher`」那条毛病不再存在的证据（BACKLOG B-33）。
+    """
+    from holdings.data import markets
+
+    class _HongKongFetcher:
+        def fetch(self, symbol):
+            return fetcher.PriceResult(symbol=symbol, price=7.8, currency="HKD", source="hk")
+
+    monkeypatch.setitem(markets.FETCHERS, "港股", _HongKongFetcher)
+
+    assert isinstance(fetcher.get_fetcher("港股"), _HongKongFetcher)
+    assert fetcher.fetch_price("00700", "港股").price == 7.8
+
+
+def test_the_dispatcher_names_no_market_of_its_own():
+    """`fetcher.py` 里不出现任何具体市场：市场清单只能有一份（`markets.FETCHERS`）。
+
+    结构性的一条，抓的是「以后有人顺手在 `fetcher.py` 里加回一个 `if` 分支」——
+    那正是这一项要拆掉的东西。
+    """
+    source = pathlib.Path(fetcher.__file__).read_text(encoding="utf-8")
+
+    named = [market.name for market in MarketType if f"MarketType.{market.name}" in source]
+    assert named == [], f"fetcher.py 里出现了具体市场 {named}，市场清单有了第二份"
 
 
 def test_fetch_price_delegates_to_resolved_fetcher(monkeypatch):
@@ -363,6 +394,28 @@ def test_the_international_symbol_goes_to_the_international_quote(monkeypatch):
     assert result.symbol == "GC=F"
     assert result.price == 2000.0
     assert result.currency == "USD"
+
+
+def test_gold_ignores_the_priority_config(monkeypatch, tmp_path):
+    """黄金由代码选路，**不读** `data_sources.priority`（CONFIG_SPEC 写明的一点）。
+
+    配置里把黄金指给 akshare 也不改变 `GC=F` 走 yfinance 国际金价——它的两个源
+    是两种不同的标的，不能按优先级互相回退，理由见 `gold.py` 的模块说明。
+    """
+    from holdings.data import sources as module
+
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "config.yaml").write_text(
+        "data_sources:\n  priority:\n    黄金: [akshare]\n", encoding="utf-8"
+    )
+    monkeypatch.setattr(module.time, "sleep", lambda _seconds: None)
+    seen: list[str] = []
+    monkeypatch.setitem(sys.modules, "yfinance", _yfinance_module(_history(2000.0), seen))
+
+    result = GoldFetcher().fetch("GC=F")
+
+    assert result.price == 2000.0
+    assert seen == ["GC=F"], "配置里怎么排都不改变 GC=F 由代码选的那条路"
 
 
 # ------------------------------------------------ 各数据源的解析与懒加载分支
