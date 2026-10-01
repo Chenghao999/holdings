@@ -36,6 +36,7 @@ holdings/
 │       │
 │       ├── data/                            # 【数据适配层·外部 API 与文件格式，不碰 DB】
 │       │   ├── fetcher.py                   #    工厂统一入口，同步/异步双接口
+│       │   ├── markets.py                   #    市场注册表：加一个市场 = 一个模块 + 一行
 │       │   ├── sources.py                   #    按 data_sources.priority 依次尝试各源
 │       │   ├── resilience.py                #    网络调用的超时（守护线程）与重试次数
 │       │   ├── a_stock.py                   #    akshare / yfinance 两个源，顺序由配置决定

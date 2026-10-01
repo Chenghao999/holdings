@@ -81,6 +81,23 @@
   **命令名与导入名都不变**，仍是 `holdings`；改的只是 `pip install` 里那个名字。
   本次**尚未上传 PyPI**（需要项目所有者的 token），在上传之前提示串依然不可执行。
 
+### Changed
+
+- **加一个市场不用再改 `fetcher.py`**（[BACKLOG B-33](docs/BACKLOG.md)）：新增
+  `data/markets.py` 作为市场注册表，`get_fetcher` 从一串 `if market == …` 退化成
+  一次查表——**加一个市场 = 加一个模块 + 在 `FETCHERS` 里加一行**，与
+  `data/brokers/` 加一家券商是同一套写法。
+  - 表放在单独模块里而不是 `fetcher.py` 里，为的是循环导入：各市场模块要从
+    `fetcher.py` 取 `PriceResult` 与异常类。`get_fetcher` 里那句延迟导入仍保留。
+  - **行为与错误文案一字未改**（未知市场仍是 `SymbolNotFoundError`），
+    改动前那 547 条用例全过、一条都没改。
+  - 各市场的**数据源**表本来就在各自模块里按名字登记，这一半没动：源表取的是
+    绑定方法，而现有用例靠替换单个源来打桩，提到类属性上会把它们全废掉。
+  - 不抽公共基类（这一项刻意不做）：三家只有 `fetch` 一条约定，用 `Protocol`
+    记下来即可——这个项目已经吃过一次「先写通用件、结果没人用」的亏。
+  - 新增用例：就地注册一个「港股」市场验证路由；配置里把黄金指给别的源也不
+    影响它由代码选路；另有一条结构性的，禁止 `fetcher.py` 里再出现具体市场。
+
 ### Added
 
 - **Web 只读看板**（[BACKLOG B-20](docs/BACKLOG.md)）：新增 `src/holdings/web/`
