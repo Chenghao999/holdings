@@ -156,3 +156,45 @@ def symbols(db_path: str) -> list[str]:
         raise DatabaseError(f"读取标的失败：{exc}") from exc
     finally:
         conn.close()
+
+
+def list_groups(db_path: str) -> list[str]:
+    """返回交易里出现过的所有组合名（去重、名称升序）。
+
+    排除 NULL：建表时 `portfolio_group` 只是 `DEFAULT '默认'` 而没有 NOT NULL，
+    老库或手工插入的行可能是 NULL。把 `None` 当组合名返回出去，调用方拿它去
+    筛交易会得到一条空结果，看起来像「有个叫 None 的空组合」。
+    """
+    conn = connect(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT DISTINCT portfolio_group FROM transactions "
+            "WHERE portfolio_group IS NOT NULL ORDER BY portfolio_group"
+        ).fetchall()
+        return [r["portfolio_group"] for r in rows]
+    except sqlite3.Error as exc:
+        raise DatabaseError(f"读取组合失败：{exc}") from exc
+    finally:
+        conn.close()
+
+
+def move_group(db_path: str, old: str, new: str) -> int:
+    """把 `old` 组合的全部交易改到 `new`，返回改动行数。
+
+    改名与合并共用这一条 SQL——「把 A 并进 B」就是把 A 的名字改成 B。
+    单条 UPDATE 自身就是一个事务，满足「改历史数据要么全成要么全不成」；
+    出错回滚再抛，与 `add_many` 同一套语义。
+    """
+    conn = connect(db_path)
+    try:
+        cur = conn.execute(
+            "UPDATE transactions SET portfolio_group = ? WHERE portfolio_group = ?",
+            (new, old),
+        )
+        conn.commit()
+        return cur.rowcount
+    except sqlite3.Error as exc:
+        conn.rollback()
+        raise DatabaseError(f"改动组合失败：{exc}") from exc
+    finally:
+        conn.close()

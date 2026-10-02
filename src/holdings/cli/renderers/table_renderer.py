@@ -6,7 +6,12 @@ from typing import TYPE_CHECKING
 
 from rich.table import Table
 
-from holdings.services.portfolio_service import BASE_CURRENCY, HOLDINGS_COLUMNS
+from holdings.services.portfolio_service import (
+    BASE_CURRENCY,
+    HOLDINGS_COLUMNS,
+    foreign_hint,
+    unpriced_hint,
+)
 from holdings.utils.formatter import (
     UNKNOWN,
     format_money,
@@ -18,6 +23,7 @@ from holdings.utils.formatter import (
 )
 
 if TYPE_CHECKING:
+    from holdings.services.group_service import GroupRow
     from holdings.services.portfolio_service import PortfolioSummary
     from holdings.services.report_service import PerformanceSummary
 
@@ -108,6 +114,65 @@ def render_holdings_table(holdings_df, width: int | None = None) -> Table:
             format_percent(row.get("profit_rate")),
         )
     return table
+
+
+def render_groups_table(rows: list[GroupRow]) -> Table:
+    """组合清单，每个组合一行。
+
+    数字全部取自服务层给出的 `PortfolioSummary`，这里不做任何加减：
+    「这一行的总市值」与 `holdings list --group <名字>` 底下那行汇总必须是
+    同一个数，而保证它同源的唯一办法就是不去重算。
+    """
+    table = Table(title="组合概览")
+    table.add_column("组合", justify="left", no_wrap=True)
+    table.add_column("标的数", justify="right")
+    table.add_column("总市值", justify="right")
+    table.add_column("总成本", justify="right")
+    table.add_column("盈亏", justify="right")
+    table.add_column("盈亏率", justify="right")
+    table.add_column("未计入", justify="left")
+    if not rows:
+        table.add_row("暂无组合", "", "", "", "", "", "")
+        return table
+    for row in rows:
+        summary = row.summary
+        table.add_row(
+            row.group,
+            str(len(summary.holdings_df)),
+            format_money(summary.total_value),
+            format_money(summary.total_cost),
+            format_money(summary.total_profit),
+            format_percent(summary.profit_rate),
+            _excluded_cell(row),
+        )
+    return table
+
+
+def _excluded_cell(row: GroupRow) -> str:
+    """这一行里没进汇总的标的数与原因；没有就留白。
+
+    留白而不是 `—`：`—` 在本工具里一直表示「算不出来」，而这里是「没有」。
+    两者混用，用户会以为这一行还有数字没算出来（`render_snapshots_table`
+    对可选备注也是同一个理由留白）。
+    """
+    parts = []
+    unpriced = len(row.summary.unpriced_symbols)
+    foreign = len(row.summary.foreign_holdings)
+    if unpriced:
+        parts.append(f"{unpriced} 无行情")
+    if foreign:
+        parts.append(f"{foreign} 外币计价")
+    return "；".join(parts)
+
+
+def render_group_hints(row: GroupRow) -> list[str]:
+    """这个组合的口径提示，句子取自服务层，这里只加组合名前缀。
+
+    `group list` 把若干组合的提示排在同一张表后面，不加前缀就分不清
+    「2 个标的无行情」说的是哪一组。
+    """
+    hints = (unpriced_hint(row.summary), foreign_hint(row.summary))
+    return [f"组合『{row.group}』：{hint}" for hint in hints if hint]
 
 
 def _compact_cells(row) -> list[str]:

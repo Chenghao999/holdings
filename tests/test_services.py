@@ -9,10 +9,11 @@ import pandas as pd
 import pytest
 
 from holdings.data.fetcher import DataSourceUnavailableError, PriceResult
+from holdings.exceptions import RecordNotFoundError, TradeValidationError
 from holdings.models.enums import AssetType, MarketType
 from holdings.models.snapshot import Snapshot
 from holdings.portfolio import metrics
-from holdings.services import portfolio_service, report_service, sync_service
+from holdings.services import group_service, portfolio_service, report_service, sync_service
 from holdings.storage import price_cache_dao, snapshot_dao, transaction_dao
 
 # ------------------------------------------------------------ portfolio_service
@@ -357,3 +358,167 @@ def test_performance_skips_annualized_when_the_first_snapshot_is_zero(db_path):
 
     assert perf.annualized_return is None
     assert any("净值为 0" in note for note in perf.notes)
+
+
+# ---------------------------------------------------------------- group_service
+
+
+def _seed_two_groups(db_path, make_tx):
+    """两个可计价的组合：主账户（600519）与打新（000001）。"""
+    transaction_dao.add(db_path, make_tx(symbol="600519", qty=100, price=10.0, group="主账户"))
+    transaction_dao.add(db_path, make_tx(symbol="000001", qty=500, price=2.0, group="打新"))
+    price_cache_dao.upsert(db_path, "600519", 12.0)
+    price_cache_dao.upsert(db_path, "000001", 3.0)
+
+
+def test_group_list_is_empty_on_an_empty_db(db_path):
+    assert group_service.list_groups(db_path) == []
+
+
+def test_group_list_matches_the_single_group_summary(db_path, make_tx):
+    """每一行的数必须与 `holdings list --group <名字>` 的汇总同源。
+
+    这条是 B-21 的要害：两处各算一份，改了口径只会让其中一处悄悄走样，
+    而用户看到的是两个都像结论的数。
+    """
+    _seed_two_groups(db_path, make_tx)
+
+    rows = group_service.list_groups(db_path)
+
+    assert [r.group for r in rows] == ["主账户", "打新"]
+    for row in rows:
+        direct = portfolio_service.get_summary(db_path, group=row.group)
+        assert row.summary.total_value == direct.total_value
+        assert row.summary.total_cost == direct.total_cost
+        assert row.summary.total_profit == direct.total_profit
+        assert row.summary.profit_rate == direct.profit_rate
+        assert len(row.summary.holdings_df) == len(direct.holdings_df)
+
+
+def test_group_list_reports_value_and_profit_per_group(db_path, make_tx):
+    _seed_two_groups(db_path, make_tx)
+
+    rows = {r.group: r for r in group_service.list_groups(db_path)}
+
+    assert rows["主账户"].summary.total_value == pytest.approx(1200.0)
+    assert rows["主账户"].summary.total_profit == pytest.approx(200.0)
+    assert rows["打新"].summary.total_value == pytest.approx(1500.0)
+    assert rows["打新"].summary.total_profit == pytest.approx(500.0)
+
+
+def test_group_list_flags_a_group_with_holdings_left_out(db_path, make_tx):
+    """有标的没进汇总时，这一行的总额是「不知道」而不是 0，且标记为不完整。"""
+    transaction_dao.add(db_path, make_tx(symbol="600519", qty=100, price=10.0, group="打新"))
+
+    row = group_service.list_groups(db_path)[0]
+
+    assert row.incomplete is True
+    assert row.summary.total_value is None
+    assert row.summary.unpriced_symbols == ["600519"]
+
+
+def test_group_list_marks_a_fully_counted_group_as_complete(db_path, make_tx):
+    _seed_two_groups(db_path, make_tx)
+
+    assert all(not row.incomplete for row in group_service.list_groups(db_path))
+
+
+def test_rename_group_moves_the_whole_history(db_path, make_tx):
+    _seed_two_groups(db_path, make_tx)
+
+    moved = group_service.rename_group(db_path, "打新", "新股")
+
+    assert moved == 1
+    assert transaction_dao.get_all(db_path, group="打新") == []
+    assert [t.symbol for t in transaction_dao.get_all(db_path, group="新股")] == ["000001"]
+
+
+def test_rename_group_strips_surrounding_whitespace(db_path, make_tx):
+    _seed_two_groups(db_path, make_tx)
+
+    group_service.rename_group(db_path, " 打新 ", " 新股 ")
+
+    assert transaction_dao.list_groups(db_path) == ["主账户", "新股"]
+
+
+@pytest.mark.parametrize("blank", ["", "   ", "\t"])
+def test_rename_group_rejects_a_blank_name(db_path, make_tx, blank):
+    _seed_two_groups(db_path, make_tx)
+
+    with pytest.raises(TradeValidationError):
+        group_service.rename_group(db_path, "打新", blank)
+
+
+def test_rename_group_to_the_same_name_changes_nothing(db_path, make_tx):
+    """同名是幂等空操作，不是错误：要的结果已经在了。
+
+    报错会让「重复执行同一条命令」变成失败，而脚本里这是常态。
+    """
+    _seed_two_groups(db_path, make_tx)
+
+    assert group_service.rename_group(db_path, "打新", "打新") == 0
+    assert transaction_dao.get_all(db_path, group="打新") != []
+
+
+def test_rename_group_missing_source_raises(db_path):
+    with pytest.raises(RecordNotFoundError):
+        group_service.rename_group(db_path, "不存在", "别的")
+
+
+def test_rename_group_onto_an_existing_name_suggests_merge(db_path, make_tx):
+    """撞名时不静默合并——那会让「改名」这条命令的语义比名字大——并给出真能用的那条。"""
+    _seed_two_groups(db_path, make_tx)
+
+    with pytest.raises(TradeValidationError, match="holdings group merge 打新 主账户"):
+        group_service.rename_group(db_path, "打新", "主账户")
+
+
+def test_merge_groups_folds_the_source_into_the_target(db_path, make_tx):
+    _seed_two_groups(db_path, make_tx)
+
+    moved = group_service.merge_groups(db_path, "打新", "主账户")
+
+    assert moved == 1
+    assert transaction_dao.list_groups(db_path) == ["主账户"]
+    assert [t.symbol for t in transaction_dao.get_all(db_path, group="主账户")] == [
+        "600519",
+        "000001",
+    ]
+
+
+def test_merge_groups_rejects_the_same_name_on_both_sides(db_path, make_tx):
+    _seed_two_groups(db_path, make_tx)
+
+    with pytest.raises(TradeValidationError):
+        group_service.merge_groups(db_path, "打新", "打新")
+
+
+def test_merge_groups_missing_target_suggests_rename(db_path, make_tx):
+    """目标写错时最容易发生的误解是「那就改名过去好了」——直接把那条路给出来。"""
+    _seed_two_groups(db_path, make_tx)
+
+    with pytest.raises(RecordNotFoundError, match="holdings group rename 打新 不存在"):
+        group_service.merge_groups(db_path, "打新", "不存在")
+
+
+def test_merge_groups_missing_source_raises(db_path, make_tx):
+    _seed_two_groups(db_path, make_tx)
+
+    with pytest.raises(RecordNotFoundError):
+        group_service.merge_groups(db_path, "不存在", "打新")
+
+
+def test_default_group_note_names_the_config_key():
+    """提醒必须说清「改的是哪个配置项」，否则用户不知道该去哪里改。"""
+    note = group_service.default_group_note("默认")
+
+    assert "default_group" in note
+    assert "默认" in note
+
+
+@pytest.mark.parametrize(("source", "target"), [("", "主账户"), ("打新", "   ")])
+def test_merge_groups_rejects_a_blank_name(db_path, make_tx, source, target):
+    _seed_two_groups(db_path, make_tx)
+
+    with pytest.raises(TradeValidationError):
+        group_service.merge_groups(db_path, source, target)

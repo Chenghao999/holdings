@@ -31,7 +31,7 @@ price_cache (价格缓存)
 -- 1. 交易记录表（支持多账户/组合，且包含费用字段）
 CREATE TABLE transactions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    portfolio_group TEXT DEFAULT '默认',   -- 未来GUI支持多账户（如：养老金、压岁钱）
+    portfolio_group TEXT DEFAULT '默认',   -- 组合分组（如：养老金、压岁钱）
     symbol TEXT NOT NULL,
     market TEXT NOT NULL,                 -- 'A股' / '美股' / '黄金'
     asset_type TEXT NOT NULL,             -- 'stock' / 'etf' / 'gold'
@@ -80,6 +80,7 @@ CREATE TABLE price_cache (
 -- 索引优化
 CREATE INDEX idx_trans_symbol ON transactions(symbol);
 CREATE INDEX idx_trans_date ON transactions(trade_date);
+CREATE INDEX idx_trans_group ON transactions(portfolio_group);
 CREATE INDEX idx_cache_time ON price_cache(update_time);
 ```
 
@@ -89,7 +90,7 @@ CREATE INDEX idx_cache_time ON price_cache(update_time);
 
 | 字段 | 类型 | 约束 | 说明 |
 |------|------|------|------|
-| `portfolio_group` | TEXT | DEFAULT '默认' | 组合分组，预留多账户支持 |
+| `portfolio_group` | TEXT | DEFAULT '默认' | 组合分组。用 `holdings group list/rename/merge` 管理与改动 |
 | `symbol` | TEXT | NOT NULL | 资产代码，如 `600519`、`518880`、`GC=F` |
 | `market` | TEXT | NOT NULL | `A股` / `美股` / `黄金` |
 | `asset_type` | TEXT | NOT NULL | `stock` / `etf` / `gold` |
@@ -192,4 +193,5 @@ CREATE INDEX idx_cache_time ON price_cache(update_time);
 |------|------|
 | `idx_trans_symbol` | 加速按标的查询交易 |
 | `idx_trans_date` | 加速按交易日范围查询 |
+| `idx_trans_group` | 加速列出组合与按组合筛选（列出的就是这一列的去重值） |
 | `idx_cache_time` | 加速判断缓存是否过期 |

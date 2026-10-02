@@ -57,6 +57,7 @@ holdings/
 │       │   ├── trade_service.py             #    写入闸门：落库前的历史持仓校验
 │       │   ├── sync_service.py              #    编排 data + storage
 │       │   ├── export_service.py            #    导出取数：账本 / 持仓表 / 快照 → 表头 + 行
+│       │   ├── group_service.py             #    组合的列出 / 改名 / 合并（汇总复用 portfolio_service）
 │       │   └── chart_service.py             #    编排 storage，返回 Figure/JSON
 │       │
 │       ├── tui/                             # 【表现层·与 cli 平级，互不 import】
@@ -71,7 +72,7 @@ holdings/
 │           ├── dates.py                     #    日期参数的解析与校验，各命令共用
 │           ├── commands/                    #    子命令：仅调用 service + 打印
 │           │   ├── init.py    add.py     check.py    list.py    meta.py
-│           │   ├── import_cmd.py  export.py  sync.py   report.py
+│           │   ├── import_cmd.py  export.py  group.py  sync.py   report.py
 │           │   └── snapshot.py  snapshots.py  chart.py  remove.py  tui.py  web.py
 │           └── renderers/                   #    把 Service 数据转为 Rich 表格/图表/文件
 │               ├── table_renderer.py

@@ -56,9 +56,9 @@ tests/
 ├── test_validation.py     # 交易领域校验（check_trade）
 ├── test_allocator.py
 ├── test_metrics.py        # 回撤 / 年化 / 夏普与采样口径
-├── test_storage.py        # 四个 DAO + 建表 + 补列迁移
+├── test_storage.py        # 四个 DAO + 建表 + 补列迁移 + 组合的列出/搬迁
 ├── test_trade_service.py  # 写入闸门与乱序补录
-├── test_services.py       # 汇总 / 绩效指标 / 同步 / 图表
+├── test_services.py       # 汇总 / 绩效指标 / 同步 / 图表 / 组合的校验与口径
 ├── test_data.py           # 数据源：工厂、降级链路、重试、优先级、解析分支（不触网）
 ├── test_instrument.py     # 标的资料：取名称/资产类型、按配置降级、asset_meta 缓存（不触网）
 ├── test_import_instrument.py # 导入时按代码补市场/资产类型：问的顺序、文件优先、取不到（B-32）
@@ -70,8 +70,9 @@ tests/
 ├── test_import_dedupe.py  # 导入幂等：同一文件两遍库不变、重复行报出行号、三种 dedupe
 ├── test_export.py         # 导出：账本表头派生自 canonical、导出去能导回来、NaN 不进 JSON
 ├── test_list_cmd.py       # --sort 排序契约
+├── test_group_cmd.py      # 组合的列出/改名/合并；改名后旧名筛空、新名筛全（B-21）
 ├── test_sync_cmd.py       # --market 默认值来自 default_market
-├── test_report_cmd.py     # 绩效行：算不出来时必须显示 —，不是 0
+├── test_report_cmd.py     # 绩效行：算不出来时必须显示 —，不是 0；--by-group 的分块与口径说明
 ├── test_snapshot_cmd.py   # 快照备注的写入、读取与列在不在
 ├── test_unpriced.py       # 没有行情时显示 —，不显示 −100%
 ├── test_multi_currency.py # 外币计价的标的不与人民币混加

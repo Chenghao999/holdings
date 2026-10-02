@@ -128,7 +128,67 @@ Rich 会平均截断每一列，代码列只剩 `6005…`——认不出持的�
 
 ---
 
-### 4. `holdings meta` —— 维护标的的基础信息
+### 4. `holdings group` —— 管理组合
+
+组合是交易上的一个标签：`add --group` / `import` 落到它上面，`list --group` 按它筛。
+但列表里只会出现**已经有交易的**组合——`config.yaml` 的 `default_group` 若还没被
+用过，它不会出现在这里。
+
+```bash
+# 列出全部组合，以及各自的总市值 / 成本 / 盈亏
+holdings group list
+
+# 改名：把「默认」的全部交易改到「主账户」
+holdings group rename 默认 主账户
+
+# 合并：「打新」并入「主账户」，「打新」之后不再存在
+holdings group merge 打新 主账户
+```
+
+```text
+                                 组合概览
+┏━━━━━━━━┳━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━━┓
+┃ 组合   ┃ 标的数 ┃     总市值 ┃     总成本 ┃      盈亏 ┃ 盈亏率 ┃ 未计入 ┃
+┡━━━━━━━━╇━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━━┩
+│ 主账户 │      2 │ 167,000.00 │ 156,000.00 │ 11,000.00 │  7.05% │        │
+│ 打新   │      1 │   1,400.00 │   1,200.00 │    200.00 │ 16.67% │        │
+└────────┴────────┴────────────┴────────────┴───────────┴────────┴────────┘
+```
+
+没同步过行情时，总市值 / 盈亏那几列是 `—`，「未计入」列会写明有几个标的没算进来：
+
+```text
+┏━━━━━━━━┳━━━━━━━━┳━━━━━━━━┳━━━━━━━━┳━━━━━━┳━━━━━━━━┳━━━━━━━━━━┓
+┃ 组合   ┃ 标的数 ┃ 总市值 ┃ 总成本 ┃ 盈亏 ┃ 盈亏率 ┃ 未计入   ┃
+┡━━━━━━━━╇━━━━━━━━╇━━━━━━━━╇━━━━━━━━╇━━━━━━╇━━━━━━━━╇━━━━━━━━━━┩
+│ 主账户 │      2 │      — │      — │    — │      — │ 2 无行情 │
+└────────┴────────┴────────┴────────┴──────┴────────┴──────────┘
+组合『主账户』：2 个标的无行情（成本合计 156,000.00），未计入上面的汇总；请先执行 holdings sync
+```
+
+每一行的数与 `holdings list --group <名字>` 底下那行汇总**同源**——口径只有一处实现，
+不会两家各算一份。「未计入」列写明这一行里有多少标的没算进汇总（没行情 / 外币计价），
+没有就留白；有内容时表后还会跟一句该组合的提示，句子与前两节那份是同一处来的。
+
+**不印总额。** 每行都排除了自己那部分没计进来的标的，把它们加起来得到的数既不是
+全体也不是部分——那会是一个看着像结论的错数。
+
+改名与合并只动历史数据的 `portfolio_group` 字段，一次事务写完。两点要留意：
+
+- **改名撞上已有的名字会报错**，不静默合并——那会让「改名」这条命令的语义比名字大。
+  报错信息里会给出该用的那条 `group merge`。
+- **合并不可逆**：改名能改回来，合并后拆不回去。先跑一次
+  `holdings export --what ledger --out ledger.csv` 留一份账本，就是后悔药。
+
+改的若正好是 `config.yaml` 里 `default_group` 指定的那个组合，命令照做，但会补一句提醒：
+之后 `holdings add` 不带 `--group` 时还会写到那个名字上，账本会因此多出一个组合。
+要把默认落到别处，改 `config.yaml` 的 `default_group`（见 [CONFIG_SPEC](CONFIG_SPEC.md)）。
+
+退出码：组合不存在 → `2`；名字为空、改名撞名、合并时源与目标相同 → `5`。
+
+---
+
+### 5. `holdings meta` —— 维护标的的基础信息
 
 ```bash
 # 记下名称与年化管理费率（如基金托管费）
@@ -160,7 +220,7 @@ holdings meta --symbol 518880 --remove
 
 ---
 
-### 5. `holdings import` —— 对账单批量导入
+### 6. `holdings import` —— 对账单批量导入
 
 从券商 / 支付宝导出的对账单批量导入历史交易。
 
@@ -348,7 +408,7 @@ Windows 上 Excel「另存为 CSV」出来的就是 GBK。
 
 ---
 
-### 6. `holdings export` —— 导出账本 / 持仓表 / 快照
+### 7. `holdings export` —— 导出账本 / 持仓表 / 快照
 
 ```bash
 holdings export --out ledger.csv                       # 账本（默认）
@@ -410,7 +470,7 @@ holdings init && holdings import --file ledger.csv
 `已导出 0 行到 ledger.csv（库里还没有交易记录）`——「0 行」是被数出来的，
 不是没导。
 
-### 7. `holdings sync` —— 同步最新价格
+### 8. `holdings sync` —— 同步最新价格
 
 ```bash
 holdings sync --market 全部     # 也可指定 A股 / 美股 / 黄金
@@ -422,13 +482,24 @@ holdings sync --market 全部     # 也可指定 A股 / 美股 / 黄金
 
 ---
 
-### 8. `holdings report` —— 生成综合报表
+### 9. `holdings report` —— 生成综合报表
 
 ```bash
 holdings report --verbose
+
+# 只看一个组合（与 holdings list --group 同一套筛选）
+holdings report --group 养老金
+
+# 每个组合各出一块
+holdings report --by-group
 ```
 
 终端显示持仓表格、汇总行与绩效行；加 `--verbose` 额外显示费用分项表与资产配置占比表。
+
+`--by-group` 按组合名升序，每个组合一块（持仓表 + 汇总行 + 该组合的口径提示），
+`--verbose` 下费用分项与资产配置占比也按组合各出一份。**绩效一节仍是整份组合的**：
+快照表不按组合记录，报表末尾会有一句说明——不然那行「整份组合的数」混在若干
+「单个组合的数」中间，很容易被当成其中一组的口径。两个参数不能同时用（退出码 `5`）。
 
 用 `holdings meta --fee-rate` 记过年化管理费率时，多印一行：
 
@@ -457,7 +528,7 @@ holdings report --verbose
 
 ---
 
-### 9. `holdings snapshot` —— 记录资产快照
+### 10. `holdings snapshot` —— 记录资产快照
 
 ```bash
 holdings snapshot --total 158000 --equity 120000 --gold 20000 --cash 18000
@@ -476,7 +547,7 @@ holdings snapshot --total 158000 --equity 120000 --gold 20000 --cash 18000
 
 ---
 
-### 10. `holdings snapshots` —— 查看已记录的快照
+### 11. `holdings snapshots` —— 查看已记录的快照
 
 ```bash
 holdings snapshots
@@ -499,7 +570,7 @@ holdings snapshots
 
 ---
 
-### 11. `holdings chart` —— 生成净值曲线图
+### 12. `holdings chart` —— 生成净值曲线图
 
 ```bash
 holdings chart --output networth.html
@@ -529,7 +600,7 @@ holdings chart --start 2025-03-01 --output 2025.html
 
 ---
 
-### 12. `holdings remove` —— 删除交易
+### 13. `holdings remove` —— 删除交易
 
 ```bash
 holdings remove --id 3
@@ -540,7 +611,7 @@ holdings remove --id 3
 
 ---
 
-### 13. `holdings tui` —— 终端界面
+### 14. `holdings tui` —— 终端界面
 
 ```bash
 pip install 'holdings-cli[tui]'    # 需要 Textual，默认不装
@@ -554,12 +625,12 @@ holdings tui
 | 持仓页 | 持仓表 + 汇总行；没同步过的标的显示 `—` 并提示去 `sync`，外币标的按第 3 节的规则排除并提示 |
 | 报表页 | 绩效指标（最大回撤 / 年化 / 夏普），口径与 `holdings report` 一致 |
 
-> 界面与 CLI 是**平级的入口**（还有第 13 节的 `holdings web`），各自演进、
+> 界面与 CLI 是**平级的入口**（还有第 14 节的 `holdings web`），各自演进、
 > 共用同一套服务层。缺 Textual 时报 `错误（6）：…` 并给出安装命令。
 
 ---
 
-### 14. `holdings web` —— 只读看板
+### 15. `holdings web` —— 只读看板
 
 ```bash
 pip install 'holdings-cli[web]'    # 需要 FastAPI，默认不装
@@ -590,7 +661,7 @@ holdings web --host 0.0.0.0 --port 9000    # 改监听地址与端口
 
 ---
 
-### 15. `holdings check` —— 检查运行环境
+### 16. `holdings check` —— 检查运行环境
 
 ```bash
 holdings check

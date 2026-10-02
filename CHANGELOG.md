@@ -7,6 +7,23 @@
 
 ### Added
 
+- **`holdings group`：组合的列出 / 改名 / 合并**（[BACKLOG B-21](docs/BACKLOG.md)）。
+  组合此前只是个筛选标签——`add` / `import` / `list --group` 都认它，却没有任何地方
+  能看有哪些组合、改名或合并：名字写错一次就永久留在库里。
+  - `holdings group list` 列出每个组合的总市值 / 成本 / 盈亏。**数字复用
+    `get_summary(group=…)`**，与 `holdings list --group <名字>` 底下那行汇总同源；
+    两处各算一份的话，改了口径只会让其中一处悄悄走样。代价是「组合数」次汇总
+    （那是账户数，不是数据规模）。
+  - **不印总额**：每行都排除了自己那部分没计进来的标的（没行情 / 外币计价），
+    加起来得到的数既不是全体也不是部分。「未计入」列写明每行漏了什么。
+  - 改名撞上已有的名字**报错并给出去路**（该用 `group merge`），不静默合并；
+    新旧同名是幂等空操作（重复执行不该变成失败）。改的若正好是 `config.yaml` 里
+    `default_group` 那个组合，照做但提醒一句——之后 `add` 不带 `--group` 还会写到
+    那个名字上。**合并不可逆**，`holdings export --what ledger` 是后悔药。
+  - `holdings report --by-group` 每个组合一块；`--group` 与 `list` 对齐。
+    **绩效一节仍是整份组合的**（快照不按组合记录），报表末尾会说明这一点。
+  - `transactions.portfolio_group` 上补了索引，老库自动补（`CREATE INDEX IF NOT EXISTS`）。
+
 - **`holdings export`：账本 / 持仓表 / 快照导出为 CSV 或 JSON**
   （[BACKLOG B-37](docs/BACKLOG.md)，从 [B-23](docs/BACKLOG.md) 拆出）。此前只有
   半个回路——`import` 能读三种对账单格式，却没有任何出口，报税、迁移、备份全堵着。
