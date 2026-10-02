@@ -574,6 +574,11 @@ class _FailingConnection:
     def commit(self) -> None:
         raise sqlite3.OperationalError("database is locked")
 
+    def rollback(self) -> None:
+        # 回滚不抛：要验的是「底层出错 → DatabaseError」，回滚本身失败是另一件事
+        # （`add_many` 也有同样的形状），混在一起会让这条用例验不准。
+        pass
+
     def close(self) -> None:
         pass
 
@@ -594,6 +599,100 @@ def test_asset_meta_wraps_sqlite_errors(monkeypatch, call):
     用户看到的是裸 traceback 而不是「错误（4）：…」。
     """
     monkeypatch.setattr(asset_meta_dao, "connect", lambda _path: _FailingConnection())
+
+    with pytest.raises(DatabaseError):
+        call("unused.db")
+
+
+# ------------------------------------------------------- transaction_dao: 组合（B-21）
+
+
+def test_connect_creates_the_group_index(db_path):
+    """`portfolio_group` 上要有索引：列出组合与按组合筛选都打这一列。
+
+    老库同样会补上——`init_schema` 每次 connect 都跑 `executescript(SCHEMA_SQL)`，
+    而语句是 `CREATE INDEX IF NOT EXISTS`。
+    """
+    conn = connect(db_path)
+    try:
+        names = {
+            r["name"] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='index'")
+        }
+    finally:
+        conn.close()
+
+    assert "idx_trans_group" in names
+
+
+def test_list_groups_returns_distinct_names_in_order(db_path, make_tx):
+    transaction_dao.add(db_path, make_tx(symbol="A", group="打新"))
+    transaction_dao.add(db_path, make_tx(symbol="B", group="默认"))
+    transaction_dao.add(db_path, make_tx(symbol="C", group="打新"))
+
+    assert transaction_dao.list_groups(db_path) == ["打新", "默认"]
+
+
+def test_list_groups_on_empty_db_is_empty(db_path):
+    assert transaction_dao.list_groups(db_path) == []
+
+
+def test_list_groups_skips_null_groups(db_path, make_tx):
+    """NULL 不是组合名。
+
+    `portfolio_group` 只有 `DEFAULT '默认'` 而没有 NOT NULL，老库或手工插入的
+    行可能是 NULL。把它当名字返回出去，调用方拿它筛交易会得到一条空结果，
+    看起来像有个叫 None 的空组合。
+    """
+    transaction_dao.add(db_path, make_tx(group="打新"))
+    conn = connect(db_path)
+    try:
+        conn.execute(
+            "INSERT INTO transactions (portfolio_group, symbol, market, asset_type, "
+            "trade_date, trade_type, quantity, price) "
+            "VALUES (NULL, '600519', 'A股', 'stock', '2025-01-01', 'BUY', 1, 1)"
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    assert transaction_dao.list_groups(db_path) == ["打新"]
+
+
+def test_move_group_rewrites_all_matching_rows_and_returns_count(db_path, make_tx):
+    transaction_dao.add(db_path, make_tx(symbol="A", group="打新"))
+    transaction_dao.add(db_path, make_tx(symbol="B", group="打新"))
+    transaction_dao.add(db_path, make_tx(symbol="C", group="默认"))
+
+    moved = transaction_dao.move_group(db_path, "打新", "主账户")
+
+    assert moved == 2
+    assert transaction_dao.list_groups(db_path) == ["主账户", "默认"]
+    assert [t.symbol for t in transaction_dao.get_all(db_path, group="主账户")] == ["A", "B"]
+    assert transaction_dao.get_all(db_path, group="打新") == []
+
+
+def test_move_group_returns_zero_for_an_unknown_source(db_path, make_tx):
+    transaction_dao.add(db_path, make_tx(group="默认"))
+
+    assert transaction_dao.move_group(db_path, "不存在的组合", "别的") == 0
+    # 没匹配到行也不该凭空建一个组合出来。
+    assert transaction_dao.list_groups(db_path) == ["默认"]
+
+
+@pytest.mark.parametrize(
+    "call",
+    [
+        pytest.param(transaction_dao.list_groups, id="list_groups"),
+        pytest.param(lambda path: transaction_dao.move_group(path, "a", "b"), id="move_group"),
+    ],
+)
+def test_group_dao_wraps_sqlite_errors(monkeypatch, call):
+    """底层 sqlite 异常必须包成 DatabaseError。
+
+    漏出去的话会绕过 `main()` 的退出码映射（`sqlite3.Error` 不是 `HoldingsError`），
+    用户看到的是裸 traceback 而不是「错误（4）：…」。
+    """
+    monkeypatch.setattr(transaction_dao, "connect", lambda _path: _FailingConnection())
 
     with pytest.raises(DatabaseError):
         call("unused.db")

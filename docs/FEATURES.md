@@ -66,7 +66,6 @@
 - ✅ Textual TUI 终端仪表盘（[B-15](BACKLOG.md#b-15)）。
 - ✅ FastAPI 网页只读看板（[B-20](BACKLOG.md#b-20)）——持仓 / 报表 / 净值曲线三页，
   写入功能待写入闸门接入后再做。
-- 多账户管理（[B-21](BACKLOG.md#b-21)）。
 - 券商对账单导入：按券商解析，模块化增加新的证券公司（[B-27](BACKLOG.md#b-27) 起 7 项）。
 - 拖拽导入 CSV、系统托盘刷新。
 - PySide6 桌面应用（跨平台打包）——形态待定（[B-22](BACKLOG.md#b-22)）。
@@ -83,11 +82,12 @@
 |------|------|
 | `holdings init` | 初始化数据库与配置 |
 | `holdings add` | 新增交易（含费用） |
-| `holdings list` | 查看持仓明细（可按列排序） |
+| `holdings list` | 查看持仓明细（可按列排序、按组合筛选） |
+| `holdings group` | 列出组合及其总市值 / 盈亏；改名与合并（只动 `portfolio_group`，一次事务写完） |
 | `holdings import` | 对账单导入（按格式解析；整批事务；未入账的行逐行报出；重复的行查出来） |
 | `holdings export` | 导出账本 / 持仓表 / 快照为 CSV 或 JSON；账本用的就是 `import` 认的那份表头，**能导回来** |
 | `holdings sync` | 同步最新价格 |
-| `holdings report` | 生成综合报表 |
+| `holdings report` | 生成综合报表（可只看一个组合，或按组合分组展示） |
 | `holdings snapshot` | 记录资产快照 |
 | `holdings chart` | 生成净值曲线图 |
 | `holdings remove` | 删除交易 |

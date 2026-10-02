@@ -21,6 +21,13 @@ from holdings.storage import snapshot_dao
 # 年化收益——数学上成立，决策上无用，还会让报表看起来像出了故障。
 MIN_DAYS_FOR_ANNUALIZED = 30
 
+#: `report --by-group` 里跟在绩效行后面的口径说明。
+#:
+#: 快照表**没有组合字段**（见 models/snapshot.py、SCHEMA.md），用户记的是整份
+#: 组合的净值，所以绩效天然只能覆盖全部持仓。分组报表里一行「整份组合的绩效」
+#: 混在若干「单个组合的数」中间，不加说明就会被当成其中一组的口径。
+PERFORMANCE_SCOPE_NOTE = "绩效来自资产快照，而快照不按组合记录——上面是整份组合的绩效，未按组合拆分"
+
 
 @dataclass
 class PerformanceSummary:
