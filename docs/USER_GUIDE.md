@@ -343,9 +343,74 @@ Windows 上 Excel「另存为 CSV」出来的就是 GBK。
 库里已有的记录也一样算，哪怕它是手录的（`holdings add`）——判重不看这笔是怎么
 进来的。同一批文件内部重复的行同样会报出来。
 
+反过来，导出的账本用的就是下面这一节认的那份表头，所以**导得出去也导得回来**
+（见 [`holdings export`](#6-holdings-export--导出账本--持仓表--快照)）。
+
 ---
 
-### 6. `holdings sync` —— 同步最新价格
+### 6. `holdings export` —— 导出账本 / 持仓表 / 快照
+
+```bash
+holdings export --out ledger.csv                       # 账本（默认）
+holdings export --what holdings --out 持仓.csv          # 当前持仓表
+holdings export --what snapshots --format json --out 快照.json
+```
+
+| 参数 | 说明 |
+|------|------|
+| `--what` | `ledger`（默认）/ `holdings` / `snapshots` |
+| `--out` | 输出文件路径，**必填**（三样共用一个默认名会互相覆盖） |
+| `--format` | `csv`（默认）/ `json` |
+
+| `--what` | 导出什么 | 给谁用 |
+|----------|---------|--------|
+| `ledger` | 交易流水 | 备份 / 迁移，**能再导回来** |
+| `holdings` | 当前持仓表 | 报税、拿去 Excel 里算 |
+| `snapshots` | 资产快照 | 备份 |
+
+#### 账本能导回去
+
+账本用的是**标准 CSV 表头**，也就是 `holdings import` 认的那一份，所以换台机器
+就是：
+
+```bash
+# 旧机器
+holdings export --out ledger.csv
+# 新机器
+holdings init && holdings import --file ledger.csv
+```
+
+数量与金额**原样写出，不做四舍五入**——这是备份不是报表，把 `10.045` 写成
+`10.05` 会让导回来的账本和原来不一样。组合分组（`portfolio_group`）跟着
+`account` 那一列一起走，一份多账户的账本导回来还是多账户。
+
+导出的 CSV **带 BOM**（`utf-8-sig`），Excel 双击打开中文不乱码；本工具自己的
+导入第一个剥的就是 BOM，所以带 BOM 的账本照样导得回来。
+
+**行情不在里面。** 现价 / 市值 / 盈亏来自 `price_cache`，那是能从数据源重取的
+缓存，不是账本——导进新库后这几列是空的，`holdings sync` 一次就回来。备份要
+备的是补不回来的东西。
+
+**往返之后 `source` 会变成 `csv`。** 它记的是「这笔是从哪份对账单读进来的」，
+而标准 CSV 表头里没有这一列。这是句实话：导回来的那一行确实是从标准 CSV
+读进来的。
+
+#### 报税那张表
+
+`--what holdings` 导出的是 `holdings list` 那张表本身（列名用英文，与
+`--sort` 接受的写法一致），**多一列 `currency`**：终端表格里不显示它（人民币
+是默认口径），但少了它，一份含美股的持仓表就分不清哪一行的市值是美元。
+
+算不出来的格子（没有行情的标的）在 CSV 里是**空单元格**，在 JSON 里是 `null`。
+写成 `nan` 的话 Excel 里看着像个词，拿它求和得到的是「没有」而不是报错。
+
+#### 空库也导得出
+
+一个刚 `init` 完的库导出成功、文件里只有表头，并印一句
+`已导出 0 行到 ledger.csv（库里还没有交易记录）`——「0 行」是被数出来的，
+不是没导。
+
+### 7. `holdings sync` —— 同步最新价格
 
 ```bash
 holdings sync --market 全部     # 也可指定 A股 / 美股 / 黄金
@@ -357,7 +422,7 @@ holdings sync --market 全部     # 也可指定 A股 / 美股 / 黄金
 
 ---
 
-### 7. `holdings report` —— 生成综合报表
+### 8. `holdings report` —— 生成综合报表
 
 ```bash
 holdings report --verbose
@@ -392,7 +457,7 @@ holdings report --verbose
 
 ---
 
-### 8. `holdings snapshot` —— 记录资产快照
+### 9. `holdings snapshot` —— 记录资产快照
 
 ```bash
 holdings snapshot --total 158000 --equity 120000 --gold 20000 --cash 18000
@@ -411,7 +476,7 @@ holdings snapshot --total 158000 --equity 120000 --gold 20000 --cash 18000
 
 ---
 
-### 9. `holdings snapshots` —— 查看已记录的快照
+### 10. `holdings snapshots` —— 查看已记录的快照
 
 ```bash
 holdings snapshots
@@ -434,7 +499,7 @@ holdings snapshots
 
 ---
 
-### 10. `holdings chart` —— 生成净值曲线图
+### 11. `holdings chart` —— 生成净值曲线图
 
 ```bash
 holdings chart --output networth.html
@@ -464,7 +529,7 @@ holdings chart --start 2025-03-01 --output 2025.html
 
 ---
 
-### 11. `holdings remove` —— 删除交易
+### 12. `holdings remove` —— 删除交易
 
 ```bash
 holdings remove --id 3
@@ -475,7 +540,7 @@ holdings remove --id 3
 
 ---
 
-### 12. `holdings tui` —— 终端界面
+### 13. `holdings tui` —— 终端界面
 
 ```bash
 pip install 'holdings-cli[tui]'    # 需要 Textual，默认不装
@@ -494,7 +559,7 @@ holdings tui
 
 ---
 
-### 13. `holdings web` —— 只读看板
+### 14. `holdings web` —— 只读看板
 
 ```bash
 pip install 'holdings-cli[web]'    # 需要 FastAPI，默认不装
@@ -525,7 +590,7 @@ holdings web --host 0.0.0.0 --port 9000    # 改监听地址与端口
 
 ---
 
-### 14. `holdings check` —— 检查运行环境
+### 15. `holdings check` —— 检查运行环境
 
 ```bash
 holdings check

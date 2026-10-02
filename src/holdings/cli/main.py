@@ -7,6 +7,7 @@ import click
 from holdings.cli.commands.add import add
 from holdings.cli.commands.chart import chart_cmd
 from holdings.cli.commands.check import check_cmd
+from holdings.cli.commands.export import export_cmd
 from holdings.cli.commands.import_cmd import import_cmd
 from holdings.cli.commands.init import init
 from holdings.cli.commands.list import list_cmd
@@ -32,6 +33,7 @@ cli.add_command(check_cmd, name="check")
 cli.add_command(list_cmd, name="list")
 cli.add_command(meta_cmd, name="meta")
 cli.add_command(import_cmd, name="import")
+cli.add_command(export_cmd, name="export")
 cli.add_command(sync_cmd, name="sync")
 cli.add_command(report_cmd, name="report")
 cli.add_command(snapshot_cmd, name="snapshot")

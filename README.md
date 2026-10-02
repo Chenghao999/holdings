@@ -53,6 +53,9 @@ holdings list --sort 盈亏率
 # 同步最新价格
 holdings sync --market 全部
 
+# 备份账本（导出的标准 CSV 能被 holdings import 读回来）
+holdings export --out ledger.csv
+
 # 打开网页看板（只读，需要 pip install 'holdings-cli[web]'）
 holdings web
 ```

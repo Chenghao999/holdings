@@ -98,11 +98,13 @@
       均已交付，收尾发布（版本号 / CHANGELOG 收口 / 演示录制 / 打 tag）见
       [B-18](BACKLOG.md#b-18)。
 - [ ] v2.0.0 进行中：剩余 [B-21](BACKLOG.md#b-21)（多账户）、
-      [B-22](BACKLOG.md#b-22)（桌面端形态待定）、[B-23](BACKLOG.md#b-23)（基准对比 / 分红拆股 / 导出），
-      以及 [B-30](BACKLOG.md#b-30)（真实券商样本，卡在样本上）与
-      [B-33](BACKLOG.md#b-33)（取价工厂去 if-chain）。
+      [B-22](BACKLOG.md#b-22)（桌面端形态待定）、[B-23](BACKLOG.md#b-23)（基准对比 / 分红拆股），
+      以及 [B-30](BACKLOG.md#b-30)（真实券商样本，卡在样本上）。
       [B-27](BACKLOG.md#b-27)（非买卖行的口径与报告）、
       [B-28](BACKLOG.md#b-28)（解析器注册表与自动识别）、
       [B-29](BACKLOG.md#b-29)（导入幂等）、
-      [B-31](BACKLOG.md#b-31)（标的资料获取与缓存）与
-      [B-32](BACKLOG.md#b-32)（导入时补全市场/资产类型、资金账号落组）已交付。
+      [B-31](BACKLOG.md#b-31)（标的资料获取与缓存）、
+      [B-32](BACKLOG.md#b-32)（导入时补全市场/资产类型、资金账号落组）、
+      [B-33](BACKLOG.md#b-33)（取价工厂去 if-chain）、
+      [B-36](BACKLOG.md#b-36)（国际金价签名错）与
+      [B-37](BACKLOG.md#b-37)（导出账本 / 持仓表 / 快照）已交付。
