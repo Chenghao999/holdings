@@ -229,6 +229,31 @@ def test_the_round_trip_keeps_both_portfolio_groups(seeded, monkeypatch, capsys,
     assert groups == {"默认", "美股账户"}
 
 
+def test_corporate_actions_survive_the_round_trip(make_tx, db_path, monkeypatch, capsys, tmp_path):
+    """判据：分红与送转走一趟导出 / 导入，重算出来的持仓逐项一致。
+
+    比的是**重算之后**的数量与成本价，不是落库的那几列——那几列本来就一样。
+    公司行为的成本价是算出来的（分红摊薄 1005 → 955、送转折半到 4.775），
+    所以只有往返之后重新重放一遍，才算验过它们能原样回去。
+    """
+    transaction_dao.add_many(
+        db_path,
+        [
+            make_tx(qty=100.0, price=10.0, fee=5.0, trade_date=date(2025, 1, 1)),
+            make_tx(trade_type="DIVIDEND", qty=100.0, price=0.5, trade_date=date(2025, 6, 1)),
+            make_tx(trade_type="BONUS_SHARE", qty=100.0, price=0.0, trade_date=date(2025, 7, 1)),
+        ],
+    )
+    before = _ledger_part(db_path)
+
+    fresh = _round_trip(monkeypatch, tmp_path, db_path, capsys)
+
+    assert before, "空对空相等是假绿"
+    assert before[0]["quantity"] == pytest.approx(200.0)
+    assert before[0]["avg_cost"] == pytest.approx(4.775)
+    assert _ledger_part(fresh) == before
+
+
 def test_the_numbers_come_back_bit_for_bit(make_tx, db_path, monkeypatch, capsys, tmp_path):
     """不做四舍五入：一个「不好看」的浮点数原样往返。
 

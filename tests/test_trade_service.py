@@ -70,6 +70,73 @@ def test_backdated_sell_is_validated_against_position_at_that_time(db_path, make
         )
 
 
+# --- 公司行为（B-38）----------------------------------------------------------
+#
+# 公司行为与买卖走同一条落库路径：`add_transactions` 在写之前会重放整段历史
+# （`strict=True`）。这里锁的是「重放要按时间顺序，且公司行为发生时的持仓是
+# 校验与计算共同的依据」。
+
+
+def test_selling_after_a_bonus_share_is_validated_against_the_new_share_count(db_path, make_tx):
+    """100 股送 100 股之后能卖 150 股；没有那笔送股就只能卖 100。
+
+    公司行为改的是**数量**，而卖出校验看的是「当时持有量」——重放顺序错了
+    （比如把送股排到卖出之后），150 股就会被拒，用户拿着对账单不知道该改哪里。
+    """
+    trade_service.add_transaction(
+        db_path, make_tx(trade_type="BUY", qty=100, price=10, trade_date=date(2025, 1, 1))
+    )
+    trade_service.add_transaction(
+        db_path,
+        make_tx(trade_type="BONUS_SHARE", qty=100, price=0, trade_date=date(2025, 6, 1)),
+    )
+
+    trade_service.add_transaction(
+        db_path, make_tx(trade_type="SELL", qty=150, price=12, trade_date=date(2025, 7, 1))
+    )
+
+    with pytest.raises(TradeValidationError, match="超过当时持有量"):
+        trade_service.add_transaction(
+            db_path, make_tx(trade_type="SELL", qty=250, price=12, trade_date=date(2025, 8, 1))
+        )
+
+
+def test_a_dividend_without_a_position_is_refused(db_path, make_tx):
+    """清仓之后才到账的分红确实存在，但此时摊薄无处可施，只能让用户改日期。
+
+    `realized_pnl` 目前没有任何界面展示，把它记成一笔独立收益等于凭空消失。
+    """
+    with pytest.raises(TradeValidationError, match="账本上没有持仓"):
+        trade_service.add_transaction(db_path, make_tx(trade_type="DIVIDEND", qty=100, price=0.5))
+
+    assert transaction_dao.get_all(db_path) == []
+
+
+def test_two_identical_dividends_on_one_day_are_reported_as_duplicates(db_path, make_tx):
+    """分红也走指纹判重：同一天同持股数同派息的两笔，默认判成重复。
+
+    与买卖同一个理由——静默重复与静默跳过一样坏。确实派了两次就用
+    `--dedupe off` 放行。
+    """
+    trade_service.add_transaction(
+        db_path, make_tx(trade_type="BUY", qty=100, price=10, trade_date=date(2025, 1, 1))
+    )
+    trade_service.add_transaction(
+        db_path,
+        make_tx(trade_type="DIVIDEND", qty=100, price=0.5, trade_date=date(2025, 6, 1)),
+    )
+
+    repeated = trade_service.find_duplicates(
+        db_path, [make_tx(trade_type="DIVIDEND", qty=100, price=0.5, trade_date=date(2025, 6, 1))]
+    )
+    another = trade_service.find_duplicates(
+        db_path, [make_tx(trade_type="DIVIDEND", qty=100, price=0.8, trade_date=date(2025, 6, 1))]
+    )
+
+    assert len(repeated) == 1
+    assert another == [], "派息不同是另一笔，不能判成重复"
+
+
 # --- 查重（B-29）--------------------------------------------------------------
 #
 # `find_duplicates` 只**报告**，丢不丢由 `import --dedupe` 决定。

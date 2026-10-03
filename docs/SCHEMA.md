@@ -6,7 +6,7 @@
 
 ```text
 transactions (交易记录)         1 ── N  按 symbol 关联  asset_meta (资产信息)
-  ├── trade_type: BUY / SELL / FEE
+  ├── trade_type: BUY / SELL / FEE / DIVIDEND / BONUS_SHARE
   └── portfolio_group: 组合分组
 
 snapshots (每日快照)
@@ -20,7 +20,7 @@ price_cache (价格缓存)
 
 | 表 | 职责 |
 |----|------|
-| `transactions` | 核心流水，记录每笔买卖与费用，支持多组合分组 |
+| `transactions` | 核心流水，记录每笔买卖、费用与公司行为，支持多组合分组 |
 | `snapshots` | 净值曲线数据源，记录任意时间点总资产快照 |
 | `asset_meta` | 资产基础信息与名称缓存，含年化管理费率 |
 | `price_cache` | 最新价格缓存，配合 5 分钟过期策略减少网络请求 |
@@ -36,9 +36,9 @@ CREATE TABLE transactions (
     market TEXT NOT NULL,                 -- 'A股' / '美股' / '黄金'
     asset_type TEXT NOT NULL,             -- 'stock' / 'etf' / 'gold'
     trade_date TEXT NOT NULL,
-    trade_type TEXT NOT NULL,             -- 'BUY' / 'SELL' / 'FEE'
-    quantity REAL NOT NULL,               -- 对于FEE类型，quantity填0
-    price REAL NOT NULL,                  -- 对于FEE类型，price填0
+    trade_type TEXT NOT NULL,             -- 见下方「trade_type 的五种语义」
+    quantity REAL NOT NULL,               -- FEE 填 0；公司行为的含义见下表
+    price REAL NOT NULL,                  -- FEE 填 0；公司行为的含义见下表
     fee REAL DEFAULT 0,                   -- 统一费用字段（佣金、印花税、托管费等）
     notes TEXT,
     source TEXT,                          -- 来源：对账单格式名（'csv' / 'demo-a'），手录的为 NULL
@@ -95,9 +95,9 @@ CREATE INDEX idx_cache_time ON price_cache(update_time);
 | `market` | TEXT | NOT NULL | `A股` / `美股` / `黄金` |
 | `asset_type` | TEXT | NOT NULL | `stock` / `etf` / `gold` |
 | `trade_date` | TEXT | NOT NULL | 交易日，格式 `YYYY-MM-DD` |
-| `trade_type` | TEXT | NOT NULL | `BUY` / `SELL` / `FEE` |
-| `quantity` | REAL | NOT NULL | 数量，`FEE` 类型填 0 |
-| `price` | REAL | NOT NULL | 单价，`FEE` 类型填 0 |
+| `trade_type` | TEXT | NOT NULL | `BUY` / `SELL` / `FEE` / `DIVIDEND` / `BONUS_SHARE` |
+| `quantity` | REAL | NOT NULL | 数量，`FEE` 类型填 0；公司行为的含义见下一节 |
+| `price` | REAL | NOT NULL | 单价，`FEE` 类型填 0；公司行为的含义见下一节 |
 | `fee` | REAL | DEFAULT 0 | 统一费用字段（佣金、印花税、托管费） |
 | `notes` | TEXT | - | 备注 |
 | `source` | TEXT | - | 这笔从哪来：对账单格式名（`--broker` 的取值）。手录的不写，存 `NULL` |
@@ -110,18 +110,36 @@ CREATE INDEX idx_cache_time ON price_cache(update_time);
 > 这里没有 UNIQUE 索引是有意的：`--dedupe off` 明说「这两笔就是要都记」，
 > 数据库层面拦下来会让那个选项变成一句空话。
 
-### trade_type 的三种语义
+### trade_type 的五种语义
 
-| 值 | 语义 | 对数量/成本影响 |
-|----|------|----------------|
-| `BUY` | 买入 | 数量增加，费用计入成本 |
-| `SELL` | 卖出 | 数量减少，成本价不变 |
-| `FEE` | 定期/独立费用 | 不改变数量与成本，仅影响现金余额，报表单独列示 |
+| 值 | 语义 | `quantity` | `price` | 对数量 / 成本的影响 |
+|----|------|-----------|---------|---------------------|
+| `BUY` | 买入 | 成交数量 | 成交单价 | 数量增加，费用计入成本 |
+| `SELL` | 卖出 | 成交数量 | 成交单价 | 数量减少，成本价不变 |
+| `FEE` | 定期/独立费用 | 0 | 0 | 不改变数量与成本，仅累计费用 |
+| `DIVIDEND` | 现金分红 | **持股数** | **每股派息** | 总成本减少 `quantity × price`，股数不变，成本价被摊薄 |
+| `BONUS_SHARE` | 送股 / 转增 / 拆股 | **新增股数** | **必须为 0** | 总成本不变、股数增加，成本价被摊薄 |
 
-> **这张表也是本列的取值全集**：对账单里的分红 / 送转 / 配股 / 银证转账 / 利息
-> **不会**写进 `transactions`，因此不会出现在这一列里——`import` 把它们逐行报出来
-> 但不入账（[B-27](BACKLOG.md#b-27)，分类表见 [USER_GUIDE](USER_GUIDE.md) 第 5 节）。
-> 也就是说，库里看到 `trade_type` 只有这三种，不是导入漏了，是设计如此。
+**每一行的金额都是 `quantity × price`**，与买入同构，`price` 永远是单价。
+公司行为也是照这个约定记的，所以对账单上的「每 10 股派 5 元」要换算成
+每股 0.5 再填 `price`（见 [USER_GUIDE](USER_GUIDE.md) 第 5 节）。
+
+两个容易记反的地方：
+
+- **分红绝不能记进 `fee`**。盈亏的算法是「(现价 − 成本价) × 数量 − 累计费用」，
+  分红进了 `fee` 就等于被**减掉**而不是加上，符号是反的；而且它会混进报表的
+  「累计费用」，那一列是拿来看交易成本的。
+- **`BONUS_SHARE` 的 `quantity` 是新增的股数，不是拆分后的总股数**。十送十就把
+  送来的那 100 股写成 `quantity=100`，一股拆成十股就把多出来的 900 股写成
+  `quantity=900`。
+
+> **这张表也是本列的取值全集。** 对账单里的配股 / 银证转账 / 利息**不会**写进
+> `transactions`，因此不会出现在这一列里——`import` 把它们逐行报出来但不入账
+> （[B-27](BACKLOG.md#b-27)，分类表见 [USER_GUIDE](USER_GUIDE.md) 第 5 节）。
+>
+> 另外，公司行为行**没给对数字**时同样不入账，理由逐行报出：分红要给出持股数与
+> 每股派息，送转要给出股数。这与「本工具不支持」是两回事——修好文件里那一行就能
+> 导进来，不必等新版本（[B-38](BACKLOG.md#b-38)）。
 
 ### snapshots 字段说明
 

@@ -29,8 +29,18 @@ def _infer_asset_type(market: str) -> AssetType:
     type=click.Choice([t.value for t in TradeType]),
     help="交易类型",
 )
-@click.option("--qty", type=float, required=True, help="数量（FEE 类型填 0）")
-@click.option("--price", type=float, required=True, help="单价（FEE 类型填 0）")
+@click.option(
+    "--qty",
+    type=float,
+    required=True,
+    help="数量（FEE 类型填 0；DIVIDEND 填持股数；BONUS_SHARE 填新增股数）",
+)
+@click.option(
+    "--price",
+    type=float,
+    required=True,
+    help="单价（FEE 类型填 0；DIVIDEND 填每股派息；BONUS_SHARE 填 0）",
+)
 @click.option("--fee", type=float, default=0.0, help="费用（佣金、印花税、托管费等）")
 @click.option(
     "--date",

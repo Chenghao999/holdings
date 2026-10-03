@@ -388,7 +388,7 @@ def test_import_of_unposted_rows_exits_0_by_default(tmp_path, monkeypatch, capsy
     csv_file = _write_import_csv(
         tmp_path,
         "600519,A股,2025-01-02,BUY,100,10",
-        "600519,A股,2025-06-20,分红派息,0,0",
+        "600519,A股,2025-06-20,配股,0,0",
     )
 
     code = run_main(monkeypatch, "import", "--file", str(csv_file))
@@ -396,7 +396,7 @@ def test_import_of_unposted_rows_exits_0_by_default(tmp_path, monkeypatch, capsy
     assert code == 0
     out = capsys.readouterr().out
     assert "识别 2 行，入账 1 笔，未入账 1 行" in out
-    assert "第 3 行 分红派息，未入账" in out
+    assert "第 3 行 配股，未入账" in out
 
 
 def test_import_with_unposted_rows_exits_5_under_strict(tmp_path, monkeypatch, capsys):
@@ -412,7 +412,7 @@ def test_import_with_unposted_rows_exits_5_under_strict(tmp_path, monkeypatch, c
     csv_file = _write_import_csv(
         tmp_path,
         "600519,A股,2025-01-02,BUY,100,10",
-        "600519,A股,2025-06-20,分红派息,0,0",
+        "600519,A股,2025-06-20,配股,0,0",
     )
 
     code = run_main(monkeypatch, "import", "--file", str(csv_file), "--strict")

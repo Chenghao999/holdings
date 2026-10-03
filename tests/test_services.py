@@ -24,7 +24,9 @@ def test_summary_on_empty_db(db_path):
 
     assert summary.total_value == 0.0
     assert summary.total_profit == 0.0
-    assert summary.profit_rate == 0.0
+    # 收益率的分母是成本，成本不为正就没有收益率可言——给 `—` 而不是 0.00%：
+    # 那个 0 是「没东西可算」，印出来却像「算过了，持平」（B-38）。
+    assert summary.profit_rate is None
     assert summary.holdings_df.empty
     assert summary.allocation == {}
 
@@ -109,6 +111,69 @@ def test_summary_allocation_splits_by_asset_type(db_path, make_tx):
     assert summary.total_value == pytest.approx(2400.0)
     assert summary.allocation["stock"] == pytest.approx(2000 / 2400)
     assert summary.allocation["gold"] == pytest.approx(400 / 2400)
+
+
+def test_summary_counts_a_dividend_as_less_cost_and_more_profit(db_path, make_tx):
+    """分红摊薄成本，于是汇总里总成本下降、总盈亏上升——报表因此自然含分红。
+
+    100 股 @10 成本 1000；每 10 股派 5 元（每股 0.5）→ 成本 950。
+    现价 11 时市值 1100，盈亏 150（没有分红那笔时是 100）。
+    """
+    transaction_dao.add(db_path, make_tx(qty=100, price=10.0))
+    transaction_dao.add(
+        db_path,
+        make_tx(trade_type="DIVIDEND", qty=100, price=0.5, trade_date=date(2025, 6, 20)),
+    )
+    price_cache_dao.upsert(db_path, "600519", 11.0)
+
+    summary = portfolio_service.get_summary(db_path)
+
+    assert summary.total_cost == pytest.approx(950.0)
+    assert summary.total_value == pytest.approx(1100.0)
+    assert summary.total_profit == pytest.approx(150.0)
+    assert summary.profit_rate == pytest.approx(150 / 950 * 100)
+
+
+def test_summary_has_no_rate_when_a_dividend_has_thinned_the_cost_away(db_path, make_tx):
+    """成本被摊到不为正时，回收益率是 `—` 而不是一个方向反了的数。"""
+    transaction_dao.add(db_path, make_tx(qty=100, price=1.0))
+    transaction_dao.add(
+        db_path,
+        make_tx(trade_type="DIVIDEND", qty=100, price=3.0, trade_date=date(2025, 6, 20)),
+    )
+    price_cache_dao.upsert(db_path, "600519", 2.0)
+
+    summary = portfolio_service.get_summary(db_path)
+
+    row = summary.holdings_df.iloc[0]
+    assert row["avg_cost"] == pytest.approx(-2.0), "成本价照实显示负数"
+    assert row["profit_rate"] is None
+    assert summary.profit_rate is None
+
+
+def test_a_corporate_action_row_does_not_change_the_displayed_asset_type(db_path, make_tx):
+    """对账单里这几行常缺 `asset_type`、被默认成 stock。
+
+    `asset_types` 是后者覆盖前者，一行分红就能把一只 ETF 的显示类型改掉，
+    而报表上看不出那是被改过的。
+    """
+    transaction_dao.add(db_path, make_tx(asset_type=AssetType.ETF, price=2.0))
+    transaction_dao.add(
+        db_path,
+        make_tx(
+            trade_type="DIVIDEND",
+            qty=100,
+            price=0.1,
+            asset_type=AssetType.STOCK,
+            trade_date=date(2025, 6, 20),
+        ),
+    )
+    price_cache_dao.upsert(db_path, "600519", 3.0)
+
+    summary = portfolio_service.get_summary(db_path)
+
+    assert summary.holdings_df.iloc[0]["asset_type"] == "etf"
+    assert summary.allocation == {"etf": pytest.approx(1.0)}
 
 
 def test_summary_respects_group_filter(db_path, make_tx):

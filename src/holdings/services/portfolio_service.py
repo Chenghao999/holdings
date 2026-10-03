@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 
 import pandas as pd
 
-from holdings.models.enums import MarketType
+from holdings.models.enums import MarketType, TradeType
 from holdings.portfolio import allocator, calculator
 from holdings.storage import asset_meta_dao, price_cache_dao, transaction_dao
 from holdings.utils.formatter import (
@@ -122,8 +122,15 @@ def get_summary(db_path: str, group: str | None = None) -> PortfolioSummary:
     transactions = transaction_dao.get_all(db_path, group=group)
     positions = calculator.compute_positions(transactions)
 
-    # 资产类型映射（用于配置占比）
-    asset_types = {t.symbol: t.asset_type.value for t in transactions}
+    # 资产类型映射（用于配置占比）。**公司行为行不参与**：对账单里这几行的
+    # `asset_type` 常是缺省值，而这个字典是后者覆盖前者——一行分红就能把一只
+    # ETF 的显示类型改成 `stock`，报表看不出那是被改过的。`FEE` 行同理，
+    # 但那是既有行为，不在本次改动范围内。
+    asset_types = {
+        t.symbol: t.asset_type.value
+        for t in transactions
+        if t.trade_type not in (TradeType.DIVIDEND, TradeType.BONUS_SHARE)
+    }
 
     # 含费用汇总（成本是账本事实，与有没有行情无关）。这一项**不按币种拆分**：
     # 交易流水里没有币种字段，无从判断一笔费用记的是哪种货币，拿行情缓存的币种
@@ -199,7 +206,10 @@ def get_summary(db_path: str, group: str | None = None) -> PortfolioSummary:
         total_profit = float(holdings_df["profit"].sum()) if not holdings_df.empty else 0.0
         # 分母只算计得进来的成本：分子里的盈亏同样只含有行情的标的，
         # 两边口径不一致会算出一个既不是「全体」也不是「部分」的数。
-        profit_rate = (total_profit / priced_cost * 100) if priced_cost else 0.0
+        # 成本不为正时收益率无定义，给 None（渲染成 `—`）而不是一个数：
+        # 分红会把成本价一路摊薄，长期持有足够久就会走到 0 甚至负数，
+        # 而负分母算出来的 `盈亏 / 成本` 是个方向都相反的怪数。
+        profit_rate = (total_profit / priced_cost * 100) if priced_cost > 0 else None
 
     alloc = allocator.allocation_by_asset_type(market_values, asset_types)
 

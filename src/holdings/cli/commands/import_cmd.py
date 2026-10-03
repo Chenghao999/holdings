@@ -21,24 +21,115 @@ from holdings.models.statement import StatementRow
 from holdings.models.transaction import Transaction
 from holdings.services.trade_service import Duplicate
 
-#: 每一类不入账的行为什么不入账。措辞要让用户明白「没坏，只是没做」——
-#: 含糊其辞会被读成「已经处理过了」。
+#: 每一类**本工具还不支持**的行为什么不入账。措辞要让用户明白「没坏，只是
+#: 没做」——含糊其辞会被读成「已经处理过了」。
 UNPOSTED_REASONS: dict[NonTradeType, str] = {
-    NonTradeType.DIVIDEND: "分红如何摊销成本尚未支持（见 BACKLOG B-23）",
-    NonTradeType.BONUS_SHARE: "送股/转增同时改变数量与成本价，口径尚未支持（见 BACKLOG B-23）",
-    NonTradeType.RIGHTS_ISSUE: "配股缴款的口径尚未支持（见 BACKLOG B-23）",
+    NonTradeType.RIGHTS_ISSUE: "配股缴款的口径尚未支持（见 BACKLOG B-38）；可拆成一笔 BUY 手工补录",
     NonTradeType.TRANSFER: "银证转账动的是现金，不影响持仓",
     NonTradeType.INTEREST: "利息不计入持仓成本",
 }
 
+#: 类别 → 人话名字。`TradeType` 的 value 是英文的（`DIVIDEND`），直接印到
+#: 终端上，用户对不上自己文件里写的「红利入账」。`NonTradeType` 的 value
+#: 本来就是中文，仍走这张表，好让打印的地方只有一个来源。
+CATEGORY_LABELS: dict[TradeType | NonTradeType, str] = {
+    TradeType.DIVIDEND: "分红",
+    TradeType.BONUS_SHARE: "送股 / 转增",
+    NonTradeType.RIGHTS_ISSUE: "配股",
+    NonTradeType.TRANSFER: "银证转账",
+    NonTradeType.INTEREST: "利息",
+}
+
+
+@dataclass(frozen=True)
+class _CorporateAction:
+    """一类公司行为要入账，对账单这一行必须给对什么。
+
+    不直接复用 `calculator.check_trade` 的校验，是因为两者的失败方式不同：
+    `check_trade` 面对的是**一笔已知的账本记录**，非法就整批拒绝（退出码 5），
+    对手录的一笔这是对的；对账单有几百行、其中一行是券商按另一套口径写的，
+    整批拒绝等于这份对账单永远导不进来（B-27 的教训）。所以这里先判一遍
+    「这一行数字不对」，归入未入账逐行报出；`check_trade` 仍在落库前把最后一道关。
+    """
+
+    #: 算法要靠哪些列，缺一列就算不出来。
+    needs: tuple[str, ...]
+    #: 这几列合起来叫什么，报错时用。
+    label: str
+    #: 必须大于 0 的列。
+    positive: tuple[str, ...] = ()
+    #: 有值时必须为 0 的列：公司行为不涉及成交金额。
+    must_be_zero: tuple[str, ...] = ()
+    #: `must_be_zero` 触发时的话。单独写，因为「股数不涉及金额」讲不通——
+    #: 该为 0 的是单价，不是数量。
+    zero_note: str = ""
+
+
+_CORPORATE_ACTIONS: dict[TradeType, _CorporateAction] = {
+    TradeType.DIVIDEND: _CorporateAction(
+        needs=("quantity", "price"),
+        label="持股数与每股派息",
+        positive=("quantity", "price"),
+    ),
+    TradeType.BONUS_SHARE: _CorporateAction(
+        needs=("quantity",),
+        label="送股 / 转增股数",
+        positive=("quantity",),
+        must_be_zero=("price",),
+        zero_note="送股 / 转增不涉及金额，这一行的单价应留空或填 0",
+    ),
+}
+
+
+def _number(raw: str) -> float | None:
+    """单元格原文转数字；不是数字返回 None。
+
+    不在这里报「不是合法数字」：那句话要带上文件里的**列名**，而列名只有
+    `_row_to_transaction` 知道（费用列尤其，券商叫法各不相同）。这里只负责
+    判断「这个数能不能用来做算术」，判断不了就放行，让那一步去报。
+    """
+    try:
+        return float(raw)
+    except ValueError:
+        return None
+
+
+def _unposted_reason(category: TradeType | NonTradeType, row: StatementRow) -> str | None:
+    """这一行为什么不入账；能入账就返回 None。
+
+    两种原因分开：`NonTradeType` 是本工具**还不支持**，按类别查表就行；
+    公司行为是支持的、只是这**一行**没给对数字，必须逐行判定——同一份对账单里
+    完全可能一行分红填对了、另一行没填。
+    """
+    if isinstance(category, NonTradeType):
+        return UNPOSTED_REASONS[category]
+    rule = _CORPORATE_ACTIONS.get(category)
+    if rule is None:
+        return None
+    if any(not row.get(column) for column in rule.needs):
+        return f"对账单这一行没有给出{rule.label}，补上才能入账"
+    for column in rule.positive:
+        value = _number(row.get(column))
+        if value is not None and value <= 0:
+            return f"{rule.label}必须大于 0，这一行是 {row.get(column)}"
+    if any(_number(row.get(column)) not in (None, 0.0) for column in rule.must_be_zero):
+        return rule.zero_note
+    return None
+
 
 @dataclass(frozen=True)
 class UnpostedRow:
-    """一行认得出来、但本工具不入账的记录。"""
+    """一行认得出来、但这一次没有入账的记录。
+
+    `category` 可能是 `NonTradeType`（本工具仍不支持），也可能是 `TradeType`
+    （支持了，但这一行缺数字或口径对不上）。两者都不入账而理由不同，所以
+    `reason` **按行带着走**，不再按类别查表。
+    """
 
     line_no: int
     raw_type: str
-    category: NonTradeType
+    category: TradeType | NonTradeType
+    reason: str
 
 
 @dataclass(frozen=True)
@@ -99,8 +190,10 @@ def import_cmd(
 
     整批校验、整批落库：任何一行非法都不会写入任何数据，并指出出错的行号。
 
-    对账单里认得出、但本工具不入账的行（分红、送转、配股、银证转账、利息）
-    同样一笔不写，但会逐行列出行号与原因——静默跳过会让「导入成功」变成假话。
+    对账单里认得出、但本工具不入账的行同样一笔不写，但会逐行列出行号与原因——
+    静默跳过会让「导入成功」变成假话。两种不入账：本工具还不支持的行为
+    （配股、银证转账、利息），以及**没给对数字**的公司行为行（分红缺持股数或
+    每股派息、送转缺股数）——后者修好文件里的那一行就能导进来。
 
     同一份文件导两遍、或逐月导出时月份之间有重叠，重复的行**默认报错而不是
     跳过**：静默跳过与静默重复一样坏，一个少算一个多算，用户都看不出来。
@@ -191,22 +284,23 @@ def _split_rows(
     for row in rows:
         raw_type = row.get("trade_type")
         category = classify_trade_type(raw_type)
-        if isinstance(category, NonTradeType):
-            unposted.append(UnpostedRow(row.line_no, raw_type, category))
-        elif category is None:
+        if category is None:
             raise TradeValidationError(
                 f"第 {row.line_no} 行 trade_type 列不是合法交易类型：{raw_type}"
             )
-        else:
-            group = row.get("account") or fallback_group
-            posted.append(
-                PostedRow(
-                    line_no=row.line_no,
-                    transaction=_row_to_transaction(row, group, category, source),
-                    needs_market=not row.get("market"),
-                    needs_asset_type=not row.get("asset_type"),
-                )
+        reason = _unposted_reason(category, row)
+        if reason is not None:
+            unposted.append(UnpostedRow(row.line_no, raw_type, category, reason))
+            continue
+        group = row.get("account") or fallback_group
+        posted.append(
+            PostedRow(
+                line_no=row.line_no,
+                transaction=_row_to_transaction(row, group, category, source),
+                needs_market=not row.get("market"),
+                needs_asset_type=not row.get("asset_type"),
             )
+        )
     return posted, unposted
 
 
@@ -383,9 +477,10 @@ def _echo_unposted(unposted: list[UnpostedRow]) -> None:
     for row in unposted:
         # 只在叫法与类别名不同时补一句，免得印成「分红派息（分红派息）」。
         label = row.raw_type
-        if label != row.category.value:
-            label = f"{label}（{row.category.value}）"
-        click.echo(f"  第 {row.line_no} 行 {label}，未入账：{UNPOSTED_REASONS[row.category]}")
+        name = CATEGORY_LABELS[row.category]
+        if label != name:
+            label = f"{label}（{name}）"
+        click.echo(f"  第 {row.line_no} 行 {label}，未入账：{row.reason}")
 
 
 def _line_numbers(unposted: list[UnpostedRow]) -> str:

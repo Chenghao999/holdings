@@ -15,7 +15,7 @@ holdings/
 │       │   ├── transaction.py               #    仅依赖 pydantic，不 import 任何项目内部模块
 │       │   ├── snapshot.py                  #    定义与 storage 解耦的纯数据结构
 │       │   ├── asset_meta.py                #    标的名称 / 币种 / 年化管理费率（仅展示用）
-│       │   └── enums.py                     #    MarketType / AssetType / TradeType（含 FEE）
+│       │   └── enums.py                     #    MarketType / AssetType / TradeType / NonTradeType
 │       │
 │       ├── utils/                           # 【基础层·无内部依赖】
 │       │   ├── config.py                    #    只做 YAML 读写 + 默认值，不引用业务模块
@@ -23,7 +23,7 @@ holdings/
 │       │   └── formatter.py                 #    金额/百分比格式化，独立纯函数
 │       │
 │       ├── portfolio/                       # 【业务计算层·纯函数，零 IO】
-│       │   ├── calculator.py                #    加权成本/盈亏/交易校验，只吃 models，不碰 storage/data
+│       │   ├── calculator.py                #    加权成本/盈亏/交易校验（含分红/送转），只吃 models，不碰 storage/data
 │       │   ├── allocator.py                 #    配置占比，独立
 │       │   └── metrics.py                   #    年化/回撤/夏普，独立
 │       │
