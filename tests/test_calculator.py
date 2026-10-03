@@ -2,9 +2,17 @@
 
 from datetime import date
 
+import pytest
+
+from holdings.exceptions import TradeValidationError
 from holdings.models.enums import AssetType, MarketType, TradeType
 from holdings.models.transaction import Transaction
-from holdings.portfolio.calculator import compute_positions, fee_breakdown, holding_for
+from holdings.portfolio.calculator import (
+    _HANDLERS,
+    compute_positions,
+    fee_breakdown,
+    holding_for,
+)
 
 
 def _tx(trade_type, qty, price, fee=0.0, symbol="600519"):
@@ -99,6 +107,131 @@ def test_holding_with_zero_cost_has_no_rate():
     h = holding_for(pos, current_price=11.0)
 
     assert h.market_value == 1100.0
+    assert h.profit_rate is None
+
+
+# --- 公司行为：分红 / 送股 / 转增（B-38）---------------------------------------
+#
+# 两类都沿用同一条列约定：金额 = `quantity × price`，`price` 永远是单价。
+# 分红是「持股数 × 每股派息」，送转是「新增股数 × 0」。
+
+
+def test_every_trade_type_has_a_handler():
+    """给 `TradeType` 加了成员、却忘了在 `_HANDLERS` 里补一行，这里就红。
+
+    从前这里是三个没有 `else` 的 `if`：新类型会被**静默吞掉**，退出码 0、
+    数字看着也对，用户没有任何线索。最可能踩的是日后做配股的时候。
+    """
+    assert set(_HANDLERS) == set(TradeType)
+
+
+def test_a_dividend_thins_the_cost_and_leaves_the_shares_alone():
+    """100 股 @10 成本 1000；每 10 股派 5 元（每股 0.5）→ 成本价 9.5。"""
+    pos = compute_positions([_tx("BUY", 100, 10.0), _tx("DIVIDEND", 100, 0.5)])["600519"]
+
+    assert pos.quantity == 100, "分红不改变股数"
+    assert pos.total_cost == pytest.approx(950.0)
+    assert pos.avg_cost == pytest.approx(9.5)
+
+
+def test_the_dividend_lands_in_the_profit_and_not_in_the_fees():
+    """分红摊薄成本，报表的总盈亏里就自然含分红——这是选这个口径的理由。
+
+    换成「记进 `fee`」会得到相反的结果：`holding_for` 把 `total_fees`
+    从盈亏里**再减一次**，分红进了那一列等于被倒扣出去，还会混进累计费用。
+    """
+    pos = compute_positions([_tx("BUY", 100, 10.0), _tx("DIVIDEND", 100, 0.5)])["600519"]
+
+    h = holding_for(pos, current_price=11.0)
+
+    # 没有分红时是 (11 - 10) × 100 = 100；分红 50 之后应当是 150
+    assert h.profit == pytest.approx(150.0)
+    assert h.total_fees == 0.0
+
+
+@pytest.mark.parametrize(
+    ("bonus", "expected_quantity", "expected_avg_cost"),
+    [(50, 150, 1000 / 150), (100, 200, 5.0)],
+)
+def test_a_bonus_share_dilutes_the_cost_without_adding_any(
+    bonus, expected_quantity, expected_avg_cost
+):
+    """总成本不变、股数增加，成本价随之被摊薄。送 50 股与十送十各一例。"""
+    pos = compute_positions([_tx("BUY", 100, 10.0), _tx("BONUS_SHARE", bonus, 0.0)])["600519"]
+
+    assert pos.quantity == pytest.approx(expected_quantity)
+    assert pos.total_cost == pytest.approx(1000.0)
+    assert pos.avg_cost == pytest.approx(expected_avg_cost)
+
+
+@pytest.mark.parametrize(
+    "steps",
+    [
+        [("BUY", 100, 10.0)],
+        [("BUY", 100, 10.0), ("SELL", 40, 12.0)],
+        [("BUY", 100, 10.0), ("DIVIDEND", 100, 0.5)],
+        [("BUY", 100, 10.0), ("BONUS_SHARE", 50, 0.0)],
+        [
+            ("BUY", 100, 10.0),
+            ("DIVIDEND", 100, 0.5),
+            ("BONUS_SHARE", 50, 0.0),
+            ("SELL", 30, 12.0),
+        ],
+    ],
+)
+def test_total_cost_always_equals_avg_cost_times_quantity(steps):
+    """恒等式 `total_cost == avg_cost × quantity`——`_sell` 靠它按比例减成本，
+    公司行为也必须维持它，否则卖出一笔之后成本价会跳。
+    """
+    pos = compute_positions([_tx(*step) for step in steps])["600519"]
+
+    assert pos.total_cost == pytest.approx(pos.avg_cost * pos.quantity)
+
+
+@pytest.mark.parametrize(
+    ("trade_type", "qty", "price", "held", "message"),
+    [
+        ("DIVIDEND", 0, 0.5, 100, "持股数必须大于 0"),
+        ("DIVIDEND", 100, 0, 100, "每股派息必须大于 0"),
+        ("DIVIDEND", 100, 0.5, 0, "账本上没有持仓"),
+        ("BONUS_SHARE", 0, 0.0, 100, "股数必须大于 0"),
+        ("BONUS_SHARE", 100, 3.0, 100, "单价必须为 0"),
+        ("BONUS_SHARE", 100, 0.0, 0, "账本上没有持仓"),
+    ],
+)
+def test_corporate_actions_are_checked_against_the_position_so_far(
+    trade_type, qty, price, held, message
+):
+    """`held` 是「账本上此刻有多少股」：摊薄与加股都作用在既有持仓上。
+
+    清仓之后才到账的分红确实存在，但那时无处可施——`realized_pnl` 目前没有
+    任何界面展示，记进去等于凭空消失。宁可报错，让用户把日期记在持仓期间。
+    """
+    history = [_tx("BUY", held, 10.0)] if held else []
+
+    with pytest.raises(TradeValidationError, match=message):
+        compute_positions([*history, _tx(trade_type, qty, price)], strict=True)
+
+
+@pytest.mark.parametrize("trade_type", ["BUY", "SELL"])
+def test_a_negative_price_is_refused_for_both_directions(trade_type):
+    """买卖的单价都不能为负。校验链改成按枚举分派之后，两条分支要各有一条用例。"""
+    with pytest.raises(TradeValidationError, match="单价不能为负"):
+        compute_positions([_tx("BUY", 100, 10.0), _tx(trade_type, 10, -1.0)], strict=True)
+
+
+def test_holding_rate_is_undefined_when_the_cost_has_gone_negative():
+    """分红摊薄到成本价为负会真实发生（长期持有，券商 APP 也这么显示）。
+
+    `(现价 / 负成本 − 1) × 100` 是个 −1000% 量级的数：看着像结论，其实是
+    符号翻了。**成本价照实显示负数**——那笔账是真的，只是收益率不给。
+    """
+    pos = compute_positions([_tx("BUY", 100, 1.0), _tx("DIVIDEND", 100, 3.0)])["600519"]
+
+    h = holding_for(pos, current_price=2.0)
+
+    assert h.avg_cost == pytest.approx(-2.0)
+    assert h.profit == pytest.approx(400.0)
     assert h.profit_rate is None
 
 
