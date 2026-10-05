@@ -64,7 +64,7 @@ tests/
 ├── test_validation.py     # 交易领域校验（check_trade）
 ├── test_allocator.py
 ├── test_metrics.py        # 回撤 / 年化 / 夏普与采样口径
-├── test_storage.py        # 四个 DAO + 建表 + 补列迁移 + 组合的列出/搬迁
+├── test_storage.py        # 各 DAO + 建表 + 补列迁移 + 组合的列出/搬迁 + 历史缓存的三种不新鲜
 ├── test_trade_service.py  # 写入闸门与乱序补录
 ├── test_services.py       # 汇总 / 绩效指标 / 同步 / 图表 / 组合的校验与口径
 ├── test_data.py           # 数据源：工厂、降级链路、重试、优先级、解析分支（不触网）
@@ -86,6 +86,8 @@ tests/
 ├── test_multi_currency.py # 外币计价的标的不与人民币混加
 ├── test_narrow_terminal.py # 窄终端下代码列完整可见
 ├── test_chart_cmd.py      # --start 真的筛日期；空区间报错而非空白图；成功路径真的落盘
+├── test_history.py        # 指数历史序列：签名按真库刻、yfinance 的开区间 end、代码形状判市场（不触网）
+├── test_benchmark_cmd.py  # 基准对比：判据是「入金不算跑赢」；对齐 / 缓存 / 退出码（不触网）
 ├── test_meta_cmd.py       # meta 录入/查看/删除；费率不影响成本与盈亏
 ├── test_check_cmd.py      # check 的报错前缀与两种模式退出码一致
 ├── test_formatter.py      # 数值显示：— 的语义、ratio 与 percent 不可互换

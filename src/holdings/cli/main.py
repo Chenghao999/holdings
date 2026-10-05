@@ -5,6 +5,7 @@ from __future__ import annotations
 import click
 
 from holdings.cli.commands.add import add
+from holdings.cli.commands.benchmark import benchmark_cmd
 from holdings.cli.commands.chart import chart_cmd
 from holdings.cli.commands.check import check_cmd
 from holdings.cli.commands.export import export_cmd
@@ -41,6 +42,7 @@ cli.add_command(report_cmd, name="report")
 cli.add_command(snapshot_cmd, name="snapshot")
 cli.add_command(snapshots_cmd, name="snapshots")
 cli.add_command(chart_cmd, name="chart")
+cli.add_command(benchmark_cmd, name="benchmark")
 cli.add_command(tui_cmd, name="tui")
 cli.add_command(web_cmd, name="web")
 cli.add_command(remove_cmd, name="remove")

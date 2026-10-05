@@ -28,6 +28,20 @@ from holdings.models.enums import MarketType
 #: 一段历史：按交易日升序的 `(日期, 收盘价)`。
 History = list[tuple[date, float]]
 
+
+@dataclass(frozen=True)
+class HistoryResult:
+    """取回来的一段历史，外加**是哪个源给的**。
+
+    形状照 `PriceResult`：降级链会在源之间回退，事后想弄清「这一段的数是谁
+    给的」只有一个地方能回答——答话的源自己。`source` 会写进
+    `price_history.source`，排查「这段行情怎么不对」时是第一条线索。
+    """
+
+    rows: History
+    source: str = ""
+
+
 #: A 股指数代码的形状：6 位数字。与 `instrument.py` 判 A 股代码是同一条规则，
 #: 但两边用途不同——那边决定「先问哪个市场」，这里决定「这个写法像不像基准」。
 _A_SHARE_CODE = re.compile(r"\d{6}")
@@ -86,7 +100,9 @@ def resolve_against(text: str) -> BenchmarkRef | None:
     return None
 
 
-def history_sources(start: date, end: date) -> dict[MarketType, dict[str, sources.Source[History]]]:
+def history_sources(
+    start: date, end: date
+) -> dict[MarketType, dict[str, sources.Source[HistoryResult]]]:
     """按取数区间造一份源表。
 
     闭包把 `start` / `end` 绑进源里，保住 `source(symbol)` 这个**一参形状**——
@@ -100,7 +116,7 @@ def history_sources(start: date, end: date) -> dict[MarketType, dict[str, source
     }
 
 
-def fetch_history(symbol: str, market: MarketType, start: date, end: date) -> History:
+def fetch_history(symbol: str, market: MarketType, start: date, end: date) -> HistoryResult:
     """取一段历史收盘价，按交易日升序、同一天只留一条。
 
     `order` **显式写死，不走 `data_sources.priority`**：那是给**取价**用的顺序，
@@ -122,8 +138,8 @@ def fetch_history(symbol: str, market: MarketType, start: date, end: date) -> Hi
     )
 
 
-def _a_share_history(start: date, end: date) -> sources.Source[History]:
-    def _source(symbol: str) -> History:
+def _a_share_history(start: date, end: date) -> sources.Source[HistoryResult]:
+    def _source(symbol: str) -> HistoryResult:
         try:
             import akshare as ak  # 懒加载
         except ImportError as exc:
@@ -140,13 +156,13 @@ def _a_share_history(start: date, end: date) -> sources.Source[History]:
         )
         if df is None or df.empty:
             raise SymbolNotFoundError(f"akshare 未找到 A股指数历史行情：{symbol}")
-        return _clean(df["日期"], df["收盘"])
+        return HistoryResult(rows=_clean(df["日期"], df["收盘"]), source="akshare")
 
     return _source
 
 
-def _us_history(start: date, end: date) -> sources.Source[History]:
-    def _source(symbol: str) -> History:
+def _us_history(start: date, end: date) -> sources.Source[HistoryResult]:
+    def _source(symbol: str) -> HistoryResult:
         try:
             import yfinance as yf  # 懒加载
         except ImportError as exc:
@@ -154,12 +170,17 @@ def _us_history(start: date, end: date) -> sources.Source[History]:
         # **`end` 是开区间**：yfinance 的 `history` 文档写着 exclusive，传末条
         # 快照当天会让最后一天**静默缺席**（序列短一天，算出来的数看着正常）。
         # 所以这里 +1 天。
+        #
+        # `start` / `end` 这两个名字是对着 `yfinance.scrapers.history.PriceHistory.
+        # history` 的签名核过的，**不是**对着 `Ticker.history`——后者是
+        # `(*args, **kwargs)` 的转发壳，签名里什么都看不出来，名字写错了也不会
+        # 在调用处报错（B-36 那类「签名写错、次次失败」就是这么漏过去的）。
         hist = yf.Ticker(symbol).history(start=start, end=end + timedelta(days=1))
         # 空 DataFrame 不抛异常（`raise_errors` 默认为 False）：不显式判成失败，
         # 降级链就收不到信号，会把「什么都没取到」当成一次成功的取数。
         if hist is None or hist.empty:
             raise SymbolNotFoundError(f"yfinance 未找到历史行情：{symbol}")
-        return _clean(hist.index, hist["Close"])
+        return HistoryResult(rows=_clean(hist.index, hist["Close"]), source="yfinance")
 
     return _source
 

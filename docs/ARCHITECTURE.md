@@ -54,14 +54,15 @@ holdings/
 │       ├── services/                        # 【编排层·唯一被 CLI/GUI 调用的入口】
 │       │   ├── portfolio_service.py         #    编排 portfolio + storage + data；持仓表的列契约、汇总的基准货币
 │       │   ├── report_service.py            #    快照 → 回撤 / 年化 / 夏普（口径不成立时给 None）
+│       │   ├── benchmark_service.py         #    组合 TWR vs 指数同期收益（唯一同时碰 storage + data + portfolio 的）
 │       │   ├── snapshot_service.py          #    快照的记录与读取
 │       │   ├── asset_meta_service.py        #    标的名称 / 币种 / 年化管理费率的读写
 │       │   ├── chart_service.py             #    净值曲线：取数与筛日期（plotly 懒加载）
 │       │   ├── trade_service.py             #    写入闸门：落库前的历史持仓校验
 │       │   ├── sync_service.py              #    编排 data + storage
+│       │   ├── import_service.py            #    对账单 → 交易：解析 + 补资料 + 查重 + 整批事务
 │       │   ├── export_service.py            #    导出取数：账本 / 持仓表 / 快照 → 表头 + 行
-│       │   ├── group_service.py             #    组合的列出 / 改名 / 合并（汇总复用 portfolio_service）
-│       │   └── chart_service.py             #    编排 storage，返回 Figure/JSON
+│       │   └── group_service.py             #    组合的列出 / 改名 / 合并（汇总复用 portfolio_service）
 │       │
 │       ├── tui/                             # 【表现层·与 cli 平级，互不 import】
 │       │   └── app.py                       #    Textual 界面：持仓 + 报表两屏
@@ -76,7 +77,8 @@ holdings/
 │           ├── commands/                    #    子命令：仅调用 service + 打印
 │           │   ├── init.py    add.py     check.py    list.py    meta.py
 │           │   ├── import_cmd.py  export.py  group.py  sync.py   report.py
-│           │   └── snapshot.py  snapshots.py  chart.py  remove.py  tui.py  web.py
+│           │   └── snapshot.py  snapshots.py  chart.py  benchmark.py  remove.py
+│           │       tui.py  web.py
 │           └── renderers/                   #    把 Service 数据转为 Rich 表格/图表/文件
 │               ├── table_renderer.py
 │               ├── chart_renderer.py

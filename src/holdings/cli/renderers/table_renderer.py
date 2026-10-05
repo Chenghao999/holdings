@@ -23,6 +23,7 @@ from holdings.utils.formatter import (
 )
 
 if TYPE_CHECKING:
+    from holdings.models.benchmark import BenchmarkResult
     from holdings.services.group_service import GroupRow
     from holdings.services.portfolio_service import PortfolioSummary
     from holdings.services.report_service import PerformanceSummary
@@ -64,6 +65,30 @@ def render_performance_line(perf: PerformanceSummary) -> str:
     )
     if perf.notes:
         line += "\n  " + "；".join(perf.notes)
+    return line
+
+
+def render_benchmark_line(result: BenchmarkResult) -> str:
+    """把基准对比渲染成一行；口径句与每个 `—` 的原因另起一行。
+
+    排版照 `render_performance_line`：`—` 单独出现时用户分不清是程序坏了
+    还是口径不成立。原因（含「没记 `--flow` 就等于断言那段没有出入金」这条
+    口径）由 service 给出，渲染层只负责摆出来。
+    """
+    if result.snapshot_count < 2:
+        line = (
+            f"基准对比（{result.against}）：快照不足（当前 {result.snapshot_count} 条，至少 2 条）"
+        )
+    else:
+        line = (
+            f"基准对比（{result.snapshot_count} 条快照，"
+            f"{result.first_date} ~ {result.last_date}，基准 {result.against}）："
+            f"组合 {format_ratio(result.portfolio_return)} | "
+            f"基准 {format_ratio(result.benchmark_return)} | "
+            f"超额 {format_ratio(result.excess_return)}"
+        )
+    if result.notes:
+        line += "\n  " + "；".join(result.notes)
     return line
 
 

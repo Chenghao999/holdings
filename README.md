@@ -18,6 +18,8 @@
 - 本地 SQLite 存储，单文件便携，隐私安全。
 - 价格自动同步：A 股优先 akshare、失败降级 yfinance，美股 / 国际黄金走 yfinance，带 5 分钟缓存防重复请求。
 - 持仓盈亏报表、净值快照、交互式净值曲线。
+- **基准对比**：`holdings benchmark --against 沪深300`，先按快照上记的净入金
+  剔除出入金（时间加权），再与指数比同期收益。
 - 三种界面共用同一套服务层：CLI（`holdings …`）、终端仪表盘
   （`holdings tui`）、网页只读看板（`holdings web`），各自按需安装。
 - 严格三层架构，为未来的 GUI / Web 扩展预留接口。
@@ -52,6 +54,9 @@ holdings list --sort 盈亏率
 
 # 同步最新价格
 holdings sync --market 全部
+
+# 记录一份资产快照（记满两条之后就能 holdings benchmark --against 沪深300）
+holdings snapshot --total 158000 --equity 120000 --cash 38000
 
 # 备份账本（导出的标准 CSV 能被 holdings import 读回来）
 holdings export --out ledger.csv

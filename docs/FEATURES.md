@@ -46,6 +46,9 @@
 - 终端界面（`tui`，可选依赖）：持仓与报表两屏，与 CLI 同源。
 - 资产快照：`snapshot` 记录（含备注），`snapshots` 查看。
 - 净值曲线图导出（`chart`，生成交互式 HTML，需 `holdings-cli[chart]`）。
+- 基准对比（`benchmark`）：组合的时间加权收益 vs 指数同期收益，给「组合 / 基准 /
+  超额」三个数。**快照上的净入金（`snapshot --flow`）会先被剔除**，免得一笔入金
+  被算成跑赢；指数日线缓存在 `price_history`，默认一天内不重复取。
 - 数据导出（`export`）：账本 / 持仓表 / 快照 → CSV 或 JSON。账本一份能与
   `import` 互相往返（备份、迁移），持仓表一份给 Excel 报税用。
 
@@ -96,5 +99,6 @@
 | `holdings report` | 生成综合报表（可只看一个组合，或按组合分组展示） |
 | `holdings snapshot` | 记录资产快照 |
 | `holdings chart` | 生成净值曲线图 |
+| `holdings benchmark` | 与基准指数比同期收益（剔除出入金后的 TWR） |
 | `holdings remove` | 删除交易 |
 | `holdings check` | 检查运行环境依赖 |

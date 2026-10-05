@@ -60,7 +60,9 @@ def test_the_akshare_source_calls_the_real_signature_with_yyyymmdd(
 
     got = history.fetch_history("000300", MarketType.A_SHARE, date(2024, 1, 1), date(2024, 1, 31))
 
-    assert got == [(date(2024, 1, 2), 3000.0), (date(2024, 1, 3), 3060.0)]
+    assert got.rows == [(date(2024, 1, 2), 3000.0), (date(2024, 1, 3), 3060.0)]
+    # `source` 会写进 `price_history.source`：事后想弄清「这段数是谁给的」只有这里能回答。
+    assert got.source == "akshare"
     assert seen == {
         "symbol": "000300",
         "period": "daily",
@@ -100,7 +102,7 @@ def test_suspended_days_are_dropped_rather_than_zeroed(fake_akshare, no_sleep):
 
     got = history.fetch_history("000300", MarketType.A_SHARE, date(2024, 1, 1), date(2024, 1, 31))
 
-    assert got == [(date(2024, 1, 2), 3000.0), (date(2024, 1, 4), 3080.0)]
+    assert got.rows == [(date(2024, 1, 2), 3000.0), (date(2024, 1, 4), 3080.0)]
 
 
 def test_the_series_comes_back_sorted_and_deduplicated(fake_akshare, no_sleep):
@@ -115,7 +117,7 @@ def test_the_series_comes_back_sorted_and_deduplicated(fake_akshare, no_sleep):
 
     got = history.fetch_history("000300", MarketType.A_SHARE, date(2024, 1, 1), date(2024, 1, 31))
 
-    assert got == [(date(2024, 1, 2), 3000.0), (date(2024, 1, 4), 3080.0)]
+    assert got.rows == [(date(2024, 1, 2), 3000.0), (date(2024, 1, 4), 3080.0)]
 
 
 def test_an_empty_result_is_a_failure_not_an_empty_series(fake_akshare, no_sleep):
@@ -170,7 +172,8 @@ def test_yfinance_gets_an_exclusive_end_one_day_later(monkeypatch, no_sleep):
 
     assert seen == {"symbol": "^GSPC", "start": date(2024, 1, 1), "end": date(2024, 2, 1)}
     # 带时区的 Timestamp 取交易所那一天，不是 UTC 那天。
-    assert got == [(date(2024, 1, 2), 4700.0), (date(2024, 1, 3), 4720.0)]
+    assert got.rows == [(date(2024, 1, 2), 4700.0), (date(2024, 1, 3), 4720.0)]
+    assert got.source == "yfinance"
 
 
 def test_a_market_without_a_history_source_says_so(no_sleep):
@@ -273,7 +276,7 @@ def test_a_plain_date_column_is_accepted_as_well(fake_akshare, no_sleep):
 
     got = history.fetch_history("000300", MarketType.A_SHARE, date(2024, 1, 1), date(2024, 1, 31))
 
-    assert got == [(date(2024, 1, 2), 3000.0), (date(2024, 1, 3), 3060.0)]
+    assert got.rows == [(date(2024, 1, 2), 3000.0), (date(2024, 1, 3), 3060.0)]
 
 
 def test_the_history_source_order_ignores_the_price_priority(
@@ -299,4 +302,4 @@ def test_the_history_source_order_ignores_the_price_priority(
 
     got = history.fetch_history("000300", MarketType.A_SHARE, date(2024, 1, 1), date(2024, 1, 31))
 
-    assert got == [(date(2024, 1, 2), 3000.0)]
+    assert got.rows == [(date(2024, 1, 2), 3000.0)]
