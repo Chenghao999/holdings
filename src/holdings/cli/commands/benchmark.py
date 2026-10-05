@@ -33,5 +33,10 @@ def benchmark_cmd(against: str, start: date | None) -> None:
         against,
         start=start,
         ttl_seconds=cfg.history_ttl_seconds,
+        # `sync.timeout_seconds` 是**全项目唯一那个「一次网络调用等多久」的旋钮**
+        # （`sync` 也是这么传的）。不传的话，用户为慢网络调大了它，
+        # `benchmark` 却还在按写死的 10 秒放弃——报出来的是一句「拉取超时」，
+        # 而真正的原因（这个源本来就慢）被那句话盖住了。真跑一次才发现的。
+        timeout_seconds=cfg.sync_timeout_seconds,
     )
     click.echo(render_benchmark_line(result))

@@ -265,6 +265,15 @@
     早在 [B-05](docs/BACKLOG.md) 就被当作 bug 去掉了（国内代码失败就报错，
     绝不拿美元/盎司的价顶替人民币 ETF 的行情），文档与设计一直对不上。
 
+### Fixed
+
+- **`holdings benchmark` 忽略 `sync.timeout_seconds`**（[BACKLOG B-39](docs/BACKLOG.md)）。
+  `sync` 一直在传 `cfg.sync_timeout_seconds`，`benchmark` 漏了，于是取指数时用的
+  始终是写死的 10 秒默认值。为慢网络把这个值调大的用户会看到「拉取超过 10 秒仍未
+  返回」——**真因（这个源本来就慢）被那句话盖住了**，而配置项在文档里写着「生效」。
+  现在两条命令共用同一个预算旋钮。真跑一次才发现的：用例里 `call_with_timeout`
+  是打桩的，超时值传没传它都不看出差别。
+
 ## [1.0.0] - 2026-09-19
 
 ### Added

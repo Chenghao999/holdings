@@ -88,18 +88,28 @@ def _run(monkeypatch, *argv: str) -> int:
     return 0
 
 
+def _cfg(db_path, **overrides):
+    """命令内部那次 `load_config()` 的替身。
+
+    **只留这一份**：属性少一个，报出来的是 `AttributeError`，看着像代码坏了，
+    其实只是夹具不全——`sync_retry_count`（`resilience.retry_count()` 自己会再调
+    一次 `load_config`）和 `sync_timeout_seconds` 都是这么各崩一轮才补上的。
+    加字段时改这一处就够。
+    """
+    values = {
+        "database_path": db_path,
+        "history_ttl_seconds": 86400,
+        "sync_retry_count": 1,
+        "sync_timeout_seconds": 10.0,
+    }
+    values.update(overrides)
+    return types.SimpleNamespace(**values)
+
+
 @pytest.fixture
 def use_db(db_path, monkeypatch):
     """把命令内部的 load_config 指向临时库。"""
-
-    class _Cfg:
-        database_path = db_path
-        history_ttl_seconds = 86400
-        # `resilience.retry_count()` 内部也会调 load_config，缺这一项会在
-        # 取数那条路上抛 AttributeError——它看着像代码坏了，其实是夹具不全。
-        sync_retry_count = 1
-
-    monkeypatch.setattr("holdings.utils.config.load_config", lambda *a, **k: _Cfg())
+    monkeypatch.setattr("holdings.utils.config.load_config", lambda *a, **k: _cfg(db_path))
     return db_path
 
 
@@ -359,12 +369,7 @@ def test_an_unrecognized_benchmark_exits_2(db_path, monkeypatch, capsys):
     snapshot_dao.add(db_path, _snap(JAN, 100_000.0))
     snapshot_dao.add(db_path, _snap(FEB, 110_000.0))
 
-    class _Cfg:
-        database_path = db_path
-        history_ttl_seconds = 86400
-        sync_retry_count = 1
-
-    monkeypatch.setattr("holdings.utils.config.load_config", lambda *a, **k: _Cfg())
+    monkeypatch.setattr("holdings.utils.config.load_config", lambda *a, **k: _cfg(db_path))
 
     code = _run(monkeypatch, "--against", "乱写的")
     err = capsys.readouterr().err
@@ -382,12 +387,7 @@ def test_a_benchmark_that_cannot_be_fetched_exits_1(db_path, monkeypatch, capsys
         snapshot_dao.add(db_path, snap)
     monkeypatch.setitem(sys.modules, "akshare", None)  # 「没装这个包」在运行时的样子
 
-    class _Cfg:
-        database_path = db_path
-        history_ttl_seconds = 86400
-        sync_retry_count = 1
-
-    monkeypatch.setattr("holdings.utils.config.load_config", lambda *a, **k: _Cfg())
+    monkeypatch.setattr("holdings.utils.config.load_config", lambda *a, **k: _cfg(db_path))
 
     code = _run(monkeypatch, "--against", "沪深300")
     err = capsys.readouterr().err
@@ -422,12 +422,7 @@ def test_a_single_snapshot_exits_0_with_a_hint(db_path, monkeypatch, capsys, no_
     """只有 1 条：算不出对比，但也不是错误——快照本来就是一条条记起来的。"""
     snapshot_dao.add(db_path, _snap(JAN, 100_000.0))
 
-    class _Cfg:
-        database_path = db_path
-        history_ttl_seconds = 86400
-        sync_retry_count = 1
-
-    monkeypatch.setattr("holdings.utils.config.load_config", lambda *a, **k: _Cfg())
+    monkeypatch.setattr("holdings.utils.config.load_config", lambda *a, **k: _cfg(db_path))
 
     code = _run(monkeypatch, "--against", "沪深300")
     out = capsys.readouterr().out
@@ -521,21 +516,33 @@ def test_the_alias_resolves_to_the_index_endpoint(deposited, no_fetch):
     assert got.against == "上证指数（000001）"
 
 
-def test_the_ttl_comes_from_the_config(use_db, deposited, monkeypatch, capsys):
-    """命令把 `history_ttl_seconds` 传下去，而不是在服务里写死一个数。"""
+def test_the_ttl_and_the_timeout_both_come_from_the_config(db_path, deposited, monkeypatch, capsys):
+    """命令把 `history_ttl_seconds` 与 `sync.timeout_seconds` 都传下去。
+
+    **超时这一条是真跑一次才发现的**：`sync` 一直传着
+    `cfg.sync_timeout_seconds`，而 `benchmark` 漏了——用户为慢网络调大了那个值，
+    这里却还按写死的 10 秒放弃，报出来的是「拉取超时」，把真正的原因（这个源
+    本来就慢）盖住了。
+    """
     seen: dict[str, object] = {}
     real = benchmark_service.get_benchmark
 
     def spy(db_path, against, start=None, ttl_seconds=0, timeout_seconds=0.0):
         seen["ttl"] = ttl_seconds
+        seen["timeout"] = timeout_seconds
         return real(db_path, against, start=start, ttl_seconds=ttl_seconds)
 
+    monkeypatch.setattr(
+        "holdings.utils.config.load_config",
+        lambda *a, **k: _cfg(db_path, sync_timeout_seconds=42.0),
+    )
     monkeypatch.setattr("holdings.services.benchmark_service.get_benchmark", spy)
 
     code = _run(monkeypatch, "--against", "沪深300")
 
     assert code == 0
     assert seen["ttl"] == 86400
+    assert seen["timeout"] == 42.0
 
 
 def test_the_fetch_is_bounded_by_a_timeout(db_path, monkeypatch):

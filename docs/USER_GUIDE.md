@@ -690,6 +690,10 @@ holdings benchmark --against 沪深300
 >
 > 指数的日线缓存在 `price_history` 表里，默认一天内不重复取
 > （`data_sources.history_ttl_seconds`）。`holdings sync` 不碰这张表——它按需取。
+>
+> 取数那一次的时间预算与 `sync` 共用 `sync.timeout_seconds`（默认 10 秒）。
+> 网络慢或数据源本身慢时把它调大：调小了会看到「拉取超时」，而真正的原因
+> （这个源就是要十几秒）被那句话盖住。
 
 ---
 
