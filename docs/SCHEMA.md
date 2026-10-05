@@ -14,16 +14,20 @@ snapshots (每日快照)
 
 price_cache (价格缓存)
   └── symbol PRIMARY KEY
+
+price_history (指数历史序列缓存)
+  └── (symbol, trade_date) PRIMARY KEY
 ```
 
-四张表职责：
+五张表职责：
 
 | 表 | 职责 |
 |----|------|
 | `transactions` | 核心流水，记录每笔买卖、费用与公司行为，支持多组合分组 |
 | `snapshots` | 净值曲线数据源，记录任意时间点总资产快照 |
 | `asset_meta` | 资产基础信息与名称缓存，含年化管理费率 |
-| `price_cache` | 最新价格缓存，配合 5 分钟过期策略减少网络请求 |
+| `price_cache` | **最新价**缓存（一个代码一行），配合 5 分钟过期策略减少网络请求 |
+| `price_history` | **一段序列**的缓存（一个代码多个交易日），供基准对比使用；TTL 见 `history_ttl_seconds` |
 
 ## 建表 SQL
 
@@ -78,11 +82,22 @@ CREATE TABLE price_cache (
     source TEXT                           -- 'akshare' / 'yfinance'
 );
 
+-- 5. 指数历史序列缓存（基准对比用；与 price_cache 形状不同，故另起一张表）
+CREATE TABLE price_history (
+    symbol TEXT NOT NULL,
+    trade_date TEXT NOT NULL,              -- YYYY-MM-DD
+    close REAL NOT NULL,
+    source TEXT,                           -- 'akshare' / 'yfinance'
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (symbol, trade_date)       -- 一个代码一个交易日一条
+);
+
 -- 索引优化
 CREATE INDEX idx_trans_symbol ON transactions(symbol);
 CREATE INDEX idx_trans_date ON transactions(trade_date);
 CREATE INDEX idx_trans_group ON transactions(portfolio_group);
 CREATE INDEX idx_cache_time ON price_cache(update_time);
+CREATE INDEX idx_history_date ON price_history(trade_date);
 ```
 
 ## 字段约束与语义说明
@@ -194,6 +209,30 @@ CREATE INDEX idx_cache_time ON price_cache(update_time);
 - 同一 `symbol` 在 `price_cache` 中若 `update_time` 距今 **不足 5 分钟**，直接返回缓存，不发起网络请求。
 - 缓存时间可通过配置项 `cache_ttl_seconds` 调整（见 [CONFIG_SPEC.md](CONFIG_SPEC.md)）。
 - `source` 字段记录数据来源，便于排查降级链路。
+
+### price_history
+
+- **只装指数**（[B-39](BACKLOG.md#b-39)）：A 股走 `ak.index_zh_a_hist`，美股走
+  yfinance 的代码。所以 `000001` 在这张表里是**上证指数**，不是平安银行——
+  同一个 6 位数字在个股端点下是另一条完全不同的价格序列。
+- 主键 `(symbol, trade_date)`：一个代码一个交易日一条。重复取数是按主键
+  **合并写**，不是清空重写——用户把 `--start` 往前挪时，新取回来的一段会补进来。
+- 这张表**不参与** `holdings sync`：它按需取，`sync` 不碰它。
+
+## 指数历史缓存过期策略
+
+`price_history` 的新鲜度判定要**三条同时成立**（`price_history_dao.is_fresh`），
+缺一条就当成一次真实取数——重复取数是安全的，只是多打一次网络：
+
+| 条件 | 防的是什么 |
+|------|-----------|
+| 有行 | 这个代码一条历史都没取过 |
+| 最新一次 `updated_at` 在 `history_ttl_seconds` 内 | 拿一份很旧的缓存当命中 |
+| `MIN(trade_date)` 不晚于 `start + 10 天`，且 `MAX(trade_date)` 不早于 `end − 10 天` | **静默少一段**：用户把 `--start` 往前挪，缓存里没有那一段，若只判「有没有行」就会拿一段缺了开头的序列去算收益，而数字看着完全正常 |
+
+两端各放宽 10 天，是因为**区间边缘常常落在非交易日上**（周末、长假），那几天
+本来就不会有行；不放宽的话，一次周末发起的查询会永远判成没盖住，每次跑都白打
+一遍网络，缓存形同虚设。10 天盖得住最长的长假（春节 / 国庆连休 8 天）。
 
 ## 标的资料缓存过期策略
 

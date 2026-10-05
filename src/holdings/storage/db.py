@@ -58,10 +58,20 @@ CREATE TABLE IF NOT EXISTS price_cache (
     source TEXT
 );
 
+CREATE TABLE IF NOT EXISTS price_history (
+    symbol TEXT NOT NULL,
+    trade_date TEXT NOT NULL,
+    close REAL NOT NULL,
+    source TEXT,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (symbol, trade_date)
+);
+
 CREATE INDEX IF NOT EXISTS idx_trans_symbol ON transactions(symbol);
 CREATE INDEX IF NOT EXISTS idx_trans_date ON transactions(trade_date);
 CREATE INDEX IF NOT EXISTS idx_trans_group ON transactions(portfolio_group);
 CREATE INDEX IF NOT EXISTS idx_cache_time ON price_cache(update_time);
+CREATE INDEX IF NOT EXISTS idx_history_date ON price_history(trade_date);
 """
 
 

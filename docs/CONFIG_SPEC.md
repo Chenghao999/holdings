@@ -33,6 +33,8 @@ data_sources:
     美股: [yfinance]
   # 标的资料的缓存天数。默认 86400 秒 = 1 天
   instrument_ttl_seconds: 86400
+  # 基准指数历史（price_history）的缓存天数。默认 86400 秒 = 1 天
+  history_ttl_seconds: 86400
 
 # 同步超时（秒）与重试次数
 sync:
@@ -55,6 +57,7 @@ default_group: 默认
 | `data_sources.priority` | map | 见上 | ✅ 生效 | 各市场按什么顺序尝试数据源。列表里没实现的源会被跳过；**黄金不读这一项**，见下 |
 | `data_sources.instrument_priority` | map | 见上 | ✅ 生效 | 取**标的资料**（名称 / 资产类型 / 币种）时的源顺序。与取价分开配：能报价的源不一定知道这标的叫什么，绑成一份会让人没法单独调 |
 | `data_sources.instrument_ttl_seconds` | integer | `86400` | ✅ 生效 | 标的资料的缓存有效期（秒），控制 `asset_meta` 的新鲜度。**默认比 `cache_ttl_seconds` 长得多是有意的**：价格 5 分钟过期合理，而「600519 叫贵州茅台」一年也不会变 |
+| `data_sources.history_ttl_seconds` | integer | `86400` | ✅ 生效 | 基准指数历史（`price_history`）的缓存有效期（秒）。与资料缓存同理：**已经过去的**指数日线不会变，按价格的 5 分钟算等于每次 `benchmark` 都要重拉一整段。区间尾部会变，那一头由「缓存盖得住这次要的区间」单独兜着 |
 | `sync.timeout_seconds` | integer | `10` | ✅ 生效 | **每个标的**拉取行情的时间预算（秒）。预算用尽即放弃该标的、记成失败，不让 `sync` 挂死。写 `0` 或负数表示不限时 |
 | `sync.retry_count` | integer | `1` | ✅ 生效 | A 股取价的**重试次数**（`1` = 首次失败后再试 1 次，共 2 次尝试）。重试之间退避 0.5 秒；用尽后降级 yfinance |
 | `database_path` | string | `data/holdings.db` | ✅ 生效 | SQLite 数据库文件路径 |
@@ -89,6 +92,7 @@ default_group: 默认
    受校验的字段：`database_path` / `default_group` / `default_market`（字符串）、
    `cache_ttl_seconds`（非负整数）、`sync.timeout_seconds`（非负数字）、
    `sync.retry_count`（非负整数）、`data_sources.instrument_ttl_seconds`（非负整数）、
+   `data_sources.history_ttl_seconds`（非负整数）、
    `data_sources.priority` 与 `data_sources.instrument_priority`（映射，值为字符串列表）。
    **未知字段原样保留**——用户可能给未来的版本或别的工具留着。
 

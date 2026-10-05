@@ -32,7 +32,8 @@ holdings/
 │       │   ├── transaction_dao.py           #    交易 CRUD（含 add_many 单事务批量写）
 │       │   ├── snapshot_dao.py              #    快照 CRUD
 │       │   ├── asset_meta_dao.py            #    资产基础信息 CRUD
-│       │   └── price_cache_dao.py           #    价格缓存 CRUD + TTL 新鲜度判断
+│       │   ├── price_cache_dao.py           #    价格缓存 CRUD + TTL 新鲜度判断
+│       │   └── price_history_dao.py         #    指数历史序列缓存 + 「盖得住区间」的新鲜度判断
 │       │
 │       ├── data/                            # 【数据适配层·外部 API 与文件格式，不碰 DB】
 │       │   ├── fetcher.py                   #    工厂统一入口，同步/异步双接口
@@ -42,6 +43,8 @@ holdings/
 │       │   ├── a_stock.py                   #    akshare / yfinance 两个源，顺序由配置决定
 │       │   ├── us_stock.py                  #    yfinance 实现（单一数据源）
 │       │   ├── gold.py                      #    黄金：按代码选路，不参与优先级配置
+│       │   ├── instrument.py                #    标的资料（名称/资产类型），自带源表
+│       │   ├── history.py                   #    指数历史序列与基准别名（自带源表，只取指数）
 │       │   └── brokers/                     #    对账单文件：编码探测 + 一家券商一个解析器
 │       │       ├── base.py                  #      子类只填映射表，识别与解析在基类
 │       │       ├── encoding.py              #      BOM → UTF-8 → GB18030，顺序不能颠倒
