@@ -88,6 +88,10 @@
       币种，与取价共用同一条降级链，结果缓存在 `asset_meta`（默认 1 天）。
       生产调用方是[导入](BACKLOG.md#b-32)：对账单里没写市场/资产类型时按代码补上，
       取不到退回默认值并报出行号（`meta` 与 `sync` 仍未接）。
+- [x] 基准对比（[B-39](BACKLOG.md#b-39)）——`holdings benchmark --against 沪深300`，
+      组合的时间加权收益 vs 指数同期收益。快照的净入金（`snapshot --flow`）先被
+      剔除，免得一笔入金被算成跑赢；历史序列另起 `price_history` 一张表，按需取，
+      `sync` 不碰。
 - [x] GUI 直接复用 `services/` 层 —— **前置条件已落实**：
       `tests/test_layering.py` 在 CI 里守着「核心层零输出、零终端依赖、
       依赖方向合规、只 import 核心层不会拖进 click / rich」。
