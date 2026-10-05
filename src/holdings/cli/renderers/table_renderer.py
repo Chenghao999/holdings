@@ -230,6 +230,9 @@ def render_snapshots_table(snapshots) -> Table:
     """渲染快照列表。
 
     `note` 为空时留白，不印「—」：备注是可选信息，一片「—」反而像出了错。
+
+    「净入金」同理留白：绝大多数区间本来就没有出入金，每行都印一个 `0.00`
+    只是占地方。留白读作「这段没有出入金」——由 `--flow` 手记，入金为正、出金为负。
     """
     table = Table(title="资产快照")
     table.add_column("日期", justify="left")
@@ -237,9 +240,10 @@ def render_snapshots_table(snapshots) -> Table:
     table.add_column("权益", justify="right")
     table.add_column("黄金", justify="right")
     table.add_column("现金", justify="right")
+    table.add_column("净入金", justify="right")
     table.add_column("备注", justify="left")
     if not snapshots:
-        table.add_row("暂无快照", "", "", "", "", "用 holdings snapshot 记录一份")
+        table.add_row("暂无快照", "", "", "", "", "", "用 holdings snapshot 记录一份")
         return table
     for s in snapshots:
         table.add_row(
@@ -248,6 +252,8 @@ def render_snapshots_table(snapshots) -> Table:
             format_money(s.equity_value),
             format_money(s.gold_value),
             format_money(s.cash_balance),
+            # 带正负号：入金与出金差一个字符，是这一列最容易看错的地方。
+            f"{s.external_flow:+,.2f}" if s.external_flow else "",
             s.note or "",
         )
     return table

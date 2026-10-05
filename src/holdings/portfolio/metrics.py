@@ -59,6 +59,66 @@ def return_series(values: list[float], gaps_days: list[int]) -> tuple[list[float
     return returns, gaps
 
 
+def chain_link(returns: list[float]) -> float | None:
+    """把逐段收益率几何接链成区间总收益率：`Π(1 + r) − 1`。
+
+    **是连乘，不是相加**：`[+10%, −10%]` 的答案是 −1%，不是 0%——算术相加会
+    系统性高估，跨越的段数越多偏得越远。
+
+    空列表返回 None（一段可用的都没有，即"算不出来"）；累计值被乘成**负数**
+    （某一段 `1 + r < 0`，例如入金比期末净值还多）同样返回 None：几何接链在那里
+    就断了，后面再乘出来的数没有意义。宁可让调用方显示 `—`，也不给一个看着像
+    结论的假数。
+
+    边界是 `< 0` 而不是 `<= 0`：恰好乘到 0 是「亏光」，`−100%` 是个真结论，
+    而且之后再乘什么都是 0（亏光的组合赚不回百分比），继续接链不会失真。
+    """
+    if not returns:
+        return None
+    total = 1.0
+    for rate in returns:
+        total *= 1.0 + rate
+        if total < 0:
+            return None
+    return total - 1.0
+
+
+def time_weighted_return(values: list[float], flows: list[float]) -> float | None:
+    """时间加权收益率（TWR）：剔除外部现金流的影响后，逐段接链。
+
+    逐段 `r_i = (V_i − F_i) / V_{i−1} − 1`，其中 `F_i = flows[i]` 是**记在第 i 个
+    时点、并在该时点估值之前到账**的净入金——**入金为正、出金为负**。
+
+    符号约定与公式是一对，必须一起看：入金 `F=+X` 时 `V_i = V_{i−1} + X`，
+    算出 `r = 0`（这笔钱本身不是业绩）；**全额撤出**时 `F=−X`、`V_i = 0`，
+    `V_i − F_i = X`，同样 `r = 0`。符号写反了，一次全额撤出会算成 `−200%` 量级。
+
+    现金流记在**期末**（记在哪条快照上就算哪一段），不做 Modified Dietz 的期中
+    加权：那需要「这笔钱是哪天进来的」，而快照本身就是稀疏手记，日中权重是编出来
+    的精度。真要更准，就在出入金当天补一条快照。
+
+    `flows[0]` 被忽略——第一条没有"上一期"，扣无处扣。`V_{i−1} <= 0` 的段丢弃
+    （除不了数，与 `return_series` 同款）；本段 `V_i = 0` 而没出金（真的亏光）
+    **不丢**，`−100%` 是真结论。
+
+    返回的是**收益率**（`0.10` 而不是 `1.10`），与 `annualized_return` 同口径，
+    好让 `format_ratio` 直接用。没有一段可用、或接链断在 `1 + r < 0` 上时返回 None。
+
+    两个序列**必须等长**：错位一格算出来的数与事实无关，比少算一段危险得多，
+    所以这里直接抛 `ValueError` 而不是按最短的截断。
+    """
+    if len(values) != len(flows):
+        raise ValueError(f"净值与现金流序列必须等长：{len(values)} != {len(flows)}")
+    returns = [
+        (curr - flow) / prev - 1
+        # strict=True：三个序列在等长检查之后必然等长，这里再钉一次——
+        # 少算一段是静默的，错位一格却会算出一个看着正常的错数。
+        for prev, curr, flow in zip(values[:-1], values[1:], flows[1:], strict=True)
+        if prev > 0
+    ]
+    return chain_link(returns)
+
+
 def periods_per_year(gaps_days: list[int], *, tolerance: float = 0.25) -> float | None:
     """把相邻两点的间隔天数折算成「每年多少个周期」；间隔不规律时返回 None。
 

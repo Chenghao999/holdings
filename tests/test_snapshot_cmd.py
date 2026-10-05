@@ -78,6 +78,75 @@ def test_snapshots_command_lists_the_note(project, monkeypatch, capsys):
     assert "2025-02-01" in out
 
 
+def test_the_flow_is_persisted_and_echoed(project, monkeypatch, capsys):
+    """B-39：净入金要落库（基准对比据此剔除现金流），方向也要当场看得见。
+
+    回显带正负号是故意的——入金与出金差一个字符，是这一列最容易记反的地方。
+    """
+    code = _run(monkeypatch, "snapshot", "--total", "150000", "--flow", "50000")
+
+    assert code == 0
+    got = snapshot_dao.get_all(project)
+    assert got[0].external_flow == 50_000.0
+    assert "+50,000.00" in capsys.readouterr().out
+
+
+def test_a_withdrawal_is_recorded_as_a_negative_flow(project, monkeypatch):
+    """出金记负数。符号反了会把一次全额撤出算成 −200% 量级（见 metrics 的用例）。"""
+    _run(monkeypatch, "snapshot", "--total", "50000", "--flow", "-50000")
+
+    assert snapshot_dao.get_all(project)[0].external_flow == -50_000.0
+
+
+def test_without_flow_the_default_is_zero(project, monkeypatch):
+    """不传 `--flow` 就是 0——**这是一句断言**「这段没有出入金」，不是"未记录"。"""
+    _run(monkeypatch, "snapshot", "--total", "150000")
+
+    assert snapshot_dao.get_all(project)[0].external_flow == 0.0
+
+
+def test_an_old_database_gets_the_flow_column_with_a_zero_default(tmp_path):
+    """老库补列后是 0，不是 NULL——`external_flow` 的语义本来就是「默认没有出入金」。
+
+    手写一张 B-39 之前的 `snapshots` 表，再走一次 `connect()` 的补列迁移。
+    """
+    from holdings.storage.db import connect
+
+    db_file = str(tmp_path / "old.db")
+    conn = connect(db_file)
+    conn.execute("DROP TABLE snapshots")
+    conn.execute(
+        "CREATE TABLE snapshots ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, snapshot_date TEXT NOT NULL UNIQUE, "
+        "total_value REAL NOT NULL, cash_balance REAL DEFAULT 0, "
+        "equity_value REAL NOT NULL, gold_value REAL NOT NULL, note TEXT, "
+        "created_at TEXT DEFAULT CURRENT_TIMESTAMP)"
+    )
+    conn.execute(
+        "INSERT INTO snapshots (snapshot_date, total_value, equity_value, gold_value) "
+        "VALUES ('2025-01-31', 1000, 900, 100)"
+    )
+    conn.commit()
+    conn.close()
+
+    got = snapshot_dao.get_all(db_file)
+
+    assert got[0].external_flow == 0.0
+
+
+def test_snapshots_command_lists_the_flow(project, monkeypatch, capsys):
+    """列表里要看得见净入金（带正负号），0 的那些留白。"""
+    _run(monkeypatch, "snapshot", "--total", "100000", "--date", "2025-01-31")
+    _run(monkeypatch, "snapshot", "--total", "150000", "--date", "2025-02-28", "--flow", "50000")
+
+    code = _run(monkeypatch, "snapshots")
+    out = capsys.readouterr().out
+
+    assert code == 0
+    assert "净入金" in out
+    assert "+50,000.00" in out
+
+
 def test_snapshots_command_on_an_empty_database_says_how_to_start(project, monkeypatch, capsys):
     """空列表要给出下一步，而不是只印一张空表。"""
     code = _run(monkeypatch, "snapshots")

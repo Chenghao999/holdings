@@ -53,6 +53,7 @@ CREATE TABLE snapshots (
     cash_balance REAL DEFAULT 0,
     equity_value REAL NOT NULL,
     gold_value REAL NOT NULL,
+    external_flow REAL DEFAULT 0,          -- 上次快照之后的净入金：入金正、出金负
     note TEXT,                             -- 备注，不传存 NULL（不是空串）
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
@@ -146,14 +147,24 @@ CREATE INDEX idx_cache_time ON price_cache(update_time);
 - `snapshot_date` 唯一：同一天只保留一份快照，重复写入报错而不是覆盖。
 - `note`：`holdings snapshot --note "…"` 写的备注。不传存 `NULL`——「没写备注」
   与「写了个空备注」在查询与展示上是两回事。
+- `external_flow`：**上一次快照之后、到这一天为止**的净入金，入金为正、出金为负，
+  `holdings snapshot --flow 50000` 写。`holdings benchmark` 用它把出入金从收益里
+  剔除（时间加权收益率）。**默认 `0` 是一句断言**「这段时间没有出入金」，而不是
+  「未记录」——真有出入金而没记，基准对比会把它算成收益。之所以不用 `NULL` 表达
+  「未申报」：手记快照本来就稀疏，绝大多数区间确实没有出入金，让每一条都挂个
+  「未申报」只是噪音；口径句里点明这条约定比一个填不过来的字段诚实。
 
-> **补列迁移**：`note`、`source`、`external_id`、`asset_type` 都是后加的列，而
-> `CREATE TABLE IF NOT EXISTS` 对**已经存在**的表完全不生效，老库不会自己长出
-> 这几列。`storage/db.py` 的 `_migrate()` 用 `PRAGMA table_info` 探测后
-> `ALTER TABLE` 补上，判定「这一列在不在」而不是查版本号——这个库由用户直接
-> 拿着用，不会有谁去维护 schema_version。补出来的列在老数据上是 `NULL`，
+> **补列迁移**：`note`、`source`、`external_id`、`asset_type`、`external_flow`
+> 都是后加的列，而 `CREATE TABLE IF NOT EXISTS` 对**已经存在**的表完全不生效，
+> 老库不会自己长出这几列。`storage/db.py` 的 `_migrate()` 用 `PRAGMA table_info`
+> 探测后 `ALTER TABLE` 补上，判定「这一列在不在」而不是查版本号——这个库由用户
+> 直接拿着用，不会有谁去维护 schema_version。补出来的列在老数据上是 `NULL`，
 > 语义就是「不知道来源、没有流水号、不知道资产类型」，不猜一个值填进去——
 > 补一个猜出来的 `stock` 会让报表凭空多出一个看似确定的事实。
+>
+> **`external_flow` 是这条规矩唯一的例外**，补出来是 `0` 而不是 `NULL`：这一列的
+> 默认值本身就是「没有出入金」这个可用的语义，而 `NULL` 会让每一条历史快照都变成
+> 「未申报」，口径句每次都要提一遍。代价写在上面那条字段说明里。
 
 ### asset_meta 字段说明
 
