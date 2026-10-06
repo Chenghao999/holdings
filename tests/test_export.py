@@ -12,6 +12,7 @@ from __future__ import annotations
 import codecs
 import csv
 import json
+import sqlite3
 import sys
 from datetime import date
 
@@ -427,6 +428,45 @@ def test_exporting_an_empty_database_says_why(db_path, monkeypatch, capsys, tmp_
     assert out_file.read_text(encoding="utf-8-sig").splitlines() == [
         ",".join(export_service.ledger_columns())
     ]
+
+
+def test_the_snapshot_export_columns_match_the_table_exactly(seeded):
+    """导出的快照列 == 表里的列去掉自增 `id`（**按集合比**，两边顺序本来就不同）。
+
+    B-37 的教训：备份少一列是**静默**丢数据，而且快照恰恰是补不回来的那种——
+    交易流水还能从券商重导，手记的日子不能。这条守卫的价值在于：往 `snapshots`
+    加一列而忘了加进 `SNAPSHOT_COLUMNS` 时，它会红。
+
+    刻意直接读 `PRAGMA table_info` 而不用 `db._columns`：守卫不该依赖它守的那
+    一侧的实现。
+    """
+    conn = sqlite3.connect(seeded)
+    try:
+        table_columns = {row[1] for row in conn.execute("PRAGMA table_info(snapshots)")}
+    finally:
+        conn.close()
+
+    assert set(export_service.SNAPSHOT_COLUMNS) == table_columns - {"id"}
+
+
+def test_a_snapshots_export_carries_the_recorded_flow(seeded, monkeypatch, tmp_path):
+    """手记的净入金必须跟着备份走（B-39）——它是补不回来的那一类数据。"""
+    snapshot_dao.add(
+        seeded,
+        Snapshot(
+            snapshot_date=date(2025, 2, 28),
+            total_value=1500.0,
+            equity_value=1400.0,
+            gold_value=100.0,
+            external_flow=50_000.0,
+        ),
+    )
+    _point_at(monkeypatch, seeded)
+
+    text = _export(monkeypatch, tmp_path, "snapshots", "csv").read_text(encoding="utf-8-sig")
+    rows = list(csv.DictReader(text.splitlines()))
+
+    assert [row["external_flow"] for row in rows] == ["0.0", "50000.0"]
 
 
 def test_an_empty_json_export_is_an_empty_array(db_path, monkeypatch, capsys, tmp_path):

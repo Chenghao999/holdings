@@ -32,7 +32,8 @@ holdings/
 │       │   ├── transaction_dao.py           #    交易 CRUD（含 add_many 单事务批量写）
 │       │   ├── snapshot_dao.py              #    快照 CRUD
 │       │   ├── asset_meta_dao.py            #    资产基础信息 CRUD
-│       │   └── price_cache_dao.py           #    价格缓存 CRUD + TTL 新鲜度判断
+│       │   ├── price_cache_dao.py           #    价格缓存 CRUD + TTL 新鲜度判断
+│       │   └── price_history_dao.py         #    指数历史序列缓存 + 「盖得住区间」的新鲜度判断
 │       │
 │       ├── data/                            # 【数据适配层·外部 API 与文件格式，不碰 DB】
 │       │   ├── fetcher.py                   #    工厂统一入口，同步/异步双接口
@@ -42,6 +43,8 @@ holdings/
 │       │   ├── a_stock.py                   #    akshare / yfinance 两个源，顺序由配置决定
 │       │   ├── us_stock.py                  #    yfinance 实现（单一数据源）
 │       │   ├── gold.py                      #    黄金：按代码选路，不参与优先级配置
+│       │   ├── instrument.py                #    标的资料（名称/资产类型），自带源表
+│       │   ├── history.py                   #    指数历史序列与基准别名（自带源表，只取指数）
 │       │   └── brokers/                     #    对账单文件：编码探测 + 一家券商一个解析器
 │       │       ├── base.py                  #      子类只填映射表，识别与解析在基类
 │       │       ├── encoding.py              #      BOM → UTF-8 → GB18030，顺序不能颠倒
@@ -51,14 +54,15 @@ holdings/
 │       ├── services/                        # 【编排层·唯一被 CLI/GUI 调用的入口】
 │       │   ├── portfolio_service.py         #    编排 portfolio + storage + data；持仓表的列契约、汇总的基准货币
 │       │   ├── report_service.py            #    快照 → 回撤 / 年化 / 夏普（口径不成立时给 None）
+│       │   ├── benchmark_service.py         #    组合 TWR vs 指数同期收益（唯一同时碰 storage + data + portfolio 的）
 │       │   ├── snapshot_service.py          #    快照的记录与读取
 │       │   ├── asset_meta_service.py        #    标的名称 / 币种 / 年化管理费率的读写
 │       │   ├── chart_service.py             #    净值曲线：取数与筛日期（plotly 懒加载）
 │       │   ├── trade_service.py             #    写入闸门：落库前的历史持仓校验
 │       │   ├── sync_service.py              #    编排 data + storage
+│       │   ├── import_service.py            #    对账单 → 交易：解析 + 补资料 + 查重 + 整批事务
 │       │   ├── export_service.py            #    导出取数：账本 / 持仓表 / 快照 → 表头 + 行
-│       │   ├── group_service.py             #    组合的列出 / 改名 / 合并（汇总复用 portfolio_service）
-│       │   └── chart_service.py             #    编排 storage，返回 Figure/JSON
+│       │   └── group_service.py             #    组合的列出 / 改名 / 合并（汇总复用 portfolio_service）
 │       │
 │       ├── tui/                             # 【表现层·与 cli 平级，互不 import】
 │       │   └── app.py                       #    Textual 界面：持仓 + 报表两屏
@@ -73,7 +77,8 @@ holdings/
 │           ├── commands/                    #    子命令：仅调用 service + 打印
 │           │   ├── init.py    add.py     check.py    list.py    meta.py
 │           │   ├── import_cmd.py  export.py  group.py  sync.py   report.py
-│           │   └── snapshot.py  snapshots.py  chart.py  remove.py  tui.py  web.py
+│           │   └── snapshot.py  snapshots.py  chart.py  benchmark.py  remove.py
+│           │       tui.py  web.py
 │           └── renderers/                   #    把 Service 数据转为 Rich 表格/图表/文件
 │               ├── table_renderer.py
 │               ├── chart_renderer.py

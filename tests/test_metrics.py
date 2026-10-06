@@ -173,3 +173,108 @@ def test_sharpe_ratio_rejects_a_non_positive_period_count():
 def test_days_per_year_matches_the_annualization_used_by_years():
     """两处折算系数必须是同一个，否则年化与周期数会各算各的。"""
     assert metrics.DAYS_PER_YEAR == 365.25
+
+
+# ----------------------------------------------------------------- chain_link
+
+
+def test_chain_link_multiplies_instead_of_adding():
+    """`[+10%, −10%]` 是 −1%，不是 0%——几何接链不是算术平均。"""
+    assert metrics.chain_link([0.1, -0.1]) == pytest.approx(1.1 * 0.9 - 1)
+
+
+def test_chain_link_of_nothing_is_unknown():
+    """一段可用的都没有 → None（"算不出来"），不是 0.0。"""
+    assert metrics.chain_link([]) is None
+
+
+def test_chain_link_of_flat_segments_is_zero():
+    assert metrics.chain_link([0.0, 0.0]) == 0.0
+
+
+def test_chain_link_keeps_a_total_wipeout_as_minus_one_hundred_percent():
+    """恰好乘到 0 是「亏光」，那是个真结论，不是无定义。"""
+    assert metrics.chain_link([-1.0]) == -1.0
+
+
+def test_chain_link_breaks_when_the_product_goes_negative():
+    """累计值被乘成负数时整条给 None——再接链乘出来的数没有意义。
+
+    触发场景是「入金比期末净值还多」（这笔钱在区间里亏掉了），
+    或带杠杆的组合，不是记账笔误。
+    """
+    assert metrics.chain_link([0.5, -1.5]) is None
+
+
+# ------------------------------------------------------- time_weighted_return
+
+
+def test_a_deposit_is_not_outperformance():
+    """**判据**：市场没动，只是入了 5 万——组合收益必须算成 0，不是 +50%。
+
+    `r = (150000 − 50000) / 100000 − 1 = 0`。
+    """
+    assert metrics.time_weighted_return([100_000.0, 150_000.0], [0.0, 50_000.0]) == 0.0
+
+
+def test_not_recording_the_deposit_gives_the_wrong_number():
+    """同一组净值，把入金记成 0 就得到 +50%——这正是 B-39 要防的那个错数。
+
+    与上一条并排放：两条的唯一差别是 `flows`，结论差 50 个百分点，
+    而那个错数**看起来完全正常**。
+    """
+    assert metrics.time_weighted_return([100_000.0, 150_000.0], [0.0, 0.0]) == pytest.approx(0.5)
+
+
+def test_without_any_flow_it_degenerates_to_the_plain_return():
+    """全是 0 时退化成朴素累计收益，常见路径不被这次改动扰动。"""
+    assert metrics.time_weighted_return([100.0, 120.0, 150.0], [0.0, 0.0, 0.0]) == pytest.approx(
+        0.5
+    )
+
+
+def test_a_withdrawal_is_not_a_loss():
+    """期初 100，亏 10% 到 90，再取走 20 → 期末 70。真实收益 −10%，不是 −30%。"""
+    assert metrics.time_weighted_return([100.0, 70.0], [0.0, -20.0]) == pytest.approx(-0.10)
+
+
+def test_a_full_withdrawal_does_not_become_minus_two_hundred_percent():
+    """全额撤出：`F=−100`、`V_i=0` ⟹ `(0−(−100))/100 − 1 = 0`。
+
+    符号写反（出金记成正）时这一条会算成 −200% 量级——符号与公式是一对。
+    """
+    assert metrics.time_weighted_return([100.0, 0.0], [0.0, -100.0]) == 0.0
+
+
+def test_the_first_flow_is_ignored():
+    """第一条快照没有"上一期"，它的 flow 扣无处扣。"""
+    assert metrics.time_weighted_return([100.0, 110.0], [999.0, 0.0]) == pytest.approx(0.10)
+
+
+def test_a_zero_previous_value_drops_only_that_segment():
+    """除不了数的段丢掉，其余照常接链。"""
+    assert metrics.time_weighted_return([0.0, 100.0, 121.0], [0.0, 0.0, 0.0]) == pytest.approx(0.21)
+
+
+def test_losing_everything_is_kept_as_minus_one_hundred_percent():
+    """`V_i = 0` 且没出金是「亏光」，−100% 是真结论。
+
+    丢的只是**上一期**为 0 的段（除不了数），不是这一段。
+    """
+    assert metrics.time_weighted_return([100.0, 0.0], [0.0, 0.0]) == -1.0
+
+
+def test_every_segment_dropped_is_unknown():
+    """每一段的上一期都是 0 → 一段都没算出来 → None。"""
+    assert metrics.time_weighted_return([0.0, 100.0], [0.0, 0.0]) is None
+
+
+def test_a_deposit_bigger_than_the_ending_value_is_unknown():
+    """`V_{i−1}=100`、入金 200、`V_i=150` ⟹ `1+r = −0.5`，接链断了 → None。"""
+    assert metrics.time_weighted_return([100.0, 150.0], [0.0, 200.0]) is None
+
+
+def test_mismatched_lengths_are_refused():
+    """错位一格算出来的数与事实无关，比少算一段危险得多——直接拒绝。"""
+    with pytest.raises(ValueError, match="等长"):
+        metrics.time_weighted_return([100.0, 110.0], [0.0])

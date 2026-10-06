@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS snapshots (
     cash_balance REAL DEFAULT 0,
     equity_value REAL NOT NULL,
     gold_value REAL NOT NULL,
+    external_flow REAL DEFAULT 0,
     note TEXT,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
@@ -57,10 +58,20 @@ CREATE TABLE IF NOT EXISTS price_cache (
     source TEXT
 );
 
+CREATE TABLE IF NOT EXISTS price_history (
+    symbol TEXT NOT NULL,
+    trade_date TEXT NOT NULL,
+    close REAL NOT NULL,
+    source TEXT,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (symbol, trade_date)
+);
+
 CREATE INDEX IF NOT EXISTS idx_trans_symbol ON transactions(symbol);
 CREATE INDEX IF NOT EXISTS idx_trans_date ON transactions(trade_date);
 CREATE INDEX IF NOT EXISTS idx_trans_group ON transactions(portfolio_group);
 CREATE INDEX IF NOT EXISTS idx_cache_time ON price_cache(update_time);
+CREATE INDEX IF NOT EXISTS idx_history_date ON price_history(trade_date);
 """
 
 
@@ -103,6 +114,13 @@ def _migrate(conn: sqlite3.Connection) -> None:
     """
     if "note" not in _columns(conn, "snapshots"):
         conn.execute("ALTER TABLE snapshots ADD COLUMN note TEXT")
+
+    # B-39：基准对比要把入金 / 出金从净值序列里剔除，快照因此多一列手记的净入金
+    # （入金为正、出金为负）。老库补上后一律是 0，语义就是默认那句话——
+    # 「这段时间没有出入金」。这是**断言**而不是「不知道」：真没记而实际有出入金，
+    # 基准对比会把那笔钱算成收益，口径句里因此要点出「未申报的按 0 处理」。
+    if "external_flow" not in _columns(conn, "snapshots"):
+        conn.execute("ALTER TABLE snapshots ADD COLUMN external_flow REAL DEFAULT 0")
 
     # B-29：导入判重要的两列。老库补上后这两列是 NULL，语义是「不知道来源、
     # 没有流水号」——比补一个空串诚实，也让「指纹判重」这条退路自然生效。

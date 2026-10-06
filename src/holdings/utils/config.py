@@ -38,6 +38,11 @@ DEFAULT_CONFIG: dict = {
         # 就过期是合理的，而「600519 叫贵州茅台」这种东西一年也不会变，
         # 按 5 分钟算等于每次导入都要再联网问一遍，缓存就白做了。
         "instrument_ttl_seconds": 86400,
+        # 基准指数历史（`price_history`）的缓存有效期。与资料缓存同理：一段
+        # 已过去的指数日线不会变，按价格的 5 分钟去算等于每次 `benchmark` 都要
+        # 重新拉一整段。**只有区间尾部会变**，而那一头由
+        # `price_history_dao.is_fresh` 的「盖得住区间」单独兜着。
+        "history_ttl_seconds": 86400,
     },
     "sync": {"timeout_seconds": 10, "retry_count": 1},
     "database_path": "data/holdings.db",
@@ -52,6 +57,7 @@ _FIELD_RULES: tuple[tuple[str, str, str], ...] = (
     ("default_market", "str", "字符串"),
     ("cache_ttl_seconds", "non_negative_int", "非负整数"),
     ("data_sources.instrument_ttl_seconds", "non_negative_int", "非负整数"),
+    ("data_sources.history_ttl_seconds", "non_negative_int", "非负整数"),
     ("sync.timeout_seconds", "non_negative_number", "非负数字"),
     ("sync.retry_count", "non_negative_int", "非负整数"),
 )
@@ -88,6 +94,10 @@ class Config:
     @property
     def instrument_ttl_seconds(self) -> int:
         return int(self.data_sources["instrument_ttl_seconds"])
+
+    @property
+    def history_ttl_seconds(self) -> int:
+        return int(self.data_sources["history_ttl_seconds"])
 
     @property
     def sync(self) -> dict:

@@ -14,16 +14,20 @@ snapshots (每日快照)
 
 price_cache (价格缓存)
   └── symbol PRIMARY KEY
+
+price_history (指数历史序列缓存)
+  └── (symbol, trade_date) PRIMARY KEY
 ```
 
-四张表职责：
+五张表职责：
 
 | 表 | 职责 |
 |----|------|
 | `transactions` | 核心流水，记录每笔买卖、费用与公司行为，支持多组合分组 |
 | `snapshots` | 净值曲线数据源，记录任意时间点总资产快照 |
 | `asset_meta` | 资产基础信息与名称缓存，含年化管理费率 |
-| `price_cache` | 最新价格缓存，配合 5 分钟过期策略减少网络请求 |
+| `price_cache` | **最新价**缓存（一个代码一行），配合 5 分钟过期策略减少网络请求 |
+| `price_history` | **一段序列**的缓存（一个代码多个交易日），供基准对比使用；TTL 见 `history_ttl_seconds` |
 
 ## 建表 SQL
 
@@ -53,6 +57,7 @@ CREATE TABLE snapshots (
     cash_balance REAL DEFAULT 0,
     equity_value REAL NOT NULL,
     gold_value REAL NOT NULL,
+    external_flow REAL DEFAULT 0,          -- 上次快照之后的净入金：入金正、出金负
     note TEXT,                             -- 备注，不传存 NULL（不是空串）
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
@@ -77,11 +82,22 @@ CREATE TABLE price_cache (
     source TEXT                           -- 'akshare' / 'yfinance'
 );
 
+-- 5. 指数历史序列缓存（基准对比用；与 price_cache 形状不同，故另起一张表）
+CREATE TABLE price_history (
+    symbol TEXT NOT NULL,
+    trade_date TEXT NOT NULL,              -- YYYY-MM-DD
+    close REAL NOT NULL,
+    source TEXT,                           -- 'akshare' / 'yfinance'
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (symbol, trade_date)       -- 一个代码一个交易日一条
+);
+
 -- 索引优化
 CREATE INDEX idx_trans_symbol ON transactions(symbol);
 CREATE INDEX idx_trans_date ON transactions(trade_date);
 CREATE INDEX idx_trans_group ON transactions(portfolio_group);
 CREATE INDEX idx_cache_time ON price_cache(update_time);
+CREATE INDEX idx_history_date ON price_history(trade_date);
 ```
 
 ## 字段约束与语义说明
@@ -146,14 +162,24 @@ CREATE INDEX idx_cache_time ON price_cache(update_time);
 - `snapshot_date` 唯一：同一天只保留一份快照，重复写入报错而不是覆盖。
 - `note`：`holdings snapshot --note "…"` 写的备注。不传存 `NULL`——「没写备注」
   与「写了个空备注」在查询与展示上是两回事。
+- `external_flow`：**上一次快照之后、到这一天为止**的净入金，入金为正、出金为负，
+  `holdings snapshot --flow 50000` 写。`holdings benchmark` 用它把出入金从收益里
+  剔除（时间加权收益率）。**默认 `0` 是一句断言**「这段时间没有出入金」，而不是
+  「未记录」——真有出入金而没记，基准对比会把它算成收益。之所以不用 `NULL` 表达
+  「未申报」：手记快照本来就稀疏，绝大多数区间确实没有出入金，让每一条都挂个
+  「未申报」只是噪音；口径句里点明这条约定比一个填不过来的字段诚实。
 
-> **补列迁移**：`note`、`source`、`external_id`、`asset_type` 都是后加的列，而
-> `CREATE TABLE IF NOT EXISTS` 对**已经存在**的表完全不生效，老库不会自己长出
-> 这几列。`storage/db.py` 的 `_migrate()` 用 `PRAGMA table_info` 探测后
-> `ALTER TABLE` 补上，判定「这一列在不在」而不是查版本号——这个库由用户直接
-> 拿着用，不会有谁去维护 schema_version。补出来的列在老数据上是 `NULL`，
+> **补列迁移**：`note`、`source`、`external_id`、`asset_type`、`external_flow`
+> 都是后加的列，而 `CREATE TABLE IF NOT EXISTS` 对**已经存在**的表完全不生效，
+> 老库不会自己长出这几列。`storage/db.py` 的 `_migrate()` 用 `PRAGMA table_info`
+> 探测后 `ALTER TABLE` 补上，判定「这一列在不在」而不是查版本号——这个库由用户
+> 直接拿着用，不会有谁去维护 schema_version。补出来的列在老数据上是 `NULL`，
 > 语义就是「不知道来源、没有流水号、不知道资产类型」，不猜一个值填进去——
 > 补一个猜出来的 `stock` 会让报表凭空多出一个看似确定的事实。
+>
+> **`external_flow` 是这条规矩唯一的例外**，补出来是 `0` 而不是 `NULL`：这一列的
+> 默认值本身就是「没有出入金」这个可用的语义，而 `NULL` 会让每一条历史快照都变成
+> 「未申报」，口径句每次都要提一遍。代价写在上面那条字段说明里。
 
 ### asset_meta 字段说明
 
@@ -183,6 +209,30 @@ CREATE INDEX idx_cache_time ON price_cache(update_time);
 - 同一 `symbol` 在 `price_cache` 中若 `update_time` 距今 **不足 5 分钟**，直接返回缓存，不发起网络请求。
 - 缓存时间可通过配置项 `cache_ttl_seconds` 调整（见 [CONFIG_SPEC.md](CONFIG_SPEC.md)）。
 - `source` 字段记录数据来源，便于排查降级链路。
+
+### price_history
+
+- **只装指数**（[B-39](BACKLOG.md#b-39)）：A 股走 `ak.index_zh_a_hist`，美股走
+  yfinance 的代码。所以 `000001` 在这张表里是**上证指数**，不是平安银行——
+  同一个 6 位数字在个股端点下是另一条完全不同的价格序列。
+- 主键 `(symbol, trade_date)`：一个代码一个交易日一条。重复取数是按主键
+  **合并写**，不是清空重写——用户把 `--start` 往前挪时，新取回来的一段会补进来。
+- 这张表**不参与** `holdings sync`：它按需取，`sync` 不碰它。
+
+## 指数历史缓存过期策略
+
+`price_history` 的新鲜度判定要**三条同时成立**（`price_history_dao.is_fresh`），
+缺一条就当成一次真实取数——重复取数是安全的，只是多打一次网络：
+
+| 条件 | 防的是什么 |
+|------|-----------|
+| 有行 | 这个代码一条历史都没取过 |
+| 最新一次 `updated_at` 在 `history_ttl_seconds` 内 | 拿一份很旧的缓存当命中 |
+| `MIN(trade_date)` 不晚于 `start + 10 天`，且 `MAX(trade_date)` 不早于 `end − 10 天` | **静默少一段**：用户把 `--start` 往前挪，缓存里没有那一段，若只判「有没有行」就会拿一段缺了开头的序列去算收益，而数字看着完全正常 |
+
+两端各放宽 10 天，是因为**区间边缘常常落在非交易日上**（周末、长假），那几天
+本来就不会有行；不放宽的话，一次周末发起的查询会永远判成没盖住，每次跑都白打
+一遍网络，缓存形同虚设。10 天盖得住最长的长假（春节 / 国庆连休 8 天）。
 
 ## 标的资料缓存过期策略
 

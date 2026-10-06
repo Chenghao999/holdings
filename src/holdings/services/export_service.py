@@ -170,6 +170,7 @@ SNAPSHOT_COLUMNS: tuple[str, ...] = (
     "equity_value",
     "gold_value",
     "cash_balance",
+    "external_flow",
     "note",
     "created_at",
 )
@@ -182,6 +183,10 @@ def _snapshot_row(snapshot: Snapshot) -> dict:
         "equity_value": snapshot.equity_value,
         "gold_value": snapshot.gold_value,
         "cash_balance": snapshot.cash_balance,
+        # 手记的净入金必须跟着备份走：交易流水还能从券商重导，手记的数字不能。
+        # 少这一列就是静默丢数据（B-37 的教训），`tests/test_export.py` 有一条
+        # 「导出的列 == 表里的列去掉自增 id」的守卫钉着。
+        "external_flow": snapshot.external_flow,
         "note": snapshot.note,
         "created_at": snapshot.created_at.isoformat() if snapshot.created_at else None,
     }

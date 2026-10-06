@@ -9,11 +9,12 @@ import inspect
 import pathlib
 import sys
 import types
+from datetime import date
 
 import pandas as pd
 import pytest
 
-from holdings.data import fetcher, instrument, resilience
+from holdings.data import fetcher, history, instrument, resilience
 from holdings.data.a_stock import AStockFetcher
 from holdings.data.gold import GoldFetcher
 from holdings.data.us_stock import USStockFetcher
@@ -624,6 +625,13 @@ def test_every_source_in_every_table_can_be_called_with_a_symbol(monkeypatch):
     tables.update(
         {f"{market.value}/instrument_priority": t for market, t in _INSTRUMENT_SOURCES.items()}
     )
+    # 历史序列那张表是按区间造出来的（闭包绑 start / end），给一个固定的区间即可。
+    tables.update(
+        {
+            f"{market.value}/history": t
+            for market, t in history.history_sources(date(2024, 1, 1), date(2024, 12, 31)).items()
+        }
+    )
     # 黄金国内代码走 A 股链路，源表与 A 股相同，不重复计入。
     assert set(tables) == {
         "A股/priority",
@@ -631,6 +639,8 @@ def test_every_source_in_every_table_can_be_called_with_a_symbol(monkeypatch):
         "黄金/priority",
         "A股/instrument_priority",
         "美股/instrument_priority",
+        "A股/history",
+        "美股/history",
     }, "少抓到源表，说明这条用例自己失效了"
 
     rejects = [

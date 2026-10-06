@@ -12,6 +12,7 @@ from holdings.storage import (
     asset_meta_dao,
     db,
     price_cache_dao,
+    price_history_dao,
     snapshot_dao,
     transaction_dao,
 )
@@ -571,6 +572,11 @@ class _FailingConnection:
     def execute(self, *_args, **_kwargs):
         raise sqlite3.OperationalError("database is locked")
 
+    def executemany(self, *_args, **_kwargs):
+        # `price_history_dao.upsert_many` 走的是批量接口；假连接得把这一条也接住，
+        # 否则报出来的是 AttributeError 而不是用例要验的那个 DatabaseError。
+        raise sqlite3.OperationalError("database is locked")
+
     def commit(self) -> None:
         raise sqlite3.OperationalError("database is locked")
 
@@ -693,6 +699,165 @@ def test_group_dao_wraps_sqlite_errors(monkeypatch, call):
     用户看到的是裸 traceback 而不是「错误（4）：…」。
     """
     monkeypatch.setattr(transaction_dao, "connect", lambda _path: _FailingConnection())
+
+    with pytest.raises(DatabaseError):
+        call("unused.db")
+
+
+# ------------------------------------------------- price_history_dao（B-39）
+
+
+def _days(*specs: tuple[str, float]) -> list[tuple[date, float]]:
+    return [(date.fromisoformat(day), close) for day, close in specs]
+
+
+def test_price_history_round_trips_a_range(db_path):
+    """写入后按区间读回来，升序、两端都是闭区间。"""
+    price_history_dao.upsert_many(
+        db_path,
+        "000300",
+        _days(("2024-01-02", 3000.0), ("2024-01-03", 3060.0), ("2024-02-01", 3200.0)),
+        "akshare",
+    )
+
+    got = price_history_dao.get_range(db_path, "000300", date(2024, 1, 1), date(2024, 1, 31))
+
+    assert got == _days(("2024-01-02", 3000.0), ("2024-01-03", 3060.0))
+
+
+def test_price_history_upsert_merges_instead_of_wiping(db_path):
+    """同一代码重复取数是**合并写**：已经有的日子留着，新的补进来，改的覆盖掉。
+
+    清空重写在这里是错的：用户把 `--start` 往前挪时新取回来的只是一部分，
+    清空会把上次那段抹掉。
+    """
+    price_history_dao.upsert_many(db_path, "000300", _days(("2024-01-02", 3000.0)), "akshare")
+    price_history_dao.upsert_many(
+        db_path,
+        "000300",
+        _days(("2024-01-02", 3001.0), ("2024-01-03", 3060.0)),
+        "akshare",
+    )
+
+    got = price_history_dao.get_range(db_path, "000300", date(2024, 1, 1), date(2024, 1, 31))
+
+    assert got == _days(("2024-01-02", 3001.0), ("2024-01-03", 3060.0))
+
+
+def test_price_history_keeps_symbols_apart(db_path):
+    price_history_dao.upsert_many(db_path, "000300", _days(("2024-01-02", 3000.0)), "akshare")
+    price_history_dao.upsert_many(db_path, "000905", _days(("2024-01-02", 5000.0)), "akshare")
+
+    got = price_history_dao.get_range(db_path, "000905", date(2024, 1, 1), date(2024, 1, 31))
+
+    assert got == _days(("2024-01-02", 5000.0))
+
+
+def test_price_history_upsert_many_does_nothing_for_an_empty_list(db_path):
+    assert price_history_dao.upsert_many(db_path, "000300", [], "akshare") == 0
+
+
+def test_price_history_range_of_an_unknown_symbol_is_empty(db_path):
+    assert (
+        price_history_dao.get_range(db_path, "从没取过", date(2024, 1, 1), date(2024, 1, 31)) == []
+    )
+
+
+def test_price_history_is_fresh_is_false_without_any_row(db_path):
+    """一条历史都没有过 —— 不新鲜，去取。"""
+    assert (
+        price_history_dao.is_fresh(db_path, "000300", date(2024, 1, 1), date(2024, 1, 31), 86400)
+        is False
+    )
+
+
+def test_price_history_is_fresh_is_false_when_the_range_is_not_covered(db_path):
+    """**这一条防的是静默少一段**：用户把 `--start` 往前挪，缓存里没有那一段。
+
+    若只判「有没有行」，就会拿一段缺了开头的序列去算收益——数字看着完全正常。
+    """
+    price_history_dao.upsert_many(
+        db_path, "000300", _days(("2024-06-03", 3000.0), ("2024-06-28", 3100.0)), "akshare"
+    )
+
+    # 缓存从 6 月起，却问 1 月起的那一段 → 盖不住。
+    assert (
+        price_history_dao.is_fresh(db_path, "000300", date(2024, 1, 1), date(2024, 6, 28), 86400)
+        is False
+    )
+    # 问的是缓存盖得住的那一段 → 命中。
+    assert (
+        price_history_dao.is_fresh(db_path, "000300", date(2024, 6, 3), date(2024, 6, 28), 86400)
+        is True
+    )
+
+
+def test_price_history_is_fresh_is_false_when_the_cache_is_too_old(db_path):
+    """行都在、区间也盖得住，但最新一次取数已经是太久以前 → 不新鲜。
+
+    `updated_at` 直接写一个明确的旧时间，不走 SQLite 的 `CURRENT_TIMESTAMP`
+    （那永远是"现在"，测不出过期）。
+    """
+    price_history_dao.upsert_many(
+        db_path, "000300", _days(("2024-01-02", 3000.0), ("2024-01-31", 3100.0)), "akshare"
+    )
+    conn = connect(db_path)
+    try:
+        conn.execute("UPDATE price_history SET updated_at = '2020-01-01 00:00:00'")
+        conn.commit()
+    finally:
+        conn.close()
+
+    assert (
+        price_history_dao.is_fresh(db_path, "000300", date(2024, 1, 1), date(2024, 1, 31), 86400)
+        is False
+    )
+
+
+def test_price_history_is_fresh_tolerates_non_trading_days_at_the_edges(db_path):
+    """区间边缘落在周末 / 长假时，那几天本来就不会有行，不该判成没盖住。
+
+    不放宽的话，一次周末发起的查询会永远命不中，每次跑都白打一遍网络——
+    缓存形同虚设，而看起来一切正常。
+    """
+    # 只有工作日有行：2024-01-05 是周五，2024-01-08 是周一。
+    price_history_dao.upsert_many(
+        db_path, "000300", _days(("2024-01-05", 3000.0), ("2024-01-08", 3060.0)), "akshare"
+    )
+
+    # 问的区间两端都落在周末（01-06 周六、01-07 周日）。
+    assert (
+        price_history_dao.is_fresh(db_path, "000300", date(2024, 1, 6), date(2024, 1, 7), 86400)
+        is True
+    )
+
+
+@pytest.mark.parametrize(
+    "call",
+    [
+        pytest.param(
+            lambda path: price_history_dao.get_range(
+                path, "000300", date(2024, 1, 1), date(2024, 1, 31)
+            ),
+            id="get_range",
+        ),
+        pytest.param(
+            lambda path: price_history_dao.upsert_many(
+                path, "000300", _days(("2024-01-02", 3000.0)), "akshare"
+            ),
+            id="upsert_many",
+        ),
+        pytest.param(
+            lambda path: price_history_dao.is_fresh(
+                path, "000300", date(2024, 1, 1), date(2024, 1, 31), 86400
+            ),
+            id="is_fresh",
+        ),
+    ],
+)
+def test_price_history_dao_wraps_sqlite_errors(monkeypatch, call):
+    """底层 sqlite 异常必须包成 DatabaseError，否则会绕过 `main()` 的退出码映射。"""
+    monkeypatch.setattr(price_history_dao, "connect", lambda _path: _FailingConnection())
 
     with pytest.raises(DatabaseError):
         call("unused.db")
