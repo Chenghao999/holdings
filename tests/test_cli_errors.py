@@ -272,7 +272,145 @@ def test_sync_failing_entirely_exits_1_with_the_prefix(tmp_path, monkeypatch, ca
     assert code == 1
     assert "错误（1）：" in err
     assert "全部同步失败" in err
+
+
+def test_sync_all_failing_with_everything_installed_does_not_blame_the_packages(
+    tmp_path, monkeypatch, capsys
+):
+    """依赖都装了却全失败时，不要编一个「缺依赖」的原因（B-40）。
+
+    此前这里是一句无条件的「请安装数据源依赖 pip install 'holdings-cli[data]'」。
+    真因是网络不通 / 代理挡着 / 上游改了接口的用户，会照着这句话去重装一遍，
+    然后更困惑——而正确的做法（看上面每条失败后面的说明）从没被提示过。
+    """
+    from datetime import date
+
+    from holdings.data.fetcher import DataSourceUnavailableError
+    from holdings.models.enums import AssetType, MarketType, TradeType
+    from holdings.models.transaction import Transaction
+    from holdings.services import sync_service
+    from holdings.storage import transaction_dao
+    from holdings.utils import deps
+
+    monkeypatch.chdir(tmp_path)
+    transaction_dao.add(
+        str(tmp_path / "data" / "holdings.db"),
+        Transaction(
+            symbol="600519",
+            market=MarketType.A_SHARE,
+            asset_type=AssetType.STOCK,
+            trade_date=date(2025, 1, 1),
+            trade_type=TradeType.BUY,
+            quantity=100.0,
+            price=10.0,
+        ),
+    )
+    monkeypatch.setattr(deps, "is_installed", lambda _name: True)
+
+    def _boom(symbol, market):
+        raise DataSourceUnavailableError(
+            "A股数据源不可用：600519；底层错误：ConnectionError: 断开了"
+        )
+
+    monkeypatch.setattr(sync_service.fetcher, "fetch_price", _boom)
+
+    code = run_main(monkeypatch, "sync", "--market", "A股")
+    err = capsys.readouterr().err
+
+    assert code == 1
+    assert "holdings-cli[data]" not in err, "依赖都在，不该指去装包"
+    assert "逐条原因见上面" in err, "要把用户指回那几行真因上"
+
+
+def test_sync_with_a_missing_package_still_prints_the_install_hint(tmp_path, monkeypatch, capsys):
+    """确实没装时才给安装提示，且方括号要原样出现——不能被 Rich 当成标记吃掉。"""
+    from datetime import date
+
+    from holdings.data.fetcher import DataSourceUnavailableError
+    from holdings.models.enums import AssetType, MarketType, TradeType
+    from holdings.models.transaction import Transaction
+    from holdings.services import sync_service
+    from holdings.storage import transaction_dao
+    from holdings.utils import deps
+
+    monkeypatch.chdir(tmp_path)
+    transaction_dao.add(
+        str(tmp_path / "data" / "holdings.db"),
+        Transaction(
+            symbol="600519",
+            market=MarketType.A_SHARE,
+            asset_type=AssetType.STOCK,
+            trade_date=date(2025, 1, 1),
+            trade_type=TradeType.BUY,
+            quantity=100.0,
+            price=10.0,
+        ),
+    )
+    monkeypatch.setattr(deps, "is_installed", lambda name: name == "akshare")
+
+    def _boom(symbol, market):
+        raise DataSourceUnavailableError("网络不通")
+
+    monkeypatch.setattr(sync_service.fetcher, "fetch_price", _boom)
+
+    code = run_main(monkeypatch, "sync", "--market", "A股")
+    err = capsys.readouterr().err
+
+    assert code == 1
+    assert "未安装 yfinance" in err
     assert "holdings-cli[data]" in err, "安装提示里的方括号要原样出现，不能被 Rich 吃掉"
+
+
+def test_sync_failing_at_the_source_level_still_shows_the_real_reason(
+    tmp_path, monkeypatch, capsys
+):
+    """端到端：源抛出来的那个异常要一路走到用户的终端上（B-40）。
+
+    单元层面已在 `test_data.py` 断言过消息内容，这里证明的是**它真的会被印出来**：
+    取数失败的信息此前只剩一句「数据源不可用」，用户既不知道要不要 `pip install`，
+    也不知道该不该查网络。用例特意打桩到**最底下的源**（`_from_akshare`），
+    让真实的降级链跑起来——打桩 `fetch_price` 就把要验的那一段绕过去了。
+    """
+    from datetime import date
+
+    from holdings.data import sources
+    from holdings.data.a_stock import AStockFetcher
+    from holdings.models.enums import AssetType, MarketType, TradeType
+    from holdings.models.transaction import Transaction
+    from holdings.storage import transaction_dao
+
+    monkeypatch.chdir(tmp_path)
+    transaction_dao.add(
+        str(tmp_path / "data" / "holdings.db"),
+        Transaction(
+            symbol="600519",
+            market=MarketType.A_SHARE,
+            asset_type=AssetType.STOCK,
+            trade_date=date(2025, 1, 1),
+            trade_type=TradeType.BUY,
+            quantity=100.0,
+            price=10.0,
+        ),
+    )
+
+    def _boom(self, symbol):
+        raise ConnectionError("Remote end closed connection without response")
+
+    monkeypatch.setattr(sources.time, "sleep", lambda _seconds: None)  # 重试的退避
+    monkeypatch.setattr(AStockFetcher, "_from_akshare", _boom)
+    monkeypatch.setattr(AStockFetcher, "_from_yfinance", _boom)
+
+    code = run_main(monkeypatch, "sync", "--market", "A股")
+    captured = capsys.readouterr()
+
+    assert code == 1
+    # 真因逐条印在 stdout（Rich 的「失败 <代码>: …」那一行），
+    # 收尾那句结论走 stderr 的统一前缀。两半都要在，且**不能互相矛盾**：
+    # 结论说「依赖都已安装」时，就不该同时叫人去 pip install（B-40）。
+    assert "ConnectionError" in captured.out, "真因要印在终端上，不只是在异常对象里"
+    assert "底层错误" in captured.out, "人话与真因要挨在一起，用户才知道那句「不可用」是什么意思"
+    assert "错误（1）：" in captured.err
+    assert "holdings-cli[data]" not in captured.err, "真因是网络，不该指去装包"
 
 
 def test_command_bodies_do_not_raise_systemexit():
