@@ -370,6 +370,11 @@ def test_sync_failing_at_the_source_level_still_shows_the_real_reason(
     取数失败的信息此前只剩一句「数据源不可用」，用户既不知道要不要 `pip install`，
     也不知道该不该查网络。用例特意打桩到**最底下的源**（`_from_akshare`），
     让真实的降级链跑起来——打桩 `fetch_price` 就把要验的那一段绕过去了。
+
+    `is_installed` 要显式钉成「都装了」：这条用例讲的是**装了依赖但网络不通**，
+    而 CI 的 `test` 作业装的是 `.[dev,chart]`，没有 akshare / yfinance。
+    不钉的话，这句话在 CI 上会走到「缺依赖」那条分支——用例于是**因为机器上
+    没装包而通过/失败**，与它要验的东西无关（B-36 同类：环境凑巧让用例全绿）。
     """
     from datetime import date
 
@@ -378,8 +383,10 @@ def test_sync_failing_at_the_source_level_still_shows_the_real_reason(
     from holdings.models.enums import AssetType, MarketType, TradeType
     from holdings.models.transaction import Transaction
     from holdings.storage import transaction_dao
+    from holdings.utils import deps
 
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(deps, "is_installed", lambda _name: True)
     transaction_dao.add(
         str(tmp_path / "data" / "holdings.db"),
         Transaction(
