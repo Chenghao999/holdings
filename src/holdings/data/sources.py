@@ -97,4 +97,35 @@ def fetch_with_fallback(
                 return source(symbol)
             except Exception as exc:  # 降级要捕获所有异常：任何一种都不该中断取价
                 last_err = exc
-    raise DataSourceUnavailableError(unavailable_message) from last_err
+    # 到这里 `last_err` 一定是个异常：`usable` 上面已拦掉空表，而
+    # `retry_count()` 是 `max(0, …)`，所以内层循环至少跑一次。
+    # 写成断言而不是 `if last_err is None`：那是够不到的分支（B-12 清过的死代码），
+    # 而断言把「这个不变式被谁破坏了」当场喊出来。
+    assert last_err is not None, "降级链没跑过就在报失败原因——这段代码坏了"
+    raise DataSourceUnavailableError(_with_reason(unavailable_message, last_err)) from last_err
+
+
+def _with_reason(message: str, err: BaseException) -> str:
+    """把链条末端那个异常接到消息末尾——**降级链的兜底捕获不能把真因吃掉**。
+
+    那三个处境（没装包 / 网络不通 / 自己代码写错）在用户眼里长着同一张脸，
+    而**修法完全不同**：一个 `pip install`，一个查网络，一个报 issue。B-36 就是
+    被这张脸挡住的——`GC=F` 次次失败，报的是「数据源不可用」，真因是一个
+    和我们无关的 `TypeError`（签名写错），用户拿着那句话去重装了 yfinance。
+
+    自己抛的那几个（`HoldingsError`）本来就是人话（`未安装 akshare`），直接用；
+    外面来的异常要**带上类型名**，因为 `str()` 有时只是个括号包着的元组
+    （`('Connection aborted.', RemoteDisconnected(...))`），光看内容分不出
+    「网络断了」还是「我这段代码写错了」。
+
+    这与 DAO 里 `f"…：{exc}"` 的写法不同，那里永远是 `sqlite3.Error`，
+    类型名一个字符的信息量都没有。
+    """
+    reason = str(err) if isinstance(err, HoldingsError) else _typed(err)
+    return f"{message}；底层错误：{reason}" if reason else message
+
+
+def _typed(err: BaseException) -> str:
+    """外来异常 → `类型名: 消息`；连消息都没有就只留类型名。"""
+    text = str(err)
+    return f"{type(err).__name__}: {text}" if text else type(err).__name__

@@ -6,6 +6,16 @@
 
 A：这是网络或数据源波动导致的。A 股会按 `sync.retry_count` 重试（默认 1 次），失败后降级至 yfinance；若彻底失败会以退出码 `1` 提示「数据源不可用」。可检查网络后重试。
 
+**读那句话的后半截**：彻底失败时消息末尾会带上底层异常，形如
+`错误（1）：A股数据源不可用：600519；底层错误：ConnectionError: Remote end closed connection`。
+这半截才是能拿来判断的东西——
+
+- `ConnectionError` / `TimeoutError` / 带 `Proxy` 字样的：网络或代理，查网络（含系统代理设置）；
+- `未安装 akshare` 这类**不带类型名**的：我们自己抛的、已经说清楚的原因，照着做就行；
+- `TypeError` / `AttributeError` / `KeyError`：**这不是网络问题，是我们代码或上游接口的问题**
+  （[B-36](BACKLOG.md#b-36) 的 `GC=F` 就是这样——一个签名写错，报出来却像「数据源挂了」，
+  用户去重装了 yfinance）。带着这半句话提 issue 能省一大圈。
+
 > **可调项**：`sync.retry_count`（每个数据源各自的重试次数）、
 > `sync.timeout_seconds`（每个标的的等待上限，`0` 表示不限）、
 > `cache_ttl_seconds`（缓存有效期）、`data_sources.priority`（各市场按什么顺序
