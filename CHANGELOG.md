@@ -7,6 +7,15 @@
 
 ### Added
 
+- **发布流程：推一个 tag 就构建并上传 PyPI**（[BACKLOG B-35](docs/BACKLOG.md)）。
+  新增 `.github/workflows/release.yml`，走 **Trusted Publishing**（GitHub 的 OIDC
+  令牌），**仓库里不存任何密钥**——换回 `twine` 加 API token 的做法要人手轮换、
+  会过期、也会泄漏，而没有密钥就没有这几件事。上传前先核对 tag 与
+  `pyproject.toml` 里的版本号，对不上就**停在上传之前**：PyPI 上的版本号**删不掉**
+  （同一个版本不能覆盖上传），这种错只能提前挡。步骤写在
+  [CONTRIBUTING](CONTRIBUTING.md#发布)。**本条尚未完成**：还差在 PyPI 上登记
+  pending publisher 与真正的首次上传，那两步只有项目所有者能做。
+
 - **基准对比 `holdings benchmark`**（[BACKLOG B-39](docs/BACKLOG.md)，从
   [B-23](docs/BACKLOG.md) 拆出）。`portfolio/metrics.py` 一直能算组合自身的回撤 /
   年化 / 夏普，却回答不了「跑赢沪深 300 了吗」——两个障碍都不在写一条命令上：

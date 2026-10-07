@@ -19,6 +19,7 @@ PyPI 页面上是一片空白，或者更糟——把用户引到别人的仓库
 
 from __future__ import annotations
 
+import fnmatch
 import pathlib
 import re
 import subprocess
@@ -37,6 +38,7 @@ SRC = pathlib.Path(holdings.__file__).parent
 ROOT = SRC.parent.parent
 PYPROJECT = ROOT / "pyproject.toml"
 CI_WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
+RELEASE_WORKFLOW = ROOT / ".github" / "workflows" / "release.yml"
 
 #: 会被 git 忽略、也确实不该提交的东西，不进这项检查。
 _SKIP_DIRS = {"__pycache__"}
@@ -183,4 +185,67 @@ def test_the_declared_python_versions_are_the_ones_ci_tests():
     assert declared == tested, (
         f"pyproject 声明 {sorted(declared)}，CI 只跑 {sorted(tested)}；"
         f"只在声明里：{sorted(declared - tested)}；只在 CI 里：{sorted(tested - declared)}"
+    )
+
+
+def _workflow(path: pathlib.Path) -> dict:
+    """解析一个 workflow 文件。
+
+    YAML 1.1 会把裸 `on:` 读成布尔 `True`，所以取触发器要用 `_triggers()`，
+    不能直接 `spec["on"]`——那是 None，看着像「这个 workflow 没有触发器」。
+    """
+    return yaml.safe_load(path.read_text(encoding="utf-8"))
+
+
+def _triggers(spec: dict) -> dict:
+    triggers = spec.get("on", spec.get(True))
+    assert triggers is not None, "没解析到 on:，这个 workflow 不会被任何事件触发"
+    return triggers
+
+
+def _strings(node: object) -> list[str]:
+    """把一份解析结果里所有的字符串摊平——用来在配置里找某个值的存在 / 不存在。"""
+    if isinstance(node, str):
+        return [node]
+    if isinstance(node, dict):
+        return [s for value in node.values() for s in _strings(value)]
+    if isinstance(node, list):
+        return [s for item in node for s in _strings(item)]
+    return []
+
+
+def test_the_release_workflow_fires_on_a_version_tag():
+    """发布流程必须真的会被版本 tag 触发，且 tag 的形状与版本号对得上。
+
+    **写错了不会有人告诉你**：GitHub 对不匹配任何分支 / tag 过滤器的 workflow
+    既不报错也不警告——tag 推上去了，什么也没发生，而你以为发布正在进行。
+    所以这里拿 `pyproject.toml` 里那个**真实的版本号**拼出 `v1.0.0` 去对过滤器，
+    而不是把过滤器再抄一遍：抄一遍只能证明两处写得一样。
+    """
+    patterns = _triggers(_workflow(RELEASE_WORKFLOW))["push"]["tags"]
+    tag = f"v{_pyproject()['project']['version']}"
+
+    assert any(fnmatch.fnmatchcase(tag, pattern) for pattern in patterns), (
+        f"tag `{tag}` 不匹配任何过滤器 {patterns}——推上去什么都不会发生"
+    )
+
+
+def test_the_release_workflow_stores_no_credential():
+    """上传靠 OIDC，不靠存在仓库里的密钥。
+
+    这条直接钉住 B-35 的一条判据「上传用的凭据不是长期 Entire-account token」。
+    换回 `twine upload` 加一个 API token 的话，workflow 里必然出现一处取密钥的
+    写法——那种做法要人手轮换、会过期、也会泄漏，而 OIDC 的令牌是一次性的。
+
+    找的是**解析结果里的字符串**，不是文件全文：否则这段说明里提一句
+    「别用 secrets」都会让它自己红。
+    """
+    spec = _workflow(RELEASE_WORKFLOW)
+    leaked = [text for text in _strings(spec) if "secrets." in text]
+    assert leaked == [], f"发布流程里出现了仓库密钥：{leaked}"
+
+    publish = spec["jobs"]["publish"]
+    assert publish.get("environment"), "publish 没绑 environment，拿不到 OIDC 令牌"
+    assert publish["permissions"].get("id-token") == "write", (
+        "缺 `id-token: write`——没有它 PyPI 认不出这次上传是谁，会被拒"
     )
