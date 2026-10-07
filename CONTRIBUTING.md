@@ -84,7 +84,9 @@ tag 推上去之后构建并上传，用的是 PyPI 的 Trusted Publishing（Git
 1. 改 `pyproject.toml` 的 `version`，并把 `CHANGELOG.md` 的 `Unreleased` 收口成那个版本号。
 2. 确认 `main` 上那个提交的 CI 是绿的。**推 tag 不会触发 `ci.yml`**，发布流程里也
    不重跑测试——它只负责把已经验过的那个提交送出去。
-3. `git tag -a v1.0.1 -m "v1.0.1"`，然后 `git push origin v1.0.1`。
+3. `git tag -a v1.1.0 -m "v1.1.0"`，然后 `git push origin v1.1.0`。
+   **打的是新版本号，不要去重推一个已存在的 tag**：GitHub 只在 tag **被推送**时
+   触发，重推旧 tag 只会得到一句 `Everything up-to-date`——静悄悄什么都没发生。
 4. 看 Actions 里的 `Release`。`build` 会先核对 tag 与 `pyproject.toml` 的版本号，
    对不上就**停在上传之前**——PyPI 上的版本号删不掉，宁可这里红。
 5. 装一遍验证：在干净 venv 里 `pip install 'holdings-cli[data]'`。

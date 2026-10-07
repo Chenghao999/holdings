@@ -2529,15 +2529,30 @@ CHANGELOG 段落承担。
 
 **三、上传（只剩这一步，卡在账号上）**
 
-1、2 做完之后打 tag 推上去即可：
-`git tag -a v1.0.0 -m v1.0.0 && git push origin v1.0.0`。`Release` workflow 会构建、
-`twine check`、再上传。完整步骤（含上面那条一次性设置）写在
-[CONTRIBUTING](../CONTRIBUTING.md#发布)。
+**先改版本号，别去推 `v1.0.0`。** 那个 tag 2026-09-20 就打过了（`8a9cabc`，
+B-18 收尾），于是两条路都不通：
+
+- **直接推它不会有任何反应**——GitHub 只在 tag **被推送**时触发 workflow，
+  推一个远端已存在的 tag 是 `Everything up-to-date`，静悄悄什么都没发生；
+- **删掉重推**则会发布**那个提交上的代码**：它比当前 `main` 少了 106 个文件，
+  `pyproject.toml` 里署名还是占位符 `holdings`、也没有 `[project.urls]`
+  ——等于刚补的元数据一样都用不上。
+
+所以首次上传从当前 `main` 打**新** tag。版本号按 SemVer 是 **`1.1.0`**：
+`Unreleased` 里躺着好几项 `Added`（基准对比、分红拆股、组合管理、Web 看板……），
+不是只有修修补补。
+
+1. `pyproject.toml` 的 `version` 改成 `1.1.0`；`CHANGELOG.md` 的 `Unreleased`
+   收口成 `[1.1.0] - 日期`。
+2. `git tag -a v1.1.0 -m v1.1.0 && git push origin v1.1.0`。
+3. `Release` 会构建 → `twine check` → 上传；tag 与版本号对不上就停在上传之前。
+4. 完整步骤（含上面那条一次性设置）写在
+   [CONTRIBUTING](../CONTRIBUTING.md#发布)。
 
 **四、上传后**
 
 6. 开干净 venv 验证：`pip install 'holdings-cli[web]'` 装上，
-   `holdings --version` 输出 `1.0.0`；几个 extra 至少各试装一次。
+   `holdings --version` 输出 `1.1.0`；几个 extra 至少各试装一次。
 7. **把所有「还没上传」的说明删干净**——它们在四处：README 快速开始里那段引用块
    （块内就写着「上传之后删掉这一段」）、本条目的 现状 与 优先级、
    `docs/ROADMAP.md` 里程碑总览下面那句「从未上传」。
@@ -2582,7 +2597,7 @@ CHANGELOG 段落承担。
 ### 完成判据
 
 - [ ] 在干净环境里 `pip install holdings-cli` 能装上，`holdings --version`
-      输出 `1.0.0`；文档里那几处 `pip install 'holdings-cli[…]'` 真的可执行了
+      输出 `1.1.0`；文档里那几处 `pip install 'holdings-cli[…]'` 真的可执行了
       ——**卡在账号**，只有所有者能做。
 - [ ] PyPI 项目页有仓库链接与分类。元数据已进 wheel、`twine check` 也会验它，
       但**页面本身要等上传之后才存在**，所以这一条现在无从勾。
@@ -2590,7 +2605,8 @@ CHANGELOG 段落承担。
 - [x] 上传用的凭据不是长期 Entire-account token——走 OIDC，仓库里不存在任何密钥，
       也有用例钉着（2026-10-07）。
 
-> **版本号不用动**：此前从没上传过，PyPI 上的首个版本就是 `1.0.0`。
+> **PyPI 上的首个版本号不会是 `1.0.0`**——不是「首个版本就该用 1.0.0」这条直觉错了，
+> 而是 **`v1.0.0` 那个提交不是要发的那个**（见上面「三、上传」）。
 > **不阻塞其他项**：这条卡在账号上，谁都不等它；但它是「让人装得上」这条
 > 链路上唯一还缺的一环——[B-34](#b-34) 只做到了「不指错门」。
 
