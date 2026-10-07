@@ -12,7 +12,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.12", "3.13"]
+        # 这个矩阵就是 `pyproject.toml` 里 `classifiers` 声明的那几个版本——
+        # 两处由 `tests/test_packaging.py` 双向核对。所以「支持 3.11」这句话
+        # 得有地方真的跑过才算数：此前跳过了 3.11，而 `requires-python` 写着
+        # `>=3.10`，等于一边说支持一边从没验过。
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
 

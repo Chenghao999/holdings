@@ -74,3 +74,24 @@ python3 -m venv .venv
 3. 新增代码遵循三层分离铁律（业务层无 `print` / `click.echo` / `rich.print`）。
 4. 提交信息遵循 [Conventional Commits](https://www.conventionalcommits.org/) 规范（见 [CODING_STANDARDS.md](docs/CODING_STANDARDS.md)）。
 5. 本 PR 只做一个工作项（见 [分支与 PR 粒度](#分支与-pr-粒度)）——混进了第二个条目，就把它拆出去再提。
+
+## 发布
+
+发布由**打 tag** 触发，本机不需要有任何凭据：`.github/workflows/release.yml` 在
+tag 推上去之后构建并上传，用的是 PyPI 的 Trusted Publishing（GitHub 的 OIDC 令牌），
+所以**仓库里不存密钥**，也没有会过期的 token。
+
+1. 改 `pyproject.toml` 的 `version`，并把 `CHANGELOG.md` 的 `Unreleased` 收口成那个版本号。
+2. 确认 `main` 上那个提交的 CI 是绿的。**推 tag 不会触发 `ci.yml`**，发布流程里也
+   不重跑测试——它只负责把已经验过的那个提交送出去。
+3. `git tag -a v1.1.0 -m "v1.1.0"`，然后 `git push origin v1.1.0`。
+   **打的是新版本号，不要去重推一个已存在的 tag**：GitHub 只在 tag **被推送**时
+   触发，重推旧 tag 只会得到一句 `Everything up-to-date`——静悄悄什么都没发生。
+4. 看 Actions 里的 `Release`。`build` 会先核对 tag 与 `pyproject.toml` 的版本号，
+   对不上就**停在上传之前**——PyPI 上的版本号删不掉，宁可这里红。
+5. 装一遍验证：在干净 venv 里 `pip install 'holdings-cli[data]'`。
+
+> **一次性设置**（只有仓库所有者能做，且只在第一次上传之前做一次）：在 PyPI 上注册
+> **pending publisher**，仓库填 `Chenghao999/holdings`、workflow 填 `release.yml`、
+> 环境填 `pypi`——这三个值必须与 workflow 里的写法一字不差。它是为「项目还不存在」
+> 的首次发布设计的机制。细节见 [BACKLOG B-35](docs/BACKLOG.md)。

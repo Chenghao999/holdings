@@ -7,6 +7,17 @@
 
 ### Added
 
+- **发布流程：推一个 tag 就构建并上传 PyPI**（[BACKLOG B-35](docs/BACKLOG.md)）。
+  新增 `.github/workflows/release.yml`，走 **Trusted Publishing**（GitHub 的 OIDC
+  令牌），**仓库里不存任何密钥**——换回 `twine` 加 API token 的做法要人手轮换、
+  会过期、也会泄漏，而没有密钥就没有这几件事。上传前先核对 tag 与
+  `pyproject.toml` 里的版本号，对不上就**停在上传之前**：PyPI 上的版本号**删不掉**
+  （同一个版本不能覆盖上传），这种错只能提前挡。步骤写在
+  [CONTRIBUTING](CONTRIBUTING.md#发布)。README 的「快速开始」补上了**安装**这一步
+  ——此前它直接从 `holdings init` 开始，照着敲的人第一行就是 `command not found`，
+  而全仓库的文档都在让用户 `pip install 'holdings-cli[…]'`。**本条尚未完成**：
+  还差在 PyPI 上登记 pending publisher 与真正的首次上传，那两步只有项目所有者能做。
+
 - **基准对比 `holdings benchmark`**（[BACKLOG B-39](docs/BACKLOG.md)，从
   [B-23](docs/BACKLOG.md) 拆出）。`portfolio/metrics.py` 一直能算组合自身的回撤 /
   年化 / 夏普，却回答不了「跑赢沪深 300 了吗」——两个障碍都不在写一条命令上：
@@ -141,6 +152,18 @@
     没查重（`--dedupe off`）时不印这一截——那是没查，不是没重复。
 
 ### Changed
+
+- **补齐 PyPI 页面上要用的元数据：署名、项目链接、分类器**（[BACKLOG B-35](docs/BACKLOG.md)）。
+  这些是**只在别人拿到分发包时才被读到**的东西，写错了本地一切照常——wheel 照样
+  构建成功、`twine check` 照样通过，而页面上是一片空白，或者更糟：把用户引到
+  别人的仓库去（[B-34](docs/BACKLOG.md) 修的是 `pip install` 里的名字，这是同一件
+  事的另一半）。`[project.urls]` 的三个链接由用例拿 `git remote` 来对，不比对一遍
+  自己抄的字符串——那只能证明两处写得一样，证明不了指对了地方。**署名刻意不带
+  邮箱**：git 里那个是学校地址，要不要公开由本人决定，不替他默认公开。
+- **CI 矩阵补上 3.11**（[BACKLOG B-35](docs/BACKLOG.md)）。`classifiers` 里声明的
+  支持版本必须与 CI 真跑过的版本一致，而此前跳过了 3.11、`requires-python` 却写着
+  `>=3.10`——一边说支持，一边从没跑过。现在这两处由用例**双向**核对：多声明一个
+  版本、或从矩阵里删掉一个，都会红。
 
 - **成本不为正时，盈亏率显示 `—` 而不是一个数**（[BACKLOG B-38](docs/BACKLOG.md)）。
   分红摊薄到把成本价压成 0 甚至负数是真实会发生的（长期持有，券商 APP 也这么显示），

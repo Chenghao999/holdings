@@ -1,0 +1,69 @@
+name: Release
+
+# 只在版本 tag 上跑：`v1.0.0` 推上去 → 构建 → 传 PyPI。
+#
+# 与 `ci.yml` **分开**而不是加一个作业进去：CI 是每次推送都跑的体检，发布是一年
+# 几次的动作。混在一个 workflow 里以后，看板上一片绿到底意味着「代码没问题」还是
+# 「刚发了一个版本」，就说不清了。
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 确认 tag 与 pyproject 里的版本一致
+        # tag 是 `v1.0.1`、`pyproject.toml` 还写着 `1.0.0` → PyPI 上会多出一个
+        # **删不掉**的版本号（同一个版本号不能覆盖上传，只能作废）。发布是不可
+        # 回滚的，所以在这里挡住，而不是等上传完再发现。
+        run: |
+          python - <<'PY'
+          import os, pathlib, tomllib
+
+          version = tomllib.loads(pathlib.Path("pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
+          tag = os.environ["GITHUB_REF_NAME"]
+          assert tag == f"v{version}", f"tag {tag!r} 与 pyproject 里的版本 {version!r} 对不上"
+          print(f"tag {tag} = 版本 {version}")
+          PY
+
+      - name: 构建 sdist 与 wheel
+        run: |
+          python -m pip install --upgrade pip build twine
+          python -m build
+
+      - name: twine check
+        # 长描述（README）在 PyPI 上渲染不了时这一条会红。而 README 在 GitHub 上
+        # 看着完全正常——又一处「只在装出来的东西上才出现」的问题（B-20 的模板、
+        # B-24 的 wheel 作业都是同一类）。
+        run: twine check dist/*
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  # 与 build 分成两个作业，而不是接着往下写：上传那一步需要 OIDC 令牌，
+  # 构建不需要。权限按作业给，构建那一步即使被注入了什么，也换不到一个能上传的身份。
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    # 这个名字要与 PyPI 上登记的 pending publisher 一字不差地对应。
+    environment: pypi
+    permissions:
+      # PyPI 靠这个一次性令牌确认「是哪个仓库的哪个 workflow 在传」，
+      # 仓库里因此**不存任何密钥**：没有东西可泄漏，也没有轮换与过期。
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - uses: pypa/gh-action-pypi-publish@release/v1
