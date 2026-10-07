@@ -211,6 +211,75 @@ def test_both_sources_failing_raises_data_source_unavailable(a_stock, monkeypatc
     assert "600519" in str(exc.value)
 
 
+# ------------------------------------------------ 失败时把真因带出来（B-40）
+
+
+def _fail_both(monkeypatch, a_stock, err):
+    """让一条链上的两个源都抛 `err`，返回最终抛出来的那条异常。
+
+    两个源都失败、且不重试，是为了让「链条末端那个异常」唯一——真因就应该是它。
+    """
+    monkeypatch.setattr(resilience, "retry_count", lambda: 0)
+    _source(monkeypatch, a_stock, "_from_akshare", [err])
+    _source(monkeypatch, a_stock, "_from_yfinance", [err])
+    with pytest.raises(fetcher.DataSourceUnavailableError) as exc:
+        a_stock.fetch("600519")
+    return exc.value
+
+
+def test_a_failed_fetch_carries_the_real_reason(a_stock, monkeypatch):
+    """兜底捕获是故意写宽的，但不能把真因一起兜掉（B-40）。
+
+    `fetch_with_fallback` 那句 `except Exception` 是为了「任何一种异常都不该中断
+    取价」，代价是链条末端那个异常本来会只剩一句「数据源不可用」。而
+    **没装包 / 网络不通 / 自己代码写错**这三种处境在用户眼里长着同一张脸，
+    修法却完全不同：一个 `pip install`，一个查网络，一个报 issue。
+    """
+    boom = ConnectionError("('Connection aborted.', RemoteDisconnected('Remote end closed'))")
+
+    message = str(_fail_both(monkeypatch, a_stock, boom))
+
+    assert "A股" in message, "人话在前：哪个市场、哪个标的"
+    assert "600519" in message
+    assert "ConnectionError" in message, "真因在后：类型名是分得清处境的那一半"
+    assert "Remote end closed" in message, "异常自带的消息也要留着"
+
+
+def test_a_signature_mistake_does_not_look_like_a_dead_upstream(a_stock, monkeypatch):
+    """B-36 那一类：源自己的签名写错，报出来的话要指得出「是代码错了」。
+
+    当时 `GC=F` 次次失败，用户看到的只有「国际黄金数据源不可用」，于是去重装了
+    yfinance——而真因是一个和我们无关的 `TypeError`（源函数漏了一个形参）。
+    类型名是这里唯一能分辨「上游挂了」与「我写错了」的东西。
+    """
+    broken = TypeError("_international_gold() takes 1 positional argument but 2 were given")
+
+    message = str(_fail_both(monkeypatch, a_stock, broken))
+
+    assert "TypeError" in message
+    assert "takes 1 positional argument" in message
+
+
+def test_our_own_reason_is_not_wrapped_in_a_type_name(a_stock, monkeypatch):
+    """自己抛的那几个本来就是人话（`未安装 akshare`），再加类型名只是噪音。
+
+    ——而这句话正是今天被吞掉最多的那一句：装没装 akshare，是两种修法。
+    """
+    missing = fetcher.DataSourceUnavailableError("未安装 akshare")
+
+    message = str(_fail_both(monkeypatch, a_stock, missing))
+
+    assert "未安装 akshare" in message
+    assert "DataSourceUnavailableError" not in message, "自己抛的异常不必再报一遍自己的类型名"
+
+
+def test_an_exception_without_a_message_still_names_itself(a_stock, monkeypatch):
+    """`raise ValueError()` 这种连消息都没有的：只留类型名，不留一个悬着的冒号。"""
+    message = str(_fail_both(monkeypatch, a_stock, ValueError()))
+
+    assert message.endswith("底层错误：ValueError"), "冒号后面不该空着"
+
+
 def test_each_source_gets_its_own_retry_budget(a_stock, monkeypatch):
     """`retry_count` 是**每个源**的重试次数，不是整条链的总次数。
 

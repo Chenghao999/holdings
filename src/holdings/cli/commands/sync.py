@@ -9,6 +9,7 @@ from holdings.models.enums import MarketType
 ALL_MARKETS = "全部"
 
 # 缺任一必需依赖（如全市场都要求 yfinance）时明确告知，避免用户只看到一堆「失败」。
+# 只在**确实没装**时才报这条——装了却全失败，原因在别处，见下面那条分支。
 _REQUIRED_PACKAGES = ("yfinance", "akshare")
 
 
@@ -76,10 +77,18 @@ def sync_cmd(market: str) -> None:
 
     if updated == 0:
         missing = "、".join(p for p in _REQUIRED_PACKAGES if not is_installed(p))
-        hint = "请安装数据源依赖 pip install 'holdings-cli[data]'" + (
-            f"（未安装：{missing}）" if missing else ""
+        if missing:
+            # 这是**能确定**的原因，直说。抛异常而不是自己 SystemExit(1)：文案统一成
+            # 「错误（1）：…」，与其它失败路径一致；顺带不需要 escape()——那是给
+            # Rich 的标记转义，而这条消息走 click.echo 输出，`[data]` 不会被吃掉。
+            raise DataSourceUnavailableError(
+                f"{failed} 个标的全部同步失败：未安装 {missing}，"
+                "请运行 pip install 'holdings-cli[data]'"
+            )
+        # **装了却还是全失败：不要把原因编成「缺依赖」。** 此前这里是一句无条件的
+        # 「请安装数据源依赖」，于是网络不通、代理挡着、上游改了接口的用户都被指去
+        # `pip install`——而真因（现在每条失败都带着）已经逐条印在上面了。
+        # 编一个错的原因比不说更糟：用户会照着它去重装一遍，然后更困惑（B-40）。
+        raise DataSourceUnavailableError(
+            f"{failed} 个标的全部同步失败；依赖都已安装，逐条原因见上面每条「失败」后面的说明"
         )
-        # 抛异常而不是自己 SystemExit(1)：文案统一成「错误（1）：…」，
-        # 与其它失败路径一致。顺带不再需要 escape()——那是给 Rich 的标记转义，
-        # 而这条消息现在走 click.echo 输出，`[data]` 不会被吃掉。
-        raise DataSourceUnavailableError(f"{failed} 个标的全部同步失败：{hint}")

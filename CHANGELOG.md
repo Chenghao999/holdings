@@ -274,6 +274,20 @@
   现在两条命令共用同一个预算旋钮。真跑一次才发现的：用例里 `call_with_timeout`
   是打桩的，超时值传没传它都不看出差别。
 
+- **取数失败时把真因带出来**（[BACKLOG B-40](docs/BACKLOG.md)）。降级链那句故意写宽的
+  `except Exception` 此前把链条末端那个异常一起兜掉了，于是三种**修法完全不同**的处境
+  在用户眼里长着同一张脸：没装包（该 `pip install`）、网络 / 代理不通（该查网络）、
+  我们自己的代码写错（该报 issue）。[B-36](docs/BACKLOG.md) 的 `GC=F` 就栽在这上面——
+  真因是一个与我们无关的 `TypeError`，用户拿着「数据源不可用」去重装了 yfinance。
+  现在消息末尾多了 `；底层错误：类型名: 消息`：
+  - 外来异常**带类型名**（`ConnectionError: Remote end closed connection`），
+    因为 `str()` 有时只是个括号包着的元组，光看内容分不出是网络还是代码；
+  - 我们自己抛的（`HoldingsError`，如 `未安装 akshare`）不带类型名，那本来就是人话。
+  - 顺带修掉 `holdings sync` 的**猜测式归因**：全部标的失败时它曾无条件提示
+    「请安装数据源依赖 pip install 'holdings-cli[data]'」，而真因可能是代理挡着。
+    现在只在确实没装包时给安装提示，否则如实指回上面逐条打印的失败原因。
+  - 报错口径写进了 `ERROR_HANDLING.md` 的处理原则第 7 条。
+
 ## [1.0.0] - 2026-09-19
 
 ### Added
