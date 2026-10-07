@@ -11,19 +11,32 @@
 
 两次都是「一条通配规则匹配进了源码树」。所以这里不去逐条检查规则写得对不对，
 而是**按结果断言**：`src/holdings/` 下的源码文件一个都不该被忽略。
+
+`pyproject.toml` 的元数据也归这里（见本文件后半），理由是同一条：
+它们是**只在别人拿到分发包时才被读到**的东西。写错了本地一切照常，
+PyPI 页面上是一片空白，或者更糟——把用户引到别人的仓库去（B-34 的另一半）。
 """
 
 from __future__ import annotations
 
 import pathlib
+import re
 import subprocess
 
 import pytest
+import yaml
 
 import holdings
 
+try:  # Python 3.10 没有 tomllib
+    import tomllib
+except ModuleNotFoundError:
+    import tomli as tomllib
+
 SRC = pathlib.Path(holdings.__file__).parent
 ROOT = SRC.parent.parent
+PYPROJECT = ROOT / "pyproject.toml"
+CI_WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
 
 #: 会被 git 忽略、也确实不该提交的东西，不进这项检查。
 _SKIP_DIRS = {"__pycache__"}
@@ -93,3 +106,81 @@ def test_the_web_templates_are_tracked():
 
     missing = [p.name for p in templates if p.relative_to(ROOT).as_posix() not in tracked]
     assert missing == [], f"这些模板没有进版本库：{missing}"
+
+
+def _pyproject() -> dict:
+    return tomllib.loads(PYPROJECT.read_text(encoding="utf-8"))
+
+
+def _repository_slugs() -> list[str]:
+    """工作区里每个远端地址的 `owner/repo`。
+
+    `https://github.com/owner/repo.git` 与 `git@github.com:owner/repo.git`
+    两种写法都认：取末尾两段，与协议无关。
+    """
+    result = subprocess.run(
+        ["git", "remote", "-v"], cwd=ROOT, capture_output=True, text=True, check=False
+    )
+    slugs = set()
+    for line in result.stdout.splitlines():
+        parts = line.split()
+        if len(parts) < 2 or ("://" not in parts[1] and "@" not in parts[1]):
+            continue  # 本地路径形式的 remote 没有 owner/repo 可言
+        match = re.search(r"([^/:\s]+)/([^/\s]+?)(?:\.git)?$", parts[1])
+        if match:
+            slugs.add(f"{match.group(1)}/{match.group(2)}")
+    return sorted(slugs)
+
+
+@requires_git
+def test_the_project_urls_point_at_this_repository():
+    """PyPI 项目页上那三个链接必须指向本仓库。
+
+    **这是 B-34 的另一半**：那一次修的是 `pip install` 里的名字把人带到别人的
+    同名包去，这里修的是页面上的 Homepage / Repository / Issues。元数据通常是从
+    模板或别的项目抄来的，抄漏一处就把用户引到别处——而 wheel 照样构建成功、
+    `twine check` 照样通过，**没有任何东西会响**。
+
+    对的是 `git remote` 里的地址，不是把 URL 再抄一遍：抄一遍只能证明「这两处
+    写的一样」，证明不了它指对了地方。
+
+    在 fork 里跑这条会红（远端是你的 fork，而 URL 该指向上游）。那是**对的**：
+    贡献者不该把自己的仓库地址改进 `pyproject.toml`。
+    """
+    slugs = _repository_slugs()
+    if not slugs:
+        pytest.skip("这个工作区没配远端（多半是解压出来的源码包），无从比对")
+
+    urls = _pyproject()["project"].get("urls", {})
+    assert urls, "pyproject 里没有 [project.urls]，PyPI 页面上会一个链接都没有"
+
+    wrong = {name: url for name, url in urls.items() if not any(s in url for s in slugs)}
+    assert wrong == {}, f"这些链接没指向本仓库 {slugs}：{wrong}"
+
+
+def test_the_declared_python_versions_are_the_ones_ci_tests():
+    """`classifiers` 声明的版本必须与 CI 矩阵跑的版本**完全一致**。
+
+    「支持 Python 3.x」是给用户看的承诺，而承诺的证据只有 CI 上真跑过。
+    两个方向都会出事，所以这条是双向的：
+
+    - 声明了却没测 → 用户在某个你从没验过的版本组合上踩坑；
+    - 测了却没声明 → PyPI 上少一个版本号，按版本搜索的人不认为你支持它。
+
+    真发生过的正是第二种：矩阵里跳过了 3.11，而 `requires-python` 写着 `>=3.10`
+    ——一边说支持，一边从没跑过。
+    """
+    declared = {
+        classifier.rsplit(" :: ", 1)[1]
+        for classifier in _pyproject()["project"]["classifiers"]
+        if classifier.startswith("Programming Language :: Python :: 3.")
+    }
+    # `yaml` 是运行期依赖（`pyyaml`），读 workflow 不必为它再进一个 dev 依赖。
+    # 注意 YAML 1.1 会把裸 `on:` 读成布尔 `True`——这里只碰 `jobs`，不受影响。
+    workflow = yaml.safe_load(CI_WORKFLOW.read_text(encoding="utf-8"))
+    tested = set(workflow["jobs"]["test"]["strategy"]["matrix"]["python-version"])
+
+    assert declared == tested, (
+        f"pyproject 声明 {sorted(declared)}，CI 只跑 {sorted(tested)}；"
+        f"只在声明里：{sorted(declared - tested)}；只在 CI 里：{sorted(tested - declared)}"
+    )
