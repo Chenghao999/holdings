@@ -3,8 +3,8 @@
 > 2026-09-15 工程体检的剩余发现，加上体检后新发现的问题与已知能力缺口。
 > **本文件是工作项的唯一权威清单**，路线图与体检报告只保留摘要并指向这里。
 
-**当前状态（2026-10-06）**：除待办的 **B-22**、**B-30** 与 **B-35** 外，
-清单内条目**全部交付**（用例 159 → 760，覆盖率 67% → 98.06%），
+**当前状态（2026-10-07）**：除待办的 **B-22**、**B-30**，以及 **B-35** 里
+只有所有者能做的那一步外，清单内条目**全部交付**（用例 159 → 765，覆盖率 67% → 98.06%），
 **v1.0.0 已发布**。[B-23](#b-23)（能力缺口）拆成的三项 B-37 导出、B-38 分红拆股、
 B-39 基准对比**已全部交付**。建议顺序见文末
 「[剩余条目的执行顺序](#剩余条目的执行顺序)」。
@@ -12,7 +12,8 @@ B-39 基准对比**已全部交付**。建议顺序见文末
 上面那句「v1.0.0 已发布」指的是**打了 git tag**——本项目**从未上传 PyPI**，
 而文档里让用户跑的 `pip install 'holdings[…]'` 指向的是别人的同名包。
 **指错门**这件事已由 [B-34](#b-34) 修掉（分发名改为 `holdings-cli`）；
-**真正把包传上去**是 [B-35](#b-35)，仍待办，且卡在账号而非代码。
+**真正把包传上去**是 [B-35](#b-35)——元数据、发布流程与 README 的安装段
+2026-10-07 已就位，只剩**上传本身**，而它要项目所有者本人的 PyPI 账号。
 
 ## 怎么读这份清单
 
@@ -99,7 +100,7 @@ B-39 基准对比**已全部交付**。建议顺序见文末
 | [B-32](#b-32) | ✅ 已完成 | 导入时只有代码，市场只能默认 | `cli/commands/import_cmd.py` |
 | [B-33](#b-33) | ✅ 已完成 | 加一个市场要改 `get_fetcher` 的 if-chain | `data/fetcher.py`、新增 `data/markets.py` |
 | [B-34](#b-34) | ✅ 已完成 | 安装提示让用户装到的是别人的同名包 | `pyproject.toml`、`README.md`、4 处提示串 |
-| [B-35](#b-35) | P2 | 包改名了但**从没传上 PyPI**，装了还是装不到 | `pyproject.toml`、新增 release workflow、`README.md` |
+| [B-35](#b-35) | P2（仅剩上传） | 包改名了但**从没传上 PyPI**，装了还是装不到；元数据与发布流程已就位 | `pyproject.toml`、`.github/workflows/release.yml`、`README.md` |
 | [B-36](#b-36) | ✅ 已完成 | `GC=F` 国际金价**次次失败**，真因被降级链吞成「源不可用」 | `data/gold.py`、`tests/test_data.py` |
 | [B-37](#b-37) | ✅ 已完成 | 只有导入没有导出（从 [B-23](#b-23) 拆出） | 新增 `services/export_service.py`、`cli/commands/export.py` |
 | [B-38](#b-38) | ✅ 已完成 | 分红 / 送股 / 拆股不入账，只能手工凑（从 [B-23](#b-23) 拆出） | `models/enums.py`、`portfolio/calculator.py`、`cli/commands/import_cmd.py` |
@@ -1009,9 +1010,10 @@ B-01~B-17 已交付（原顺序的前两步走完）。以下是 B-18 之后的�
    - ~~**B-33 最后**~~ —— ✅ 已完成（2026-10-01）。等 B-28 / B-31 / B-32 把注册表
      的形状真的用出来之后才搬，免得先设计一个没人用的通用件（[B-12](#b-12) 的教训）；
      顺带把黄金「不读 priority」这条此前没被用例钉住的规则补上（[B-33](#b-33)）。
-9. **B-35** —— 与上面各项都无关，且**卡的不是代码是账号**：需要项目所有者本人
-   开 PyPI 账号、开 2FA、签 API token。其余部分（补打包元数据、写 release
-   workflow、补 README 的安装段）不依赖账号，随时可以先做（[B-35](#b-35)）。
+9. **B-35** —— 与上面各项都无关，且**卡的不是代码是账号**。不依赖账号的那一半
+   （打包元数据、release workflow、README 的安装段）**2026-10-07 已做完**；
+   剩下的要项目所有者本人开 PyPI 账号、开 2FA、登记 pending publisher，
+   然后推一个 tag（[B-35](#b-35)）。
 10. ~~**B-36**~~ —— ✅ 已完成（2026-09-30）。它不依赖谁，也不被谁依赖，改动局限在
     黄金这一条链路与它那两条用例，因此**插在了 B-33 之前**做掉：一个「文档说能用、
     实际从没成功过」的功能，用户每次试 `GC=F` 都会撞上，而错误信息会把人引去查网络
@@ -2494,8 +2496,9 @@ CHANGELOG 段落承担。
 
 ## B-35　把分发包真正传到 PyPI
 
-**优先级** P2（会误导用户）
-**位置** `pyproject.toml`、新增 release workflow、`README.md`
+**优先级** P2（会误导用户）· **不依赖账号的那一半已完成（2026-10-07）**，
+剩的只有「所有者本人上传」
+**位置** `pyproject.toml`、`.github/workflows/release.yml`、`README.md`、`CONTRIBUTING.md`
 
 ### 现状
 
@@ -2504,47 +2507,88 @@ CHANGELOG 段落承担。
 （不会把人带到别人的包），但**依然装不到东西**。README 的「快速开始」更是
 从 `holdings init` 直接开始，**连安装那一步都没写**。
 
-这条与清单里其他项不同：**卡住的不是代码，是需要项目所有者本人做的三件事**。
+这条与清单里其他项不同：**卡住的不是代码，是需要项目所有者本人做的事**。
 
 ### 要做什么
 
 **一、只有所有者能做的（前置，卡点在这里）**
 
-1. 注册 PyPI 账号并**开通 2FA**——不开两步验证连 API token 都建不了。
-2. 建 API token：首次上传只能建 **Entire account** scope 的
-   （项目还不存在，建不了 project-scoped）。token 只显示一次，签完存好。
+1. 注册 PyPI 账号并**开通 2FA**——不开两步验证，下面那一步做不了。
+2. 在 PyPI 登记 **pending publisher**：仓库 `Chenghao999/holdings`、
+   workflow `release.yml`、环境 `pypi`。**三个值必须与 workflow 里的写法一字不差**
+   ——对不上时 PyPI 只说「身份不匹配」，不会告诉你是哪个值错了。它是为
+   「项目还不存在」的首次发布设计的机制，所以这条路**不需要先建 API token**
+   （也就没有「token 泄漏 / 过期 / 轮换」这三件事）。
 
-**二、不依赖账号的（可以先做）**
+**二、不依赖账号的（✅ 2026-10-07 全部完成）**
 
-3. `pyproject.toml` 补齐元数据：`authors` 现在是占位符 `holdings`，
-   要改成真实署名；另加 `[project.urls]`（Homepage / Repository / Issues）
-   与 `classifiers`。PyPI 页面上有没有这些，直接决定有没有人愿意点进仓库。
-4. README 的「快速开始」补上安装作为第一步。
-5. 选上传通路并接进 CI（下面二选一）。
+3. ✅ `pyproject.toml` 补齐元数据：真实署名（原来是占位符 `holdings`）、
+   `[project.urls]`（Homepage / Repository / Issues）、12 个分类器。
+4. ✅ README 的「快速开始」把安装补成第一步。
+5. ✅ 上传通路选 **Trusted Publishing**——`.github/workflows/release.yml` 已就位。
 
-**三、上传（二选一）**
+**三、上传（只剩这一步，卡在账号上）**
 
-- **twine**：`python -m build` → `twine check dist/*` → `twine upload dist/*`。
-  用户名固定填 `__token__`，密码是 token 本身。最省事，但 token 要存在本机。
-- **Trusted Publishing（推荐）**：先在 PyPI 登记 **pending publisher**
-  （仓库 `Chenghao999/holdings` + workflow 文件名 + 环境名，这个机制正是为
-  首次发布设计的），再用 GitHub Actions 的 OIDC 上传。**仓库里不存任何密钥**，
-  也没有 token 过期的问题。代价是要新增一个 release workflow——以
-  [B-24](#b-24) 之后 CI 的水准，这条路更配。
+1、2 做完之后打 tag 推上去即可：
+`git tag -a v1.0.0 -m v1.0.0 && git push origin v1.0.0`。`Release` workflow 会构建、
+`twine check`、再上传。完整步骤（含上面那条一次性设置）写在
+[CONTRIBUTING](../CONTRIBUTING.md#发布)。
 
 **四、上传后**
 
 6. 开干净 venv 验证：`pip install 'holdings-cli[web]'` 装上，
    `holdings --version` 输出 `1.0.0`；几个 extra 至少各试装一次。
-7. 把 Entire-account token 换成 project-scoped，或直接改用 Trusted Publishing。
+7. **把所有「还没上传」的说明删干净**——它们在四处：README 快速开始里那段引用块
+   （块内就写着「上传之后删掉这一段」）、本条目的 现状 与 优先级、
+   `docs/ROADMAP.md` 里程碑总览下面那句「从未上传」。
+8. `USER_GUIDE` 的「环境准备」目前是 `uv sync --all-extras` 那套源码口径，
+   那是写给「已经拿到仓库的人」的；上传之后这一节该换成 `pip install`。
+
+### 完成情况（不依赖账号的那一半，2026-10-07）
+
+三个提交，对应上面第 3~5 条：
+
+1. **元数据**（`build:`）。署名**刻意不带邮箱**：git 里那个是学校地址，
+   要不要把私人地址印在公开页面上由本人决定，不替他默认公开。顺带把 CI 矩阵
+   补上 3.11——`classifiers` 声明支持的版本必须与 CI 真跑过的版本一致，而此前
+   跳过 3.11、`requires-python` 却写着 `>=3.10`：一边说支持，一边从没跑过。
+2. **发布流程**（`ci:`）。上传前先核对 tag 与 `pyproject.toml` 的版本号，对不上就
+   **停在上传之前**——PyPI 上的版本号删不掉（同一个版本不能覆盖上传），这种错只能
+   在前面挡。权限按作业给：构建那一步拿不到 OIDC 令牌。
+3. **README**（`docs:`）。快速开始拆成「1. 安装 / 2. 上手」。写法上有个取舍：
+   **按「PyPI 为先 + 一段显眼的『尚未上传』说明」写，而不是「先教你从源码装」**
+   ——前者上传之后删掉四行就对了，后者上传之后会变成一句更难发现的假话。
+
+**两条判据现在就能锁住**（第 3、4 条），另加三条发布链路自己的，全进了
+`tests/test_packaging.py`——这个文件的主题正是「只在别人拿到分发包时才被读到的
+东西」，元数据与 README 正文（PyPI 页面的 `long_description`）都归它管：
+
+| 用例 | 改坏了会怎样 |
+|------|-------------|
+| `…project_urls_point_at_this_repository` | Homepage 换成别人的仓库 → 红 |
+| `…declared_python_versions_are_the_ones_ci_tests` | 从 CI 矩阵删掉 3.11 → 红 |
+| `…release_workflow_fires_on_a_version_tag` | tag 过滤器改成 `release-*` → 红 |
+| `…release_workflow_stores_no_credential` | 加回 `secrets.*`、或删掉 `id-token: write` → 红 |
+| `…readme_teaches_installing_before_using` | 把安装挪到「上手」之后 → 红 |
+
+五条都按「先改坏、看它真红」逐条验过（跑一遍绿的说明不了任何事）。两处值得记：
+
+- **URL 那一条对的是 `git remote`，不是把 URL 再抄一遍**：抄一遍只能证明「这两处
+  写得一样」，证明不了它指对了地方。在 fork 里跑它会红，而那是**对的**——贡献者
+  不该把自己的仓库地址改进 `pyproject.toml`。
+- **README 那条不检查「尚未上传」的说明**：那段是要被删掉的，而一条强制它留在原地的
+  用例，会在删掉它之后逼着人把假话写回去。
 
 ### 完成判据
 
 - [ ] 在干净环境里 `pip install holdings-cli` 能装上，`holdings --version`
-      输出 `1.0.0`；文档里那几处 `pip install 'holdings-cli[…]'` 真的可执行了。
-- [ ] PyPI 项目页有仓库链接与分类（`[project.urls]` 与 `classifiers` 生效）。
-- [ ] README 的「快速开始」第一步是安装。
-- [ ] 上传用的凭据不是长期 Entire-account token。
+      输出 `1.0.0`；文档里那几处 `pip install 'holdings-cli[…]'` 真的可执行了
+      ——**卡在账号**，只有所有者能做。
+- [ ] PyPI 项目页有仓库链接与分类。元数据已进 wheel、`twine check` 也会验它，
+      但**页面本身要等上传之后才存在**，所以这一条现在无从勾。
+- [x] README 的「快速开始」第一步是安装（2026-10-07，有用例钉着）。
+- [x] 上传用的凭据不是长期 Entire-account token——走 OIDC，仓库里不存在任何密钥，
+      也有用例钉着（2026-10-07）。
 
 > **版本号不用动**：此前从没上传过，PyPI 上的首个版本就是 `1.0.0`。
 > **不阻塞其他项**：这条卡在账号上，谁都不等它；但它是「让人装得上」这条
