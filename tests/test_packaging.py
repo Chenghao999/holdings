@@ -36,6 +36,7 @@ except ModuleNotFoundError:
 
 SRC = pathlib.Path(holdings.__file__).parent
 ROOT = SRC.parent.parent
+README = ROOT / "README.md"
 PYPROJECT = ROOT / "pyproject.toml"
 CI_WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
 RELEASE_WORKFLOW = ROOT / ".github" / "workflows" / "release.yml"
@@ -249,3 +250,32 @@ def test_the_release_workflow_stores_no_credential():
     assert publish["permissions"].get("id-token") == "write", (
         "缺 `id-token: write`——没有它 PyPI 认不出这次上传是谁，会被拒"
     )
+
+
+def test_the_readme_teaches_installing_before_using():
+    """README 的「快速开始」第一步必须是安装。
+
+    README 同时是 PyPI 页面上的正文（wheel 元数据里就是
+    `Description-Content-Type: text/markdown`），所以它归这个文件管。
+
+    此前的快速开始**直接从 `holdings init` 开始，连安装那一步都没写**，
+    而全仓库的文档都在让用户 `pip install 'holdings-cli[…]'`。照着 README 敲的
+    人，第一行命令就会得到 `command not found`。
+
+    比的是**位置**而不是「出现过 `pip install`」：安装写在文末的「常见问题」
+    里一点用都没有。这里也**不检查**那段「尚未上传 PyPI」的说明——它是要被删掉
+    的，而一条强制它留在原地的用例，会在删掉它之后逼着人把假话写回去。
+    """
+    text = README.read_text(encoding="utf-8")
+    assert "## 快速开始" in text, "README 里没有「快速开始」这一节"
+
+    section = text[text.index("## 快速开始") :]
+    end = section.find("\n## ", 1)  # 下一个二级标题，避免把全文都算进来
+    if end != -1:
+        section = section[:end]
+
+    install = section.find("pip install")
+    run = section.find("holdings init")
+    assert install != -1, "「快速开始」里没有安装步骤"
+    assert run != -1, "「快速开始」里没找到 `holdings init`，多半是抓错段落了"
+    assert install < run, "安装写在使用之后——用户第一眼看到的是 `holdings init`"

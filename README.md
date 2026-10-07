@@ -40,7 +40,28 @@
 
 ## 快速开始
 
-> 具体安装与使用步骤见 [docs/USER_GUIDE.md](docs/USER_GUIDE.md)。
+> 完整安装与使用步骤见 [docs/USER_GUIDE.md](docs/USER_GUIDE.md)。
+
+### 1. 安装
+
+```bash
+pip install 'holdings-cli[data]'
+```
+
+`[data]` 是行情同步那两组依赖（akshare / yfinance）。只想记账、不联网取价的话
+`pip install holdings-cli` 就够；另有 `[chart]` / `[web]` / `[tui]` 三组按需加。
+
+> **这个包还没传上 PyPI**（[BACKLOG B-35](docs/BACKLOG.md)），上面那条命令目前会报
+> `No matching distribution found`。上传之前请从源码装：
+>
+> ```bash
+> git clone https://github.com/Chenghao999/holdings.git
+> cd holdings && pip install -e '.[data]'
+> ```
+>
+> **上传之后删掉这一段引用块。**
+
+### 2. 上手
 
 ```bash
 # 初始化项目（创建数据库、config.yaml）

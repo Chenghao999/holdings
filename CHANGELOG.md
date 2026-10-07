@@ -13,8 +13,10 @@
   会过期、也会泄漏，而没有密钥就没有这几件事。上传前先核对 tag 与
   `pyproject.toml` 里的版本号，对不上就**停在上传之前**：PyPI 上的版本号**删不掉**
   （同一个版本不能覆盖上传），这种错只能提前挡。步骤写在
-  [CONTRIBUTING](CONTRIBUTING.md#发布)。**本条尚未完成**：还差在 PyPI 上登记
-  pending publisher 与真正的首次上传，那两步只有项目所有者能做。
+  [CONTRIBUTING](CONTRIBUTING.md#发布)。README 的「快速开始」补上了**安装**这一步
+  ——此前它直接从 `holdings init` 开始，照着敲的人第一行就是 `command not found`，
+  而全仓库的文档都在让用户 `pip install 'holdings-cli[…]'`。**本条尚未完成**：
+  还差在 PyPI 上登记 pending publisher 与真正的首次上传，那两步只有项目所有者能做。
 
 - **基准对比 `holdings benchmark`**（[BACKLOG B-39](docs/BACKLOG.md)，从
   [B-23](docs/BACKLOG.md) 拆出）。`portfolio/metrics.py` 一直能算组合自身的回撤 /
