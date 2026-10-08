@@ -153,6 +153,13 @@
 
 ### Changed
 
+- **README 与仓库门面：让陌生人点进来装得上、看得懂**（[BACKLOG B-41](docs/BACKLOG.md)）。
+  安装命令换成**现在就能装上**的源码直装——此前那条 `pip install 'holdings-cli[data]'`
+  指向还没上传的 PyPI，照着敲的人第一行就得到 `No matching distribution found`。
+  另补 CI / 协议 / Python 版本徽章、演示 GIF 上移并重录（补进 `benchmark` 与组合列表；
+  录制宽度 110 → 140 列，因为 110 列下 `list` 是「详表但每列都在截断」，比简表还难认）、
+  英文 [README.en.md](README.en.md)。仓库 topics 一并补上（搜索与相关推荐靠它）。
+
 - **补齐 PyPI 页面上要用的元数据：署名、项目链接、分类器**（[BACKLOG B-35](docs/BACKLOG.md)）。
   这些是**只在别人拿到分发包时才被读到**的东西，写错了本地一切照常——wheel 照样
   构建成功、`twine check` 照样通过，而页面上是一片空白，或者更糟：把用户引到
