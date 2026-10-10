@@ -5,6 +5,8 @@
 [![CI](https://github.com/Chenghao999/holdings/actions/workflows/ci.yml/badge.svg)](https://github.com/Chenghao999/holdings/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue.svg)](pyproject.toml)
+[![Stars](https://img.shields.io/github/stars/Chenghao999/holdings?label=stars)](https://github.com/Chenghao999/holdings/stargazers)
+[![最后提交](https://img.shields.io/github/last-commit/Chenghao999/holdings?label=%E6%9C%80%E5%90%8E%E6%8F%90%E4%BA%A4)](https://github.com/Chenghao999/holdings/commits/main)
 
 > **本地优先的持仓记账工具。** 把支付宝、券商 APP 里散落的资产汇成一本账，并回答
 > 「我跑赢沪深 300 了吗」。命令行、终端仪表盘、网页只读看板三种界面共用同一套服务层，
