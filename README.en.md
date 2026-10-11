@@ -5,6 +5,8 @@
 [![CI](https://github.com/Chenghao999/holdings/actions/workflows/ci.yml/badge.svg)](https://github.com/Chenghao999/holdings/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue.svg)](pyproject.toml)
+[![Stars](https://img.shields.io/github/stars/Chenghao999/holdings?label=stars)](https://github.com/Chenghao999/holdings/stargazers)
+[![Last commit](https://img.shields.io/github/last-commit/Chenghao999/holdings?label=last%20commit)](https://github.com/Chenghao999/holdings/commits/main)
 
 > **A local-first portfolio tracker for the command line.** It consolidates holdings
 > scattered across Alipay and brokerage apps into a single ledger, and answers

@@ -7,6 +7,16 @@
 
 ### Added
 
+- **仓库门面补强：分享预览图与两个新徽章**（[BACKLOG B-42](docs/BACKLOG.md)）。
+  README（中英文各一份）补上 stars 与**最后提交**两个徽章——原来那三个说的都是
+  「它是什么」，没有一个说「它还在动」，而「看不出还活着」正是 [B-41](docs/BACKLOG.md)
+  要修的毛病之一。新增 `.github/social-preview.png`（1280×640）：链接贴到
+  V2EX / 掘金时，信息流里撞见的是这张卡片，所以图取自演示 GIF 里 `benchmark` 那一帧，
+  并保留「净入金」那几列——少了它，「超额 +1.61%」就是个看着凭空的数。生成脚本
+  `docs/demo/make-card.py` 一并入库（需 `pip install pillow`，属**一次性工具**，
+  不进 `pyproject.toml` 的依赖）。**这一步没做完**：图片要在 GitHub 仓库设置里
+  手动上传，没有 API 可用。
+
 - **发布流程：推一个 tag 就构建并上传 PyPI**（[BACKLOG B-35](docs/BACKLOG.md)）。
   新增 `.github/workflows/release.yml`，走 **Trusted Publishing**（GitHub 的 OIDC
   令牌），**仓库里不存任何密钥**——换回 `twine` 加 API token 的做法要人手轮换、
