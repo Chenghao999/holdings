@@ -38,8 +38,8 @@
   recognise but not post — rights issues, bank transfers, interest — are reported
   line by line with a reason instead of being silently skipped.
 - **Built for developers.** Install with `pip`, drive it from a shell, move data
-  in and out as CSV / JSON, and branch on a documented set of exit codes.
-  765 test cases, with a 95% line-coverage gate enforced in CI.
+  in and out as CSV / JSON, branch on a documented set of exit codes, and lean on
+  a 95% line-coverage gate enforced in CI across Python 3.10 through 3.13.
 
 ## Quick start
 
